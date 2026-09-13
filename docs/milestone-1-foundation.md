@@ -21,6 +21,12 @@ Next.js UI/API
 The application uses the `pg` driver in production. Tests use PGlite as an
 in-process PostgreSQL-compatible runtime and execute the checked-in SQL migration.
 
+`BusinessStateService` is the application-facing mutation boundary for Business
+Profiles, Claims, Evidence, Claim/Evidence links, Metrics, and Business State
+Snapshots. It delegates persistence and existing validation to
+`FoundationRepository`; factual Claim admission remains exclusive to
+`FactAdmissionService`.
+
 ## Domain model and database schema
 
 Milestone 1 contains:
@@ -63,7 +69,10 @@ Evidence quality is deliberately not used to automate truth in Milestone 1.
 Unit tests cover Zod schemas and deterministic transition/authority rules.
 Integration tests execute the real migration and cover repositories, provenance,
 cross-business reference rejection, snapshot versioning/immutability, and
-persisted workflow history.
+persisted workflow history. The Milestone 1 acceptance test exercises Business
+creation through structured state and snapshot creation, then verifies valid and
+invalid Orchestrator transitions and persisted transition history through the
+application service path.
 
 A separate real-PostgreSQL 17 target is available and requires a disposable test
 database through `TEST_DATABASE_URL`. It is intentionally not substituted by
