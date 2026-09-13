@@ -12,7 +12,7 @@
     "test": "vitest run tests/unit tests/integration",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:postgres": "vitest run tests/postgres/foundation.postgres.test.ts",
+    "test:postgres": "vitest run tests/postgres",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
@@ -33,6 +33,7 @@
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "next": "^16.3.5",
+    "openai": "^7.15.0",
     "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

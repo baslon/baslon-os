@@ -1,8 +1,11 @@
 import { getDatabase } from "@/db/client";
+import { OpenAIEvidenceExtractionModel } from "@/ai/evidence-extractor/openai-adapter";
+import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
 import { FactAdmissionRepository } from "@/repositories/fact-admission-repository";
 import { BusinessService } from "@/services/business-service";
 import { BusinessStateService } from "@/services/business-state-service";
+import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
 import { FactAdmissionService } from "@/services/fact-admission-service";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 
@@ -23,6 +26,13 @@ export function getBusinessService() {
 
 export function getBusinessStateService() {
   return new BusinessStateService(getFoundationRepository());
+}
+
+export function getEvidenceExtractionService() {
+  return new EvidenceExtractionService(
+    new EvidenceExtractionRepository(getDatabase()),
+    new OpenAIEvidenceExtractionModel(),
+  );
 }
 
 export function getStrategyOrchestrator() {

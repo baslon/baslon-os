@@ -36,6 +36,12 @@ export const workflowEvent = pgEnum("workflow_event", [
   "RUN_GAP_ANALYSIS", "MARK_ANALYSIS_COMPLETE",
 ]);
 export const actorType = pgEnum("actor_type", ["human", "system", "ai"]);
+export const evidenceExtractionRunStatus = pgEnum("evidence_extraction_run_status", [
+  "RUNNING", "SUCCEEDED", "FAILED",
+]);
+export const evidenceProposalType = pgEnum("evidence_proposal_type", [
+  "claim", "evidence", "metric", "claim_evidence",
+]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -59,6 +65,45 @@ export const businessProfiles = pgTable("business_profiles", {
   profileData: jsonb("profile_data").$type<Record<string, unknown>>().default({}).notNull(),
   ...timestamps,
 });
+
+export const evidenceExtractionRuns = pgTable("evidence_extraction_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  rawIntakeText: text("raw_intake_text").notNull(),
+  sourceType: text("source_type"),
+  sourceReference: text("source_reference"),
+  sourceMetadata: jsonb("source_metadata").$type<Record<string, unknown>>().default({}).notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  modelConfiguration: jsonb("model_configuration").$type<Record<string, unknown>>().default({}).notNull(),
+  status: evidenceExtractionRunStatus("status").default("RUNNING").notNull(),
+  rawModelOutput: jsonb("raw_model_output").$type<unknown>(),
+  validationErrors: jsonb("validation_errors").$type<unknown[]>().default([]).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("evidence_extraction_runs_business_idx").on(table.businessId, table.createdAt),
+  unique("evidence_extraction_runs_id_business_unique").on(table.id, table.businessId),
+]);
+
+export const evidenceProposals = pgTable("evidence_proposals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  extractionRunId: uuid("extraction_run_id").notNull(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  proposalRef: text("proposal_ref").notNull(),
+  proposalType: evidenceProposalType("proposal_type").notNull(),
+  structuredPayload: jsonb("structured_payload").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("evidence_proposals_run_ref_unique").on(table.extractionRunId, table.proposalRef),
+  index("evidence_proposals_business_idx").on(table.businessId, table.createdAt),
+  foreignKey({
+    columns: [table.extractionRunId, table.businessId],
+    foreignColumns: [evidenceExtractionRuns.id, evidenceExtractionRuns.businessId],
+    name: "evidence_proposals_run_same_business_fk",
+  }).onDelete("restrict"),
+]);
 
 export const claims = pgTable("claims", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -202,4 +247,5 @@ export const businessRelations = relations(businesses, ({ one, many }) => ({
   metrics: many(metrics),
   snapshots: many(businessStateSnapshots),
   workflow: one(strategyWorkflows),
+  evidenceExtractionRuns: many(evidenceExtractionRuns),
 }));
