@@ -1,0 +1,41 @@
+{
+  "name": "baslon-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit tests/integration",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:postgres": "vitest run tests/postgres/foundation.postgres.test.ts",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^22.20.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.3.5",
+    "pg": "^8.23.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.3"
+  }
+}
