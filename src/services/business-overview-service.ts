@@ -15,6 +15,16 @@ export class BusinessOverviewService {
     return row ? this.present(row) : undefined;
   }
 
+  async getIncludingArchived(businessId: string) {
+    const row = await this.repository.getIncludingArchived(businessId);
+    return row ? this.present(row) : undefined;
+  }
+
+  async listArchived() {
+    const rows = await this.repository.listArchived();
+    return rows.map((row) => this.present(row));
+  }
+
   async getWorkspaceOverview() {
     const businesses = await this.list();
     return { businesses, ...buildWorkspaceDashboard(businesses) };

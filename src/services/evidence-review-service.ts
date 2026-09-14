@@ -72,8 +72,10 @@ export class EvidenceReviewService {
     private readonly orchestrator: StrategyOrchestrator,
   ) {}
 
-  startReview(input: unknown) {
-    return this.repository.startSession(startEvidenceReviewSchema.parse(input));
+  async startReview(input: unknown) {
+    const parsed = startEvidenceReviewSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
+    return this.repository.startSession(parsed);
   }
 
   getReview(sessionId: string, businessId: string) {
@@ -94,6 +96,7 @@ export class EvidenceReviewService {
 
   async reviewProposal(input: unknown) {
     const parsed = reviewProposalSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
     const details = await this.repository.getSessionDetails(
       parsed.reviewSessionId,
       parsed.businessId,
@@ -257,6 +260,7 @@ export class EvidenceReviewService {
 
   async completeReview(input: unknown) {
     const parsed = completeEvidenceReviewSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
     const result = await this.repository.completeSession(parsed);
     if (result.workflowState === "EVIDENCE_PROCESSING") {
       try {

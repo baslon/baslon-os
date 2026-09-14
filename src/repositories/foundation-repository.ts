@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   businessProfiles,
@@ -23,6 +23,7 @@ import {
   type EvidenceInput,
   type MetricInput,
 } from "@/domain/schemas";
+import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 export class FoundationRepository {
   constructor(private readonly database: Database) {}
@@ -46,18 +47,67 @@ export class FoundationRepository {
     });
   }
 
-  async listBusinesses() {
-    return this.database.select().from(businesses).orderBy(businesses.createdAt);
+  async getBusinessIncludingArchived(businessId: string) {
+    const [business] = await this.database.select().from(businesses)
+      .where(eq(businesses.id, businessId));
+    return business;
+  }
+
+  async getActiveBusiness(businessId: string) {
+    const [business] = await this.database.select().from(businesses).where(and(
+      eq(businesses.id, businessId),
+      eq(businesses.status, "active"),
+    ));
+    return business;
+  }
+
+  listActiveBusinesses() {
+    return this.database.select().from(businesses)
+      .where(eq(businesses.status, "active"))
+      .orderBy(businesses.createdAt);
+  }
+
+  listArchivedBusinesses() {
+    return this.database.select().from(businesses)
+      .where(eq(businesses.status, "archived"))
+      .orderBy(businesses.archivedAt, businesses.createdAt);
+  }
+
+  assertBusinessActive(businessId: string) {
+    return assertBusinessActive(this.database, businessId);
   }
 
   async archiveBusiness(businessId: string) {
+    const now = new Date();
     const [business] = await this.database.update(businesses).set({
       status: "archived",
-      archivedAt: new Date(),
+      archivedAt: now,
+      updatedAt: now,
+    }).where(and(
+      eq(businesses.id, businessId),
+      eq(businesses.status, "active"),
+    )).returning();
+    if (business) return business;
+    const existing = await this.getBusinessIncludingArchived(businessId);
+    if (!existing) throw new Error("Business not found");
+    if (existing.status !== "archived") throw new Error("Unsupported Business lifecycle status");
+    return existing;
+  }
+
+  async restoreBusiness(businessId: string) {
+    const [business] = await this.database.update(businesses).set({
+      status: "active",
+      archivedAt: null,
       updatedAt: new Date(),
-    }).where(eq(businesses.id, businessId)).returning();
-    if (!business) throw new Error("Business not found");
-    return business;
+    }).where(and(
+      eq(businesses.id, businessId),
+      eq(businesses.status, "archived"),
+    )).returning();
+    if (business) return business;
+    const existing = await this.getBusinessIncludingArchived(businessId);
+    if (!existing) throw new Error("Business not found");
+    if (existing.status !== "active") throw new Error("Unsupported Business lifecycle status");
+    return existing;
   }
 
   async updateBusinessProfile(input: { businessId: string; profileData: Record<string, unknown> }) {
@@ -79,6 +129,11 @@ export class FoundationRepository {
       ...parsed,
       confidenceScore: parsed.confidenceScore?.toString(),
     }).returning();
+    return claim;
+  }
+
+  async getClaim(claimId: string) {
+    const [claim] = await this.database.select().from(claims).where(eq(claims.id, claimId));
     return claim;
   }
 

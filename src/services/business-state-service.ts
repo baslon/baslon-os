@@ -3,33 +3,42 @@ import type { FoundationRepository } from "@/repositories/foundation-repository"
 export class BusinessStateService {
   constructor(private readonly repository: FoundationRepository) {}
 
-  updateProfile(
+  async updateProfile(
     input: Parameters<FoundationRepository["updateBusinessProfile"]>[0],
   ) {
+    await this.repository.assertBusinessActive(input.businessId);
     return this.repository.updateBusinessProfile(input);
   }
 
-  addClaim(input: Parameters<FoundationRepository["addClaim"]>[0]) {
+  async addClaim(input: Parameters<FoundationRepository["addClaim"]>[0]) {
+    await this.repository.assertBusinessActive(input.businessId);
     return this.repository.addClaim(input);
   }
 
-  addEvidence(input: Parameters<FoundationRepository["addEvidence"]>[0]) {
+  async addEvidence(input: Parameters<FoundationRepository["addEvidence"]>[0]) {
+    await this.repository.assertBusinessActive(input.businessId);
     return this.repository.addEvidence(input);
   }
 
-  linkClaimEvidence(
+  async linkClaimEvidence(
     input: Parameters<FoundationRepository["linkClaimEvidence"]>[0],
   ) {
+    // Ownership is resolved by the repository; it validates both records before mutation.
+    const claim = await this.repository.getClaim(input.claimId);
+    if (!claim) throw new Error("Claim not found");
+    await this.repository.assertBusinessActive(claim.businessId);
     return this.repository.linkClaimEvidence(input);
   }
 
-  addMetric(input: Parameters<FoundationRepository["addMetric"]>[0]) {
+  async addMetric(input: Parameters<FoundationRepository["addMetric"]>[0]) {
+    await this.repository.assertBusinessActive(input.businessId);
     return this.repository.addMetric(input);
   }
 
-  createSnapshot(
+  async createSnapshot(
     businessId: Parameters<FoundationRepository["createSnapshot"]>[0],
   ) {
+    await this.repository.assertBusinessActive(businessId);
     return this.repository.createSnapshot(businessId);
   }
 }

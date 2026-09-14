@@ -9,9 +9,14 @@ import {
   StrategyOrchestrator,
   type WorkflowPersistence,
 } from "@/strategy/orchestrator";
+import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 class PostgresWorkflowRepository implements WorkflowPersistence {
   constructor(private readonly database: Database) {}
+
+  assertBusinessActive(businessId: string) {
+    return assertBusinessActive(this.database, businessId);
+  }
 
   async getWorkflow(businessId: string) {
     const [workflow] = await this.database.select().from(strategyWorkflows)

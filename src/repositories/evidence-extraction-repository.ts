@@ -4,6 +4,7 @@ import {
   evidenceExtractionRuns,
   evidenceProposals,
 } from "@/db/schema";
+import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 export type ExtractionRunStart = {
   businessId: string;
@@ -25,6 +26,10 @@ export type ExtractionProposalRecord = {
 
 export class EvidenceExtractionRepository {
   constructor(private readonly database: Database) {}
+
+  assertBusinessActive(businessId: string) {
+    return assertBusinessActive(this.database, businessId);
+  }
 
   async createRun(input: ExtractionRunStart) {
     const [run] = await this.database.insert(evidenceExtractionRuns).values(input).returning();

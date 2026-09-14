@@ -35,8 +35,16 @@ export default async function EvidenceReviewPage({
   const query = await searchParams;
   const service = getEvidenceReviewService();
   const extraction = await service.getExtraction(runId, businessId).catch(() => null);
-  const business = (await getBusinessService().list()).find((item) => item.id === businessId);
+  const business = await getBusinessService().getIncludingArchived(businessId);
   if (!extraction || !business) notFound();
+  if (business.status === "archived") return <main className="narrow">
+    <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${businessId}`}>{business.name}</Link> <span aria-hidden="true">/</span> Evidence Review</nav>
+    <p className="context-name">{business.name}</p>
+    <h1 className="task-title">Evidence Review</h1>
+    <div className="notice"><strong>Archived — read-only</strong><p>Restore this business before making or completing review decisions.</p></div>
+    <p>{extraction.proposals.length} proposals are preserved from this extraction run.</p>
+    <div className="button-row"><Link className="button-link" href={`/businesses/${businessId}/evidence`}>View Evidence State</Link><Link href={`/businesses/${businessId}`}>Return to business</Link></div>
+  </main>;
   const existingSession = query.session ? { id: query.session } : await service.getReviewByRun(runId, businessId);
 
   if (!existingSession) {

@@ -15,6 +15,7 @@ import {
   strategyWorkflows,
 } from "@/db/schema";
 import type { ReviewDecision } from "@/domain/evidence-review";
+import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 export type CanonicalApplication =
   | { type: "none" }
@@ -41,6 +42,10 @@ function sameJson(left: unknown, right: unknown): boolean {
 
 export class EvidenceReviewRepository {
   constructor(private readonly database: Database) {}
+
+  assertBusinessActive(businessId: string) {
+    return assertBusinessActive(this.database, businessId);
+  }
 
   async startSession(input: {
     businessId: string;

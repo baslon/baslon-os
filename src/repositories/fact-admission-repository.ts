@@ -5,9 +5,14 @@ import {
   assertAuthorizedFactAdmission,
   type AuthorizedFactAdmission,
 } from "@/domain/fact-admission";
+import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 export class FactAdmissionRepository {
   constructor(private readonly database: Database) {}
+
+  assertBusinessActive(businessId: string) {
+    return assertBusinessActive(this.database, businessId);
+  }
 
   async apply(command: AuthorizedFactAdmission) {
     assertAuthorizedFactAdmission(command);

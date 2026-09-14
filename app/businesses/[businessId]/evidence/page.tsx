@@ -33,7 +33,7 @@ function sourceLabel(sourceType: string) {
   return sourceType.replaceAll("_", " ");
 }
 
-function ClaimCard({ claim, businessId, evidenceItems }: { claim: Claim; businessId: string; evidenceItems: EvidenceState["evidence"] }) {
+function ClaimCard({ claim, businessId, evidenceItems, readOnly }: { claim: Claim; businessId: string; evidenceItems: EvidenceState["evidence"]; readOnly: boolean }) {
   return <article className="record-card">
     <p className="eyebrow">{claim.claimType.replaceAll("_", " ")}</p>
     <h3>{claim.statement}</h3>
@@ -41,7 +41,7 @@ function ClaimCard({ claim, businessId, evidenceItems }: { claim: Claim; busines
     {claim.lineage ? <p className="muted">Human reviewed · {claim.lineage.review.decision.toLowerCase()}</p> : <p className="muted">Entered outside Evidence Review.</p>}
     <details className="audit-details"><summary>Audit details</summary>
       <pre>{JSON.stringify(claim.confidenceBasis, null, 2)}</pre>
-      {claim.claimType !== "fact" && evidenceItems.length > 0 ? <FactAdmissionAction>
+      {!readOnly && claim.claimType !== "fact" && evidenceItems.length > 0 ? <FactAdmissionAction>
         <form action={admitFactAction} className="form-grid compact-form">
           <input type="hidden" name="businessId" value={businessId} />
           <input type="hidden" name="claimId" value={claim.id} />
@@ -81,12 +81,14 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     relationships: state.relationships.length,
   });
   const tabs = [["overview", "Overview"], ["claims", "Claims"], ["evidence", "Evidence"], ["metrics", "Metrics"], ["relationships", "Relationships"]] as const;
+  const archived = state.business.status === "archived";
 
   return <main>
     <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${businessId}`}>{state.business.name}</Link> <span aria-hidden="true">/</span> Evidence State</nav>
     <p className="context-name">{state.business.name}</p>
     <h1 className="task-title">Evidence State</h1>
     <p className="lede">Reviewed information currently held about this business.</p>
+    {archived ? <div className="notice"><strong>Archived — read-only</strong><p>Restore this business before making changes to its Evidence State.</p></div> : null}
     {query.error ? <p className="error" role="alert">That change could not be saved. Please review it and try again.</p> : null}
 
     <EvidenceStateSummary summary={summaries} />
@@ -103,7 +105,7 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     {view === "claims" ? <section>
       <div className="section-heading"><h2>Claims</h2><span className="muted">{visibleClaims.length} shown</span></div>
       <nav className="filter-pills" aria-label="Filter Claims"><Link className={!selectedGroup ? "active" : ""} href="?view=claims">All</Link>{groups.map((group) => <Link key={group.key} className={selectedGroup?.key === group.key ? "active" : ""} href={`?view=claims&claimType=${group.key}`}>{group.label} ({group.items.length})</Link>)}</nav>
-      {visibleClaims.length > 0 ? <div className="record-list">{visibleClaims.map((claim) => <ClaimCard key={claim.id} claim={claim} businessId={businessId} evidenceItems={reviewedEvidence} />)}</div> : <p className="empty-state">No claims in this category.</p>}
+      {visibleClaims.length > 0 ? <div className="record-list">{visibleClaims.map((claim) => <ClaimCard key={claim.id} claim={claim} businessId={businessId} evidenceItems={reviewedEvidence} readOnly={archived} />)}</div> : <p className="empty-state">No claims in this category.</p>}
     </section> : null}
 
     {view === "evidence" ? <section><h2>Evidence</h2>{state.evidence.length > 0 ? <div className="record-list">{state.evidence.map((item) => <article className="record-card" key={item.id}>

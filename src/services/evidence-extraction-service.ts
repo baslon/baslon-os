@@ -70,6 +70,7 @@ export class EvidenceExtractionService {
 
   async extract(input: unknown) {
     const parsed = evidenceExtractionInputSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
     const configuration = this.model.getConfiguration();
     const run = await this.repository.createRun({
       businessId: parsed.businessId,

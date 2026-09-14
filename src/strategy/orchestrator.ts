@@ -5,6 +5,7 @@ import {
 } from "@/domain/workflow";
 
 export interface WorkflowPersistence {
+  assertBusinessActive(businessId: string): Promise<void>;
   getWorkflow(businessId: string): Promise<{
     id: string;
     businessId: string;
@@ -19,6 +20,7 @@ export class StrategyOrchestrator {
 
   async transition(input: unknown) {
     const parsed = transitionInputSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
     const workflow = await this.repository.getWorkflow(parsed.businessId);
     if (!workflow) throw new Error("Workflow not found");
     const command = authorizeWorkflowTransition({

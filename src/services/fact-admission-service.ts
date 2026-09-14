@@ -6,23 +6,25 @@ import type { FactAdmissionRepository } from "@/repositories/fact-admission-repo
 export class FactAdmissionService {
   constructor(private readonly repository: FactAdmissionRepository) {}
 
-  createFact(input: {
+  async createFact(input: {
     claim: FactClaimInput;
     supportingEvidenceIds: string[];
     authority: HumanAuthority;
   }) {
+    await this.repository.assertBusinessActive(input.claim.businessId);
     return this.repository.apply(authorizeFactAdmission({
       operation: "create",
       ...input,
     }));
   }
 
-  promoteToFact(input: {
+  async promoteToFact(input: {
     currentClaimId: string;
     claim: FactClaimInput;
     supportingEvidenceIds: string[];
     authority: HumanAuthority;
   }) {
+    await this.repository.assertBusinessActive(input.claim.businessId);
     return this.repository.apply(authorizeFactAdmission({
       operation: "promote",
       ...input,

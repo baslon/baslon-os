@@ -8,6 +8,8 @@ import { EvidenceStateSummary } from "../../app/evidence-state-summary";
 import { FactAdmissionAction } from "../../app/fact-admission-action";
 import { EvidenceValue } from "../../app/evidence-value";
 import { WorkspaceHome } from "../../app/home";
+import { ArchivedBusinesses } from "../../app/archived-businesses";
+import { confirmArchiveBusiness } from "../../app/business-lifecycle-actions";
 import RootLayout from "../../app/layout";
 import { deriveBusinessProgress } from "@/domain/business-progress";
 import { deriveIntakePresentation } from "@/domain/intake-presentation";
@@ -18,7 +20,7 @@ import { formatWorkspaceMetric, formatWorkspaceMetricPeriod, selectWorkspaceKeyM
 import { countNoun } from "@/domain/presentation";
 import { formatEvidenceNumericSummary } from "@/domain/evidence-presentation";
 
-const business = { id: "business-1", name: "Baslon Digital", sector: "Digital agency", primaryGeography: "London, UK" };
+const business = { id: "business-1", name: "Baslon Digital", sector: "Digital agency", primaryGeography: "London, UK", status: "active", archivedAt: null };
 
 describe("Baslon OS UX redesign", () => {
   it("renders businesses as cards without development milestone language", () => {
@@ -31,6 +33,7 @@ describe("Baslon OS UX redesign", () => {
     expect(html).toContain("Evidence review complete");
     expect(html).toContain("39 items reviewed");
     expect(html).not.toContain("Milestone 2");
+    expect(html).toContain('href="/businesses/archived"');
   });
 
   it("renders the organisation Workspace Dashboard with live summary and urgent work", () => {
@@ -118,6 +121,8 @@ describe("Baslon OS UX redesign", () => {
     expect(html).toContain("7</strong><span>Observations");
     expect(html).toContain("£80,000");
     expect(html).toContain('href="/businesses"');
+    expect(html).toContain("Archive business");
+    expect(html).toContain("Business management");
   });
 
   it("selects performance metrics without removing preference metrics from the underlying state", () => {
@@ -159,6 +164,43 @@ describe("Baslon OS UX redesign", () => {
     } }));
     expect(html.match(/class="button-link[^\"]*" href="\/businesses\/business-1\/evidence"/g)).toHaveLength(1);
     expect(html).toContain("View all");
+  });
+
+  it("renders an archived Workspace as read-only with Restore and no strategic actions", () => {
+    const progress = deriveBusinessProgress({ workflowState: "EVIDENCE_PROCESSING", latestExtraction: { id: "run", status: "SUCCEEDED" }, reviewSession: { id: "review", status: "OPEN" } });
+    const html = renderToStaticMarkup(createElement(BusinessWorkspace, { model: {
+      business: { ...business, status: "archived", archivedAt: new Date("2026-09-14") },
+      progress, primaryHref: "/businesses/business-1/reviews/run", activeReviewHref: "/businesses/business-1/reviews/run",
+      canAddInformation: true, counts: [], metrics: [],
+    } }));
+    expect(html).toContain("Archived business");
+    expect(html).toContain("read-only");
+    expect(html).toContain("Restore business");
+    expect(html).not.toContain("Add more information");
+    expect(html).not.toContain("Continue Evidence Review");
+    expect(html).not.toContain("Archive business");
+  });
+
+  it("renders archived Businesses and their empty state without exposing IDs as text", () => {
+    const html = renderToStaticMarkup(createElement(ArchivedBusinesses, { businesses: [{
+      business: { id: "private-business-id", name: "Archived Example", archivedAt: new Date("2026-09-14") },
+    }] }));
+    expect(html).toContain("Archived businesses");
+    expect(html).toContain("Archived 14 Sept 2026");
+    expect(html).toContain("View business");
+    expect(html).toContain("Restore business");
+    expect(html).not.toContain(">private-business-id<");
+    expect(renderToStaticMarkup(createElement(ArchivedBusinesses, { businesses: [] }))).toContain("No archived businesses.");
+  });
+
+  it("requires confirmation before archiving", () => {
+    const messages: string[] = [];
+    expect(confirmArchiveBusiness("Example Business", (message) => {
+      messages.push(message);
+      return false;
+    })).toBe(false);
+    expect(messages[0]).toContain("Archive Example Business?");
+    expect(messages[0]).toContain("preserved");
   });
 
   it("automatically restores the latest failed intake without exposing provider detail", () => {

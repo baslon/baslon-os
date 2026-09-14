@@ -15,8 +15,15 @@ export default async function BusinessIntakePage({
 }) {
   const { businessId } = await params;
   const { error } = await searchParams;
-  const business = (await getBusinessService().list()).find((item) => item.id === businessId);
+  const business = await getBusinessService().getIncludingArchived(businessId);
   if (!business) notFound();
+  if (business.status === "archived") return <main className="narrow">
+    <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${businessId}`}>{business.name}</Link> <span aria-hidden="true">/</span> Business information</nav>
+    <p className="context-name">{business.name}</p>
+    <h1 className="task-title">This business is archived.</h1>
+    <p className="lede">Restore it before adding or analysing new business information.</p>
+    <Link className="button-link" href={`/businesses/${businessId}`}>Return to business</Link>
+  </main>;
   const [latestRun, state] = await Promise.all([
     getEvidenceExtractionService().getLatestRun(businessId).catch(() => undefined),
     getEvidenceStateService().getCurrent(businessId).catch(() => undefined),

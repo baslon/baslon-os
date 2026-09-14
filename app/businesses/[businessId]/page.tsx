@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function BusinessWorkspacePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const [overview, state] = await Promise.all([
-    getBusinessOverviewService().get(businessId),
+    getBusinessOverviewService().getIncludingArchived(businessId),
     getEvidenceStateService().getCurrent(businessId).catch(() => undefined),
   ]);
   if (!overview || !state) notFound();

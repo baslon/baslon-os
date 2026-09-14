@@ -43,6 +43,16 @@ export async function createBusinessAction(formData: FormData) {
   redirect(`/businesses/${business.id}`);
 }
 
+export async function archiveBusinessAction(formData: FormData) {
+  const business = await getBusinessService().archive(text(formData, "businessId"));
+  redirect(`/businesses/${business.id}`);
+}
+
+export async function restoreBusinessAction(formData: FormData) {
+  const business = await getBusinessService().restore(text(formData, "businessId"));
+  redirect(`/businesses/${business.id}`);
+}
+
 export async function runEvidenceExtractionAction(formData: FormData) {
   const businessId = text(formData, "businessId");
   const rawIntakeText = text(formData, "rawIntakeText");

@@ -9,10 +9,30 @@ export class BusinessService {
   }
 
   list() {
-    return this.repository.listBusinesses();
+    return this.repository.listActiveBusinesses();
+  }
+
+  listArchived() {
+    return this.repository.listArchivedBusinesses();
+  }
+
+  getActive(businessId: string) {
+    return this.repository.getActiveBusiness(businessId);
+  }
+
+  getIncludingArchived(businessId: string) {
+    return this.repository.getBusinessIncludingArchived(businessId);
+  }
+
+  assertActive(businessId: string) {
+    return this.repository.assertBusinessActive(businessId);
   }
 
   archive(businessId: string) {
     return this.repository.archiveBusiness(businessId);
+  }
+
+  restore(businessId: string) {
+    return this.repository.restoreBusiness(businessId);
   }
 }

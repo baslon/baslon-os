@@ -13,9 +13,12 @@ export class BusinessOverviewRepository {
   constructor(private readonly database: Database) {}
 
   async list() {
-    const businessRows = await this.database.select().from(businesses)
-      .where(eq(businesses.status, "active"))
-      .orderBy(businesses.createdAt);
+    const businessRows = await this.listBusinessesByStatus("active");
+    return Promise.all(businessRows.map((business) => this.getForBusiness(business)));
+  }
+
+  async listArchived() {
+    const businessRows = await this.listBusinessesByStatus("archived");
     return Promise.all(businessRows.map((business) => this.getForBusiness(business)));
   }
 
@@ -26,6 +29,19 @@ export class BusinessOverviewRepository {
     ));
     if (!business) return undefined;
     return this.getForBusiness(business);
+  }
+
+  async getIncludingArchived(businessId: string) {
+    const [business] = await this.database.select().from(businesses)
+      .where(eq(businesses.id, businessId));
+    if (!business) return undefined;
+    return this.getForBusiness(business);
+  }
+
+  private listBusinessesByStatus(status: "active" | "archived") {
+    return this.database.select().from(businesses)
+      .where(eq(businesses.status, status))
+      .orderBy(businesses.createdAt);
   }
 
   private async getForBusiness(business: typeof businesses.$inferSelect) {
