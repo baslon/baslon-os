@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { runEvidenceExtractionAction } from "../../../actions";
-import { getBusinessService } from "@/foundation";
+import { getBusinessService, getEvidenceExtractionService } from "@/foundation";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,17 @@ export default async function BusinessIntakePage({
   searchParams,
 }: {
   params: Promise<{ businessId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; failedRun?: string }>;
 }) {
   const { businessId } = await params;
-  const { error } = await searchParams;
+  const { error, failedRun } = await searchParams;
   const business = (await getBusinessService().list()).find((item) => item.id === businessId);
   if (!business) notFound();
+  const preservedRun = failedRun
+    ? await getEvidenceExtractionService().getRun(failedRun, businessId).catch(() => undefined)
+    : undefined;
+  const preservedIntake = preservedRun?.status === "FAILED" ? preservedRun.rawIntakeText : "";
+  const preservedReference = preservedRun?.status === "FAILED" ? preservedRun.sourceReference ?? "" : "";
 
   return (
     <main>
@@ -28,11 +33,11 @@ export default async function BusinessIntakePage({
         <input type="hidden" name="businessId" value={business.id} />
         <label>
           Messy intake
-          <textarea name="rawIntakeText" rows={18} required />
+          <textarea name="rawIntakeText" rows={18} required defaultValue={preservedIntake} />
         </label>
         <label>
           Source reference (optional)
-          <input name="sourceReference" placeholder="Interview notes, intake form, email…" />
+          <input name="sourceReference" placeholder="Interview notes, intake form, email…" defaultValue={preservedReference} />
         </label>
         <button type="submit">Run Evidence Extraction</button>
       </form>

@@ -6,61 +6,14 @@ import {
   startEvidenceReviewAction,
 } from "../../../../actions";
 import { getBusinessService, getEvidenceReviewService } from "@/foundation";
+import { ProposalReviewControls } from "../../../../proposal-review-controls";
+import { RelationshipEndpoints } from "../../../../relationship-endpoints";
 
 export const dynamic = "force-dynamic";
-
-type Proposal = Awaited<ReturnType<ReturnType<typeof getEvidenceReviewService>["getExtraction"]>>["proposals"][number];
 
 function display(value: unknown) {
   if (value === null || value === undefined) return "";
   return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function CorrectionFields({ proposal }: { proposal: Proposal }) {
-  const payload = proposal.structuredPayload;
-  if (proposal.proposalType === "claim") {
-    return <div className="correction-grid">
-      <label>Statement<input name="statement" defaultValue={display(payload.statement)} /></label>
-      <label>Claim type<select name="claimType" defaultValue={display(payload.claimType)}>
-        {['observation', 'management_belief', 'hypothesis', 'ai_inference', 'unknown'].map((item) => <option key={item}>{item}</option>)}
-      </select></label>
-      <label>Subject area<input name="subjectArea" defaultValue={display(payload.subjectArea)} /></label>
-      <label>Confidence level<input name="confidenceLevel" defaultValue={display(payload.confidenceLevel)} /></label>
-      <label>Confidence score<input name="confidenceScore" type="number" min="0" max="1" step="0.01" defaultValue={display(payload.confidenceScore)} /></label>
-      <label>Confidence basis<input name="confidenceBasis" defaultValue={display((payload.confidenceBasis as Record<string, unknown>)?.basis)} /></label>
-    </div>;
-  }
-  if (proposal.proposalType === "evidence") {
-    return <div className="correction-grid">
-      <label>Statement<input name="statement" defaultValue={display(payload.statement)} /></label>
-      <label>Numeric value<input name="valueNumeric" type="number" step="any" defaultValue={display(payload.valueNumeric)} /></label>
-      <label>Text value<input name="valueText" defaultValue={display(payload.valueText)} /></label>
-      <label>Unit<input name="unit" defaultValue={display(payload.unit)} /></label>
-      <label>Period start<input name="periodStart" type="date" defaultValue={display(payload.periodStart)} /></label>
-      <label>Period end<input name="periodEnd" type="date" defaultValue={display(payload.periodEnd)} /></label>
-      <label>Reliability<input name="reliabilityLevel" defaultValue={display(payload.reliabilityLevel)} /></label>
-      <label>Reliability score<input name="reliabilityScore" type="number" min="0" max="1" step="0.01" defaultValue={display(payload.reliabilityScore)} /></label>
-      <label>Directness<input name="directnessLevel" defaultValue={display(payload.directnessLevel)} /></label>
-      <label>Recency<input name="recencyLevel" defaultValue={display(payload.recencyLevel)} /></label>
-      <label>Materiality<input name="materiality" defaultValue={display(payload.materiality)} /></label>
-    </div>;
-  }
-  if (proposal.proposalType === "metric") {
-    return <div className="correction-grid">
-      <label>Metric key<input name="metricKey" defaultValue={display(payload.metricKey)} /></label>
-      <label>Label<input name="metricLabel" defaultValue={display(payload.metricLabel)} /></label>
-      <label>Numeric value<input name="numericValue" type="number" step="any" defaultValue={display(payload.numericValue)} /></label>
-      <label>Unit<input name="unit" defaultValue={display(payload.unit)} /></label>
-      <label>Period start<input name="periodStart" type="date" defaultValue={display(payload.periodStart)} /></label>
-      <label>Period end<input name="periodEnd" type="date" defaultValue={display(payload.periodEnd)} /></label>
-    </div>;
-  }
-  return <div className="correction-grid">
-    <label>Relationship type<select name="relationshipType" defaultValue={display(payload.relationshipType)}>
-      {['supports', 'contradicts', 'context'].map((item) => <option key={item}>{item}</option>)}
-    </select></label>
-    <label>Strength score<input name="strengthScore" type="number" min="0" max="1" step="0.01" defaultValue={display(payload.strengthScore)} /></label>
-  </div>;
 }
 
 export default async function EvidenceReviewPage({
@@ -120,11 +73,11 @@ export default async function EvidenceReviewPage({
       <p>Reviewer: {details.session.reviewerId} <span className="note">(asserted, not authenticated)</span></p>
     </section>
 
-    {['claim', 'evidence', 'metric', 'claim_evidence'].map((type) => {
+    {([['claim', 'Claims'], ['evidence', 'Evidence'], ['metric', 'Metrics'], ['claim_evidence', 'Relationships']] as const).map(([type, heading]) => {
       const proposals = details.proposals.filter((proposal) => proposal.proposalType === type);
       if (proposals.length === 0) return null;
       return <section key={type}>
-        <h2>{type === 'claim_evidence' ? 'Relationships' : `${type[0].toUpperCase()}${type.slice(1)}s`}</h2>
+        <h2>{heading}</h2>
         <div className="proposal-list">
           {proposals.map((proposal) => {
             const review = reviewByProposal.get(proposal.id);
@@ -135,29 +88,23 @@ export default async function EvidenceReviewPage({
                 <span className={`status ${review?.decision.toLowerCase() ?? 'pending'}`}>{review?.decision ?? 'PENDING'}</span>
               </div>
               {'sourceExcerpt' in payload && <blockquote>{display(payload.sourceExcerpt)}</blockquote>}
-              {type === 'claim_evidence' && <p className="note">Endpoints: {display(payload.claimRef)} → {display(payload.evidenceRef)} (not editable)</p>}
+              {type === 'claim_evidence' && <RelationshipEndpoints relationship={payload} proposals={details.proposals} />}
               {type === 'metric' && Boolean(payload.sourceEvidenceRef) && <p className="note">Evidence dependency: {display(payload.sourceEvidenceRef)}</p>}
               <details><summary>Original AI proposal</summary><pre>{JSON.stringify(payload, null, 2)}</pre></details>
               {review ? <div>
                 <p>Decision recorded {review.reviewedAt.toLocaleString()}.</p>
                 {review.reason && <p>Reason: {review.reason}</p>}
                 {review.reviewedPayload && <details><summary>Corrected payload</summary><pre>{JSON.stringify(review.reviewedPayload, null, 2)}</pre></details>}
-              </div> : <form action={reviewProposalAction} className="review-form">
-                <input type="hidden" name="businessId" value={businessId} />
-                <input type="hidden" name="extractionRunId" value={runId} />
-                <input type="hidden" name="reviewSessionId" value={details.session.id} />
-                <input type="hidden" name="proposalId" value={proposal.id} />
-                <input type="hidden" name="proposalType" value={proposal.proposalType} />
-                <input type="hidden" name="reviewerId" value={details.session.reviewerId} />
-                <CorrectionFields proposal={proposal} />
-                <label>Review reason (optional)<input name="reason" /></label>
-                <div className="button-row">
-                  <button name="decision" value="ACCEPTED">Accept</button>
-                  <button name="decision" value="CORRECTED" className="secondary">Edit &amp; Accept</button>
-                  <button name="decision" value="REJECTED" className="secondary">Reject</button>
-                  <button name="decision" value="UNRESOLVED" className="secondary">Leave Unresolved</button>
-                </div>
-              </form>}
+              </div> : <ProposalReviewControls
+                proposal={proposal}
+                context={{
+                  businessId,
+                  extractionRunId: runId,
+                  reviewSessionId: details.session.id,
+                  reviewerId: details.session.reviewerId,
+                }}
+                reviewAction={reviewProposalAction}
+              />}
             </article>;
           })}
         </div>

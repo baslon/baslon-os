@@ -4,7 +4,7 @@
 
 Milestone 2A accepts messy human-supplied business intake and sends it through
 an injectable Evidence Extraction model. The module uses the versioned
-`evidence_extractor_v1` prompt, validates untrusted output with strict Zod
+`evidence_extractor_v4` prompt, validates untrusted output with strict Zod
 schemas, then applies deterministic proposal-reference and provenance rules.
 
 The live adapter uses the official OpenAI JavaScript/TypeScript SDK, Responses
@@ -53,6 +53,32 @@ Management Beliefs, Hypotheses, AI Inferences, and Unknowns. Fact admission
 remains a separate explicit human operation requiring selected supporting
 Evidence. The current reviewer identity is asserted by server-side form handling;
 authentication and user accounts are intentionally deferred.
+
+## Stabilisation after the first live review
+
+Extraction now asks for one proposal per independent assertion and explicitly
+separates measurements with different units. Deterministic validation rejects
+Evidence that combines incompatible measurement families, including currency
+and percentages, or encodes several units in one unit field. Relationship
+instructions require specific semantic relevance and tell the model to omit
+uncertain relationships rather than link records merely because both exist.
+
+Proposal cards are read-only by default. Edit opens a separate correction form,
+and an unchanged correction is rejected by the application service. Review
+notes are labelled as audit notes and do not alter structured content.
+Relationship cards show the underlying Claim and Evidence statements before
+their internal references. Reject and Unresolved actions require browser
+confirmation, and the UI states that submitted decisions cannot currently be
+changed.
+
+Failed extraction runs remain the server-side source for restoring raw intake
+and source reference on retry. Provider errors are not placed into the browser
+URL. Evidence reliability/confidence and strategic materiality remain separate
+fields and are described separately in the review interface.
+
+Decision undo/change remains deliberately deferred. The database continues to
+allow one immutable review decision per proposal, and no additional migration
+was introduced by this stabilisation pass.
 
 Migration `0002_evidence_review.sql` adds review sessions, proposal decisions,
 same-Business relational constraints, and immutability triggers.

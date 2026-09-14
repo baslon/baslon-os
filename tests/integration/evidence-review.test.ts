@@ -253,6 +253,26 @@ describe("Milestone 2B Evidence Review", () => {
       proposalId: proposal.id,
       reviewerId: "David",
       decision: "CORRECTED",
+      correctedPayload: {
+        statement: "Founder notes indicate approximately £80k annual revenue.",
+        reliabilityLevel: "medium",
+      },
+    })).rejects.toThrow("No changes detected");
+    await expect(setup.reviewService.reviewProposal({
+      businessId: setup.business.id,
+      reviewSessionId: session.id,
+      proposalId: proposal.id,
+      reviewerId: "David",
+      decision: "CORRECTED",
+      correctedPayload: { sourceExcerpt: "rewritten provenance" },
+    })).rejects.toThrow();
+
+    await expect(setup.reviewService.reviewProposal({
+      businessId: setup.business.id,
+      reviewSessionId: session.id,
+      proposalId: proposal.id,
+      reviewerId: "David",
+      decision: "CORRECTED",
       correctedPayload: { valueNumeric: 81000 },
     })).rejects.toThrow("not explicitly present");
     const reviewed = await setup.reviewService.reviewProposal({

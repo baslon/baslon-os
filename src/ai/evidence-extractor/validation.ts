@@ -35,6 +35,29 @@ export function numericValueIsExplicit(value: number, sourceExcerpt: string): bo
   });
 }
 
+function measurementFamilies(text: string): Set<string> {
+  const families = new Set<string>();
+  if (/(?:[£$€]\s*\d|\b(?:GBP|USD|EUR)\b)/iu.test(text)) families.add("currency");
+  if (/(?:\d(?:[\d,.]*)\s*%|\bpercent(?:age)?\b)/iu.test(text)) families.add("percent");
+
+  const countPattern = /\b\d(?:[\d,.]*)\s*(serious\s+)?(opportunit(?:y|ies)|enquir(?:y|ies)|calls?|projects?|clients?|employees?)\b/giu;
+  for (const match of text.matchAll(countPattern)) {
+    const noun = match[2].toLowerCase()
+      .replace(/ies$/, "y")
+      .replace(/s$/, "");
+    families.add(`count:${noun}`);
+  }
+  return families;
+}
+
+function hasIncompatibleEvidenceMeasurements(sourceExcerpt: string, unit: string | null): boolean {
+  const sourceFamilies = measurementFamilies(sourceExcerpt);
+  const unitFamilies = measurementFamilies(unit ?? "");
+  const unitAttemptsMultipleValues = /[;|]/u.test(unit ?? "")
+    || /\b(?:and|plus)\b/iu.test(unit ?? "");
+  return sourceFamilies.size > 1 || unitFamilies.size > 1 || unitAttemptsMultipleValues;
+}
+
 export function validateEvidenceExtractionOutput(
   output: unknown,
   rawIntakeText: string,
@@ -85,6 +108,11 @@ export function validateEvidenceExtractionOutput(
     ) {
       issues.push(
         `${item.proposalRef} numeric value ${item.valueNumeric} is not explicitly present in its source excerpt`,
+      );
+    }
+    if (hasIncompatibleEvidenceMeasurements(item.sourceExcerpt, item.unit)) {
+      issues.push(
+        `${item.proposalRef} combines independent numeric measurements with incompatible units; create separate Evidence proposals`,
       );
     }
   }

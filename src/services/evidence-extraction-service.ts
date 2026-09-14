@@ -13,6 +13,7 @@ import type {
   EvidenceExtractionRepository,
   ExtractionProposalRecord,
 } from "@/repositories/evidence-extraction-repository";
+import { EvidenceExtractionFailedError } from "@/domain/evidence-extraction-error";
 
 function serializeError(error: unknown): unknown[] {
   if (error instanceof z.ZodError) {
@@ -113,7 +114,11 @@ export class EvidenceExtractionService {
         rawModelOutput,
         validationErrors: serializeError(error),
       });
-      throw error;
+      throw new EvidenceExtractionFailedError(run.id, error);
     }
+  }
+
+  getRun(runId: string, businessId: string) {
+    return this.repository.getRun(runId, businessId);
   }
 }

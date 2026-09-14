@@ -22,6 +22,7 @@ import type {
   EvidenceReviewRepository,
 } from "@/repositories/evidence-review-repository";
 import type { StrategyOrchestrator } from "@/strategy/orchestrator";
+import { isDeepStrictEqual } from "node:util";
 
 type ReviewDetails = Awaited<ReturnType<EvidenceReviewRepository["getSessionDetails"]>>;
 
@@ -55,6 +56,14 @@ function acceptedReviewForRef(
     throw new Error(`${expectedType} dependency ${proposalRef} must be accepted first`);
   }
   return review;
+}
+
+function requireMaterialCorrection(original: unknown, reviewed: unknown): void {
+  if (isDeepStrictEqual(original, reviewed)) {
+    throw new Error(
+      "No changes detected. Use Accept, or edit at least one field before saving a correction.",
+    );
+  }
 }
 
 export class EvidenceReviewService {
@@ -108,6 +117,7 @@ export class EvidenceReviewService {
           ...claimCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
+      if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
       reviewedPayload = parsed.decision === "CORRECTED" ? reviewed : null;
       canonical = {
         type: "claim",
@@ -133,6 +143,7 @@ export class EvidenceReviewService {
           ...evidenceCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
+      if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
       if (
         reviewed.valueNumeric !== null
         && !numericValueIsExplicit(reviewed.valueNumeric, original.sourceExcerpt)
@@ -181,6 +192,7 @@ export class EvidenceReviewService {
           ...metricCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
+      if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
       if (!numericValueIsExplicit(reviewed.numericValue, original.sourceExcerpt)) {
         throw new EvidenceExtractionBusinessRuleError([
           `${proposal.proposalRef} corrected numeric value is not explicitly present in its source excerpt`,
@@ -215,6 +227,7 @@ export class EvidenceReviewService {
           ...relationshipCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
+      if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
       const claimReview = acceptedReviewForRef(details, original.claimRef, "claim");
       const evidenceReview = acceptedReviewForRef(details, original.evidenceRef, "evidence");
       reviewedPayload = parsed.decision === "CORRECTED" ? reviewed : null;

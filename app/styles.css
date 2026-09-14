@@ -56,5 +56,9 @@ summary { cursor: pointer; font-weight: 700; }
 .status.rejected { background: #f3ded9; }
 .status.unresolved { background: #f4e8c9; }
 .secondary { background: #58635c; }
+.review-controls { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.review-controls form { margin: 0; }
+.warning { color: #8a3528; font-weight: 700; }
+.relationship-endpoints { padding: 0.8rem 1rem; background: #f4f1ea; border-radius: 0.4rem; }
 blockquote { margin-left: 0; padding-left: 1rem; border-left: 3px solid #8ca595; color: #3c4d43; }
 pre { overflow: auto; padding: 1rem; background: #f4f1ea; }

@@ -153,9 +153,16 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
       }),
     );
 
+    let failedRunId: string | undefined;
     await expect(service.extract({
       businessId: business.id,
       rawIntakeText: baslonMessyIntake,
+      sourceReference: "Preserved live intake reference",
+    }).catch((error: unknown) => {
+      failedRunId = error && typeof error === "object" && "runId" in error
+        ? String(error.runId)
+        : undefined;
+      throw error;
     })).rejects.toThrow();
 
     const [failedRun] = await database.select().from(evidenceExtractionRuns)
@@ -167,7 +174,10 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
       provider: "test-provider",
       model: "deterministic-extractor-v1",
       rawModelOutput: "malformed model response",
+      rawIntakeText: baslonMessyIntake,
+      sourceReference: "Preserved live intake reference",
     });
+    expect(failedRunId).toBe(failedRun.id);
     expect(failedRun.validationErrors).not.toEqual([]);
     expect(await extractionRepository.getProposals(failedRun.id, business.id)).toEqual([]);
     expect(await strategicState(business.id)).toEqual(before);

@@ -9,6 +9,7 @@ import {
   getStrategyOrchestrator,
 } from "@/foundation";
 import { deriveHumanAuthority } from "@/domain/server-authority";
+import { evidenceExtractionFailureTarget } from "@/domain/intake-retry";
 
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -82,7 +83,7 @@ export async function runEvidenceExtractionAction(formData: FormData) {
     });
     target = `/businesses/${businessId}/reviews/${extraction.run.id}`;
   } catch (error) {
-    target = `/businesses/${businessId}/intake?error=${encodeURIComponent(errorMessage(error))}`;
+    target = evidenceExtractionFailureTarget(businessId, error);
   }
   redirect(target);
 }
