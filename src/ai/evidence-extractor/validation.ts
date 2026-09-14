@@ -28,7 +28,7 @@ function numbersExplicitlyPresentIn(sourceExcerpt: string): number[] {
   return values;
 }
 
-function numericValueIsExplicit(value: number, sourceExcerpt: string): boolean {
+export function numericValueIsExplicit(value: number, sourceExcerpt: string): boolean {
   return numbersExplicitlyPresentIn(sourceExcerpt).some((candidate) => {
     const tolerance = Math.max(1e-9, Math.abs(value) * 1e-12);
     return Math.abs(candidate - value) <= tolerance;

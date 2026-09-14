@@ -42,6 +42,15 @@ export const evidenceExtractionRunStatus = pgEnum("evidence_extraction_run_statu
 export const evidenceProposalType = pgEnum("evidence_proposal_type", [
   "claim", "evidence", "metric", "claim_evidence",
 ]);
+export const evidenceReviewSessionStatus = pgEnum("evidence_review_session_status", [
+  "OPEN", "COMPLETED",
+]);
+export const evidenceReviewDecision = pgEnum("evidence_review_decision", [
+  "ACCEPTED", "CORRECTED", "REJECTED", "UNRESOLVED",
+]);
+export const reviewCanonicalEntityType = pgEnum("review_canonical_entity_type", [
+  "claim", "evidence", "metric", "claim_evidence",
+]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -97,6 +106,11 @@ export const evidenceProposals = pgTable("evidence_proposals", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("evidence_proposals_run_ref_unique").on(table.extractionRunId, table.proposalRef),
+  unique("evidence_proposals_id_business_run_unique").on(
+    table.id,
+    table.businessId,
+    table.extractionRunId,
+  ),
   index("evidence_proposals_business_idx").on(table.businessId, table.createdAt),
   foreignKey({
     columns: [table.extractionRunId, table.businessId],
@@ -216,7 +230,80 @@ export const businessStateSnapshots = pgTable("business_state_snapshots", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("business_state_snapshots_business_version_unique").on(table.businessId, table.version),
+  unique("business_state_snapshots_id_business_unique").on(table.id, table.businessId),
   check("business_state_snapshots_version_check", sql`${table.version} > 0`),
+]);
+
+export const evidenceReviewSessions = pgTable("evidence_review_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  extractionRunId: uuid("extraction_run_id").notNull(),
+  reviewerId: text("reviewer_id").notNull(),
+  status: evidenceReviewSessionStatus("status").default("OPEN").notNull(),
+  resultingSnapshotId: uuid("resulting_snapshot_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  unique("evidence_review_sessions_run_unique").on(table.extractionRunId),
+  unique("evidence_review_sessions_id_business_run_unique").on(
+    table.id,
+    table.businessId,
+    table.extractionRunId,
+  ),
+  foreignKey({
+    columns: [table.extractionRunId, table.businessId],
+    foreignColumns: [evidenceExtractionRuns.id, evidenceExtractionRuns.businessId],
+    name: "evidence_review_sessions_run_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.resultingSnapshotId, table.businessId],
+    foreignColumns: [businessStateSnapshots.id, businessStateSnapshots.businessId],
+    name: "evidence_review_sessions_snapshot_same_business_fk",
+  }).onDelete("restrict"),
+]);
+
+export const proposalReviews = pgTable("proposal_reviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  proposalId: uuid("proposal_id").notNull(),
+  extractionRunId: uuid("extraction_run_id").notNull(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  decision: evidenceReviewDecision("decision").notNull(),
+  reviewedPayload: jsonb("reviewed_payload").$type<Record<string, unknown>>(),
+  reason: text("reason"),
+  canonicalEntityType: reviewCanonicalEntityType("canonical_entity_type"),
+  canonicalEntityId: uuid("canonical_entity_id"),
+  canonicalReference: jsonb("canonical_reference").$type<Record<string, unknown>>().default({}).notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("proposal_reviews_proposal_unique").on(table.proposalId),
+  index("proposal_reviews_session_idx").on(table.reviewSessionId, table.reviewedAt),
+  foreignKey({
+    columns: [table.reviewSessionId, table.businessId, table.extractionRunId],
+    foreignColumns: [
+      evidenceReviewSessions.id,
+      evidenceReviewSessions.businessId,
+      evidenceReviewSessions.extractionRunId,
+    ],
+    name: "proposal_reviews_session_same_business_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.proposalId, table.businessId, table.extractionRunId],
+    foreignColumns: [
+      evidenceProposals.id,
+      evidenceProposals.businessId,
+      evidenceProposals.extractionRunId,
+    ],
+    name: "proposal_reviews_proposal_same_business_run_fk",
+  }).onDelete("restrict"),
+  check("proposal_reviews_corrected_payload_check", sql`
+    (${table.decision} = 'CORRECTED' and ${table.reviewedPayload} is not null)
+    or (${table.decision} <> 'CORRECTED' and ${table.reviewedPayload} is null)
+  `),
+  check("proposal_reviews_noncanonical_decision_check", sql`
+    ${table.decision} not in ('REJECTED', 'UNRESOLVED')
+    or (${table.canonicalEntityType} is null and ${table.canonicalEntityId} is null)
+  `),
 ]);
 
 export const strategyWorkflows = pgTable("strategy_workflows", {
@@ -248,4 +335,5 @@ export const businessRelations = relations(businesses, ({ one, many }) => ({
   snapshots: many(businessStateSnapshots),
   workflow: one(strategyWorkflows),
   evidenceExtractionRuns: many(evidenceExtractionRuns),
+  evidenceReviewSessions: many(evidenceReviewSessions),
 }));
