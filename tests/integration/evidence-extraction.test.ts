@@ -178,6 +178,12 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
       sourceReference: "Preserved live intake reference",
     });
     expect(failedRunId).toBe(failedRun.id);
+    expect(await extractionRepository.getLatestRun(business.id)).toMatchObject({
+      id: failedRun.id,
+      rawIntakeText: baslonMessyIntake,
+      sourceReference: "Preserved live intake reference",
+      status: "FAILED",
+    });
     expect(failedRun.validationErrors).not.toEqual([]);
     expect(await extractionRepository.getProposals(failedRun.id, business.id)).toEqual([]);
     expect(await strategicState(business.id)).toEqual(before);

@@ -1,0 +1,73 @@
+import Link from "next/link";
+import type { BusinessProgress } from "@/domain/business-progress";
+import { countNoun } from "@/domain/presentation";
+import {
+  formatWorkspaceMetric,
+  formatWorkspaceMetricPeriod,
+  type WorkspaceMetricPresentation,
+} from "@/domain/workspace-metrics";
+
+export type WorkspaceMetric = WorkspaceMetricPresentation;
+
+export type WorkspaceModel = {
+  business: {
+    id: string;
+    name: string;
+    sector: string | null;
+    primaryGeography: string | null;
+  };
+  progress: BusinessProgress;
+  primaryHref: string;
+  activeReviewHref?: string;
+  canAddInformation: boolean;
+  counts: Array<{ singular: string; plural: string; value: number }>;
+  metrics: WorkspaceMetric[];
+};
+
+export function BusinessWorkspace({ model }: { model: WorkspaceModel }) {
+  const metadata = [model.business.sector, model.business.primaryGeography].filter(Boolean).join(" · ");
+  return <main>
+    <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> {model.business.name}</nav>
+    <p className="context-name">{model.business.name}</p>
+    {metadata ? <p className="muted business-meta">{metadata}</p> : null}
+    <h1 className="task-title">Business Workspace</h1>
+
+    <section aria-labelledby="progress-heading">
+      <h2 id="progress-heading">Analysis progress</h2>
+      <ol className="stepper">
+        {model.progress.stages.map((stage) => <li className={`step-${stage.state}`} key={stage.label}>
+          <span aria-hidden="true">{stage.state === "complete" ? "✓" : "○"}</span>
+          <span>{stage.label}</span>
+          <span className="sr-only"> — {stage.state === "future" ? "not available yet" : stage.state}</span>
+        </li>)}
+      </ol>
+    </section>
+
+    <section className="status-panel">
+      <p className="eyebrow">Current status</p>
+      <h2>{model.progress.statusLabel}</h2>
+      <p>{model.progress.statusDescription}</p>
+      <Link className="button-link" href={model.primaryHref}>{model.progress.primaryActionLabel}</Link>
+    </section>
+
+    <section>
+      <div className="section-heading"><h2>Current Evidence State</h2><Link href={`/businesses/${model.business.id}/evidence`}>View all →</Link></div>
+      <div className="summary-grid">{model.counts.map((count) => <article className="summary-card" key={count.plural}>
+        <strong>{count.value}</strong><span>{countNoun(count.value, count.singular, count.plural)}</span>
+      </article>)}</div>
+    </section>
+
+    {model.metrics.length > 0 ? <section>
+      <h2>Key metrics</h2>
+      <div className="metric-grid">{model.metrics.map((metric) => <article className="metric-card" key={metric.id}>
+        <p>{metric.metricLabel}</p><strong>{formatWorkspaceMetric(metric)}</strong>
+        {formatWorkspaceMetricPeriod(metric.periodStart, metric.periodEnd) ? <span className="muted">{formatWorkspaceMetricPeriod(metric.periodStart, metric.periodEnd)}</span> : null}
+      </article>)}</div>
+    </section> : null}
+
+    <section className="secondary-actions" aria-label="Business actions">
+      {model.canAddInformation ? <Link className="button-link secondary-link" href={`/businesses/${model.business.id}/intake`}>Add more information</Link> : null}
+      {model.activeReviewHref ? <Link className="button-link" href={model.activeReviewHref}>Continue Evidence Review</Link> : null}
+    </section>
+  </main>;
+}

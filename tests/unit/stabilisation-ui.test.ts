@@ -1,7 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EvidenceExtractionFailedError } from "@/domain/evidence-extraction-error";
 import { evidenceExtractionFailureTarget } from "@/domain/intake-retry";
 import {
   ProposalReviewControls,
@@ -35,25 +34,40 @@ describe("Milestone 2 stabilisation UI", () => {
       proposal, context, reviewAction: action,
     }));
     expect(html).toContain(">Accept<");
-    expect(html).toContain(">Edit<");
-    expect(html).not.toContain("Save Correction");
+    expect(html).toContain(">Correct proposal<");
+    expect(html).not.toContain(">Edit<");
+    expect(html).not.toContain("Save correction");
     expect(html).not.toContain('name="statement"');
-    expect(html).toContain("does not change the proposal");
-    expect(html).toContain("cannot currently be changed");
+    expect(html).toContain("Add review note");
+    expect(html).toContain('<details class="review-note">');
+    expect(html).toContain("It does not change the proposal");
+    expect(html).toContain("Once you submit a review decision, it cannot currently be changed.");
+    expect(html).toContain(">Leave unresolved<");
   });
 
-  it("renders only the correction workflow after Edit is entered", () => {
+  it("renders only the correction workflow after Correct proposal is chosen", () => {
     const html = renderToStaticMarkup(createElement(ProposalReviewControls, {
       proposal, context, reviewAction: action, initialEditing: true,
     }));
-    expect(html).toContain("Edit proposal");
-    expect(html).toContain("Save Correction");
+    expect(html).toContain("Correct proposal");
+    expect(html).toContain("Save correction");
     expect(html).toContain(">Cancel<");
     expect(html).toContain('name="statement"');
     expect(html).not.toContain("Edit &amp; Accept");
+    expect(html).toContain('name="decision" value="CORRECTED"');
   });
 
-  it("renders human-readable relationship endpoints before internal refs", () => {
+  it("can render the secondary review-note disclosure expanded", () => {
+    const html = renderToStaticMarkup(createElement(ProposalReviewControls, {
+      proposal, context, reviewAction: action, initialNoteOpen: true,
+    }));
+    expect(html).toContain('<details class="review-note" open="">');
+    expect(html).toContain("Review note");
+    expect(html).toContain("stored in the audit history");
+    expect(html).toContain("does not change the proposal");
+  });
+
+  it("renders human-readable relationship endpoints without internal refs", () => {
     const html = renderToStaticMarkup(createElement(RelationshipEndpoints, {
       relationship: {
         claimRef: "claim_1", evidenceRef: "evidence_1", relationshipType: "supports",
@@ -65,17 +79,18 @@ describe("Milestone 2 stabilisation UI", () => {
     }));
     expect(html).toContain("Revenue is approximately £80k.");
     expect(html).toContain("Founder records report £80k revenue.");
-    expect(html.indexOf("Revenue is approximately £80k.")).toBeLessThan(html.indexOf("claim_1"));
+    expect(html).not.toContain("claim_1");
+    expect(html).not.toContain("evidence_1");
   });
 
   it("builds a safe retry URL that references persisted intake without embedding it", () => {
     const rawIntake = "Sensitive business intake must not appear in the URL";
     const target = evidenceExtractionFailureTarget(
       context.businessId,
-      new EvidenceExtractionFailedError(context.extractionRunId, new Error(rawIntake)),
+      new Error(rawIntake),
     );
-    expect(target).toContain(`failedRun=${context.extractionRunId}`);
-    expect(target).toContain("intake+has+been+preserved");
+    expect(target).not.toContain("failedRun");
+    expect(target).toContain("information+has+been+saved");
     expect(target).not.toContain("Sensitive");
   });
 });

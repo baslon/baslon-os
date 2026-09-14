@@ -11,6 +11,8 @@ import { EvidenceReviewService } from "@/services/evidence-review-service";
 import { EvidenceStateService } from "@/services/evidence-state-service";
 import { FactAdmissionService } from "@/services/fact-admission-service";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
+import { BusinessOverviewRepository } from "@/repositories/business-overview-repository";
+import { BusinessOverviewService } from "@/services/business-overview-service";
 
 let repository: FoundationRepository | undefined;
 
@@ -25,6 +27,10 @@ export function getFactAdmissionService() {
 
 export function getBusinessService() {
   return new BusinessService(getFoundationRepository());
+}
+
+export function getBusinessOverviewService() {
+  return new BusinessOverviewService(new BusinessOverviewRepository(getDatabase()));
 }
 
 export function getBusinessStateService() {

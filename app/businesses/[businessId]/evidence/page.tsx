@@ -1,151 +1,125 @@
 import Link from "next/link";
 import { admitFactAction } from "../../../actions";
 import { getEvidenceStateService } from "@/foundation";
+import { buildEvidenceStateSummary } from "@/domain/evidence-state-summary";
+import { EvidenceStateSummary } from "../../../evidence-state-summary";
+import { EvidenceStateOverview } from "../../../evidence-state-overview";
+import { FactAdmissionAction } from "../../../fact-admission-action";
+import { EvidenceValue } from "../../../evidence-value";
+import { formatWorkspaceMetric } from "@/domain/workspace-metrics";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; view?: string; claimType?: string }>;
 };
 
 type EvidenceState = Awaited<ReturnType<ReturnType<typeof getEvidenceStateService>["getCurrent"]>>;
 type Claim = EvidenceState["claims"]["facts"][number];
 
-function Lineage({ item }: { item: Claim | EvidenceState["evidence"][number] | EvidenceState["metrics"][number] }) {
-  if (!item.lineage) return <span className="muted">Entered outside Evidence Review.</span>;
-  return (
-    <span className="muted">
-      Review {item.lineage.review.decision.toLowerCase()} from proposal {item.lineage.proposal?.proposalRef ?? "unknown"}
-      {item.lineage.review.reason ? ` — ${item.lineage.review.reason}` : ""}.
-    </span>
-  );
+const claimGroups = [
+  ["facts", "Facts"],
+  ["observations", "Observations"],
+  ["managementBeliefs", "Management beliefs"],
+  ["hypotheses", "Hypotheses"],
+  ["aiInferences", "AI inferences"],
+  ["unknowns", "Unknowns"],
+] as const;
+
+function sourceLabel(sourceType: string) {
+  if (sourceType === "business_intake") return "Business information";
+  if (sourceType === "human_fact_admission") return "Human fact admission";
+  return sourceType.replaceAll("_", " ");
 }
 
-function ClaimGroup({
-  title,
-  claims,
-  businessId,
-  evidenceItems,
-}: {
-  title: string;
-  claims: Claim[];
-  businessId: string;
-  evidenceItems: EvidenceState["evidence"];
-}) {
-  return (
-    <section className="panel">
-      <h2>{title}</h2>
-      {claims.length === 0 ? <p className="muted">None recorded.</p> : claims.map((claim) => (
-        <article className="record" key={claim.id}>
-          <h3>{claim.statement}</h3>
-          <p>{claim.subjectArea} · {claim.confidenceLevel} confidence</p>
-          <details><summary>Confidence and authority record</summary><pre>{JSON.stringify(claim.confidenceBasis, null, 2)}</pre></details>
-          <Lineage item={claim} />
-          {claim.claimType !== "fact" && evidenceItems.length > 0 ? (
-            <details>
-              <summary>Admit as fact with human confirmation</summary>
-              <form action={admitFactAction} className="form-grid compact-form">
-                <input type="hidden" name="businessId" value={businessId} />
-                <input type="hidden" name="claimId" value={claim.id} />
-                <input type="hidden" name="statement" value={claim.statement} />
-                <input type="hidden" name="subjectArea" value={claim.subjectArea} />
-                <label>
-                  Supporting evidence
-                  <select name="evidenceId" required defaultValue="">
-                    <option value="" disabled>Select evidence</option>
-                    {evidenceItems.map((evidenceItem) => (
-                      <option key={evidenceItem.id} value={evidenceItem.id}>{evidenceItem.statement}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Reviewer identity
-                  <input name="reviewerId" required placeholder="Your name or internal identifier" />
-                </label>
-                <label>
-                  Confirmation basis
-                  <textarea name="basis" required placeholder="Why this evidence supports factual admission" />
-                </label>
-                <button type="submit">Confirm fact admission</button>
-              </form>
-            </details>
-          ) : null}
-        </article>
-      ))}
-    </section>
-  );
+function ClaimCard({ claim, businessId, evidenceItems }: { claim: Claim; businessId: string; evidenceItems: EvidenceState["evidence"] }) {
+  return <article className="record-card">
+    <p className="eyebrow">{claim.claimType.replaceAll("_", " ")}</p>
+    <h3>{claim.statement}</h3>
+    <p className="record-attributes"><span>{claim.confidenceLevel} confidence</span><span>{claim.subjectArea}</span></p>
+    {claim.lineage ? <p className="muted">Human reviewed · {claim.lineage.review.decision.toLowerCase()}</p> : <p className="muted">Entered outside Evidence Review.</p>}
+    <details className="audit-details"><summary>Audit details</summary>
+      <pre>{JSON.stringify(claim.confidenceBasis, null, 2)}</pre>
+      {claim.claimType !== "fact" && evidenceItems.length > 0 ? <FactAdmissionAction>
+        <form action={admitFactAction} className="form-grid compact-form">
+          <input type="hidden" name="businessId" value={businessId} />
+          <input type="hidden" name="claimId" value={claim.id} />
+          <input type="hidden" name="statement" value={claim.statement} />
+          <input type="hidden" name="subjectArea" value={claim.subjectArea} />
+          <label>Supporting evidence<select name="evidenceId" required defaultValue=""><option value="" disabled>Select evidence</option>{evidenceItems.map((item) => <option key={item.id} value={item.id}>{item.statement}</option>)}</select></label>
+          <label>Reviewer identity<input name="reviewerId" required placeholder="Your name or internal identifier" /></label>
+          <label>Confirmation basis<textarea name="basis" required placeholder="Why this evidence supports factual admission" /></label>
+          <button type="submit">Confirm fact admission</button>
+        </form>
+      </FactAdmissionAction> : null}
+    </details>
+  </article>;
 }
 
 export default async function EvidenceStatePage({ params, searchParams }: PageProps) {
   const { businessId } = await params;
-  const { error } = await searchParams;
+  const query = await searchParams;
   const state = await getEvidenceStateService().getCurrent(businessId);
-  const reviewedEvidence = state.evidence.filter((item) => (
-    item.lineage && ["ACCEPTED", "CORRECTED"].includes(item.lineage.review.decision)
-  ));
-  const claimGroups: Array<[string, Claim[]]> = [
-    ["Facts", state.claims.facts],
-    ["Observations", state.claims.observations],
-    ["Management beliefs", state.claims.managementBeliefs],
-    ["Hypotheses", state.claims.hypotheses],
-    ["AI inferences", state.claims.aiInferences],
-    ["Unknowns", state.claims.unknowns],
-  ];
+  const view = ["overview", "claims", "evidence", "metrics", "relationships"].includes(query.view ?? "") ? query.view! : "overview";
+  const reviewedEvidence = state.evidence.filter((item) => item.lineage && ["ACCEPTED", "CORRECTED"].includes(item.lineage.review.decision));
+  const groups = claimGroups.map(([key, label]) => ({ key, label, items: state.claims[key] }));
+  const allClaims = groups.flatMap((group) => group.items);
+  const selectedGroup = groups.find((group) => group.key === query.claimType);
+  const visibleClaims = selectedGroup?.items ?? allClaims;
+  const claimById = new Map(allClaims.map((claim) => [claim.id, claim]));
+  const evidenceById = new Map(state.evidence.map((item) => [item.id, item]));
+  const summaries = buildEvidenceStateSummary({
+    facts: state.claims.facts.length,
+    observations: state.claims.observations.length,
+    managementBeliefs: state.claims.managementBeliefs.length,
+    hypotheses: state.claims.hypotheses.length,
+    aiInferences: state.claims.aiInferences.length,
+    unknowns: state.claims.unknowns.length,
+    evidence: state.evidence.length,
+    metrics: state.metrics.length,
+    relationships: state.relationships.length,
+  });
+  const tabs = [["overview", "Overview"], ["claims", "Claims"], ["evidence", "Evidence"], ["metrics", "Metrics"], ["relationships", "Relationships"]] as const;
 
-  return (
-    <main>
-      <nav><Link href="/">Businesses</Link> / Evidence State</nav>
-      <p className="eyebrow">Evidence State</p>
-      <h1>{state.business.name}</h1>
-      <p className="lede">Canonical strategic state accepted by a human. AI proposals never appear here unless reviewed.</p>
-      {error ? <p className="error" role="alert">{error}</p> : null}
+  return <main>
+    <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${businessId}`}>{state.business.name}</Link> <span aria-hidden="true">/</span> Evidence State</nav>
+    <p className="context-name">{state.business.name}</p>
+    <h1 className="task-title">Evidence State</h1>
+    <p className="lede">Reviewed information currently held about this business.</p>
+    {query.error ? <p className="error" role="alert">That change could not be saved. Please review it and try again.</p> : null}
 
-      {claimGroups.map(([title, claims]) => (
-        <ClaimGroup
-          key={title}
-          title={title}
-          claims={claims}
-          businessId={businessId}
-          evidenceItems={reviewedEvidence}
-        />
-      ))}
+    <EvidenceStateSummary summary={summaries} />
+    <nav className="tabs" aria-label="Evidence State sections">{tabs.map(([key, label]) => <Link key={key} className={view === key ? "active" : ""} aria-current={view === key ? "page" : undefined} href={`?view=${key}`}>{label}</Link>)}</nav>
 
-      <section className="panel">
-        <h2>Evidence</h2>
-        {state.evidence.length === 0 ? <p className="muted">None recorded.</p> : state.evidence.map((item) => (
-          <article className="record" key={item.id}>
-            <h3>{item.statement}</h3>
-            <p>{item.sourceType}{item.sourceReference ? ` · ${item.sourceReference}` : ""}</p>
-            <p>Reliability: {item.reliabilityLevel} · Directness: {item.directnessLevel} · Materiality: {item.materiality}</p>
-            <details><summary>Source provenance</summary><pre>{JSON.stringify(item.sourceMetadata, null, 2)}</pre></details>
-            <Lineage item={item} />
-          </article>
-        ))}
-      </section>
+    {view === "overview" ? <EvidenceStateOverview
+      claims={allClaims.length}
+      activeClaimTypes={groups.filter((group) => group.items.length > 0).length}
+      evidence={state.evidence.length}
+      metrics={state.metrics.length}
+      relationships={state.relationships.length}
+    /> : null}
 
-      <section className="panel">
-        <h2>Metrics</h2>
-        {state.metrics.length === 0 ? <p className="muted">None recorded.</p> : state.metrics.map((item) => (
-          <article className="record" key={item.id}>
-            <h3>{item.metricLabel}</h3>
-            <p>{item.numericValue} {item.unit}</p>
-            <p className="muted">Source evidence: {item.sourceEvidenceId ?? "none linked"}</p>
-            <Lineage item={item} />
-          </article>
-        ))}
-      </section>
+    {view === "claims" ? <section>
+      <div className="section-heading"><h2>Claims</h2><span className="muted">{visibleClaims.length} shown</span></div>
+      <nav className="filter-pills" aria-label="Filter Claims"><Link className={!selectedGroup ? "active" : ""} href="?view=claims">All</Link>{groups.map((group) => <Link key={group.key} className={selectedGroup?.key === group.key ? "active" : ""} href={`?view=claims&claimType=${group.key}`}>{group.label} ({group.items.length})</Link>)}</nav>
+      {visibleClaims.length > 0 ? <div className="record-list">{visibleClaims.map((claim) => <ClaimCard key={claim.id} claim={claim} businessId={businessId} evidenceItems={reviewedEvidence} />)}</div> : <p className="empty-state">No claims in this category.</p>}
+    </section> : null}
 
-      <section className="panel">
-        <h2>Claim / evidence relationships</h2>
-        {state.relationships.length === 0 ? <p className="muted">None recorded.</p> : state.relationships.map((item) => (
-          <article className="record" key={`${item.claimId}-${item.evidenceId}-${item.relationshipType}`}>
-            <strong>{item.relationshipType}</strong>
-            <p className="muted">Claim {item.claimId}<br />Evidence {item.evidenceId}</p>
-            {item.lineage ? <p className="muted">Reviewed from proposal {item.lineage.proposal?.proposalRef ?? "unknown"}.</p> : null}
-          </article>
-        ))}
-      </section>
-    </main>
-  );
+    {view === "evidence" ? <section><h2>Evidence</h2>{state.evidence.length > 0 ? <div className="record-list">{state.evidence.map((item) => <article className="record-card" key={item.id}>
+      <p className="eyebrow">Evidence</p><EvidenceValue statement={item.statement} valueNumeric={item.valueNumeric} valueText={item.valueText} unit={item.unit} />
+      <p className="record-attributes"><span>{item.reliabilityLevel} reliability</span><span>{item.directnessLevel} directness</span><span>{item.materiality} materiality</span></p>
+      <p className="muted">Source: {item.sourceReference ?? sourceLabel(item.sourceType)}{item.lineage ? ` · Human ${item.lineage.review.decision.toLowerCase()}` : ""}</p>
+      <details><summary>Source provenance</summary><pre>{JSON.stringify(item.sourceMetadata, null, 2)}</pre></details>
+    </article>)}</div> : <p className="empty-state">No Evidence has been recorded yet.</p>}</section> : null}
+
+    {view === "metrics" ? <section><h2>Metrics</h2>{state.metrics.length > 0 ? <div className="metric-grid">{state.metrics.map((item) => <article className="metric-card" key={item.id}><p>{item.metricLabel}</p><strong>{formatWorkspaceMetric(item)}</strong><span className="muted">{item.sourceEvidenceId ? "Source evidence available" : "No source evidence linked"}</span></article>)}</div> : <p className="empty-state">No metrics have been recorded yet.</p>}</section> : null}
+
+    {view === "relationships" ? <section><h2>Relationships</h2>{state.relationships.length > 0 ? <div className="record-list">{state.relationships.map((item) => <article className="record-card relationship-card" key={`${item.claimId}-${item.evidenceId}-${item.relationshipType}`}>
+      <div><p className="eyebrow">Claim</p><h3>{claimById.get(item.claimId)?.statement ?? "Claim unavailable"}</h3></div>
+      <p className="relationship-badge">{item.relationshipType}</p>
+      <div><p className="eyebrow">Evidence</p><p>{evidenceById.get(item.evidenceId)?.statement ?? "Evidence unavailable"}</p></div>
+      {item.lineage ? <p className="muted">Human reviewed · {item.lineage.review.decision.toLowerCase()}</p> : null}
+    </article>)}</div> : <p className="empty-state">No reviewed relationships yet.</p>}</section> : null}
+  </main>;
 }

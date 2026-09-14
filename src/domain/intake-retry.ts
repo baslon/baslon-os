@@ -1,8 +1,6 @@
-import { EvidenceExtractionFailedError } from "@/domain/evidence-extraction-error";
-
-export function evidenceExtractionFailureTarget(businessId: string, error: unknown): string {
-  const message = "Evidence extraction failed. Your intake has been preserved so you can retry.";
+export function evidenceExtractionFailureTarget(businessId: string, _error: unknown): string {
+  void _error;
+  const message = "Analysis wasn't completed. Your information has been saved.";
   const query = new URLSearchParams({ error: message });
-  if (error instanceof EvidenceExtractionFailedError) query.set("failedRun", error.runId);
   return `/businesses/${businessId}/intake?${query.toString()}`;
 }

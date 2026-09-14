@@ -20,6 +20,7 @@ type Props = {
   context: ReviewContext;
   reviewAction: (formData: FormData) => void | Promise<void>;
   initialEditing?: boolean;
+  initialNoteOpen?: boolean;
 };
 
 function display(value: unknown) {
@@ -99,11 +100,33 @@ function confirmDecision(message: string) {
   };
 }
 
+function ReviewNote({
+  note,
+  setNote,
+  fieldName,
+  initiallyOpen = false,
+}: {
+  note: string;
+  setNote: (value: string) => void;
+  fieldName?: string;
+  initiallyOpen?: boolean;
+}) {
+  return <details className="review-note" open={initiallyOpen}>
+    <summary>Add review note <span className="field-note">Optional</span></summary>
+    <label>
+      Review note
+      <input name={fieldName} value={note} onChange={(event) => setNote(event.target.value)} />
+    </label>
+    <p className="note">This note is stored in the audit history. It does not change the proposal.</p>
+  </details>;
+}
+
 export function ProposalReviewControls({
   proposal,
   context,
   reviewAction,
   initialEditing = false,
+  initialNoteOpen = false,
 }: Props) {
   const [editing, setEditing] = useState(initialEditing);
   const [note, setNote] = useState("");
@@ -111,44 +134,36 @@ export function ProposalReviewControls({
   if (editing) {
     return <form action={reviewAction} className="review-form">
       <HiddenContext proposal={proposal} context={context} decision="CORRECTED" />
-      <h3>Edit proposal</h3>
+      <h3>Correct proposal</h3>
       <ProposalCorrectionFields proposal={proposal} />
-      <label>
-        Review note (optional — does not change the proposal)
-        <input name="reason" value={note} onChange={(event) => setNote(event.target.value)} />
-      </label>
-      <p className="note">To change the proposal, edit the structured fields above. This note is stored only in the audit history.</p>
+      <ReviewNote note={note} setNote={setNote} fieldName="reason" initiallyOpen={initialNoteOpen} />
       <div className="button-row">
-        <button type="submit">Save Correction</button>
+        <button type="submit">Save correction</button>
         <button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button>
       </div>
     </form>;
   }
 
   return <div className="review-controls">
-    <label>
-      Review note (optional — does not change the proposal)
-      <input value={note} onChange={(event) => setNote(event.target.value)} />
-    </label>
-    <p className="note">To change the proposal, choose Edit. This note is stored only in the audit history.</p>
+    <ReviewNote note={note} setNote={setNote} initiallyOpen={initialNoteOpen} />
     <div className="button-row">
       <form action={reviewAction}>
         <HiddenContext proposal={proposal} context={context} decision="ACCEPTED" />
         <input type="hidden" name="reason" value={note} />
         <button type="submit">Accept</button>
       </form>
-      <button type="button" className="secondary" onClick={() => setEditing(true)}>Edit</button>
-      <form action={reviewAction} onSubmit={confirmDecision("Reject this proposal? This review decision cannot currently be changed.")}>
+      <button type="button" className="secondary" onClick={() => setEditing(true)}>Correct proposal</button>
+      <form action={reviewAction} onSubmit={confirmDecision("Reject this proposal? Once you submit a review decision, it cannot currently be changed.")}>
         <HiddenContext proposal={proposal} context={context} decision="REJECTED" />
         <input type="hidden" name="reason" value={note} />
         <button type="submit" className="secondary">Reject</button>
       </form>
-      <form action={reviewAction} onSubmit={confirmDecision("Leave this proposal unresolved? This review decision cannot currently be changed.")}>
+      <form action={reviewAction} onSubmit={confirmDecision("Leave this proposal unresolved? Once you submit a review decision, it cannot currently be changed.")}>
         <HiddenContext proposal={proposal} context={context} decision="UNRESOLVED" />
         <input type="hidden" name="reason" value={note} />
-        <button type="submit" className="secondary">Leave Unresolved</button>
+        <button type="submit" className="secondary">Leave unresolved</button>
       </form>
     </div>
-    <p className="warning">Submitted review decisions cannot currently be changed.</p>
+    <p className="note decision-helper">Once you submit a review decision, it cannot currently be changed.</p>
   </div>;
 }

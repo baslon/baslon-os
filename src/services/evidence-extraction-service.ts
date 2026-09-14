@@ -121,4 +121,8 @@ export class EvidenceExtractionService {
   getRun(runId: string, businessId: string) {
     return this.repository.getRun(runId, businessId);
   }
+
+  getLatestRun(businessId: string) {
+    return this.repository.getLatestRun(businessId);
+  }
 }

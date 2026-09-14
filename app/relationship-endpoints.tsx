@@ -17,9 +17,10 @@ export function RelationshipEndpoints({
   const claim = proposals.find((item) => item.proposalRef === relationship.claimRef);
   const evidence = proposals.find((item) => item.proposalRef === relationship.evidenceRef);
   return <div className="relationship-endpoints">
-    <p><strong>Claim:</strong><br />{text(claim?.structuredPayload.statement)}</p>
-    <p><strong>Relationship:</strong><br />{text(relationship.relationshipType)}</p>
-    <p><strong>Evidence:</strong><br />{text(evidence?.structuredPayload.statement)}</p>
-    <p className="note">Internal refs: {text(relationship.claimRef)} → {text(relationship.evidenceRef)} (not editable)</p>
+    <div><strong>Claim</strong><p>{text(claim?.structuredPayload.statement)}</p></div>
+    <div className="relationship-arrow" aria-hidden="true">↓</div>
+    <div><strong>Relationship</strong><p>{text(relationship.relationshipType)}</p></div>
+    <div className="relationship-arrow" aria-hidden="true">↓</div>
+    <div><strong>Evidence</strong><p>{text(evidence?.structuredPayload.statement)}</p></div>
   </div>;
 }

@@ -40,7 +40,7 @@ export async function createBusinessAction(formData: FormData) {
     sector: optionalText(formData, "sector"),
     primaryGeography: optionalText(formData, "primaryGeography"),
   });
-  redirect(`/businesses/${business.id}/intake`);
+  redirect(`/businesses/${business.id}`);
 }
 
 export async function runEvidenceExtractionAction(formData: FormData) {
@@ -174,17 +174,17 @@ export async function reviewProposalAction(formData: FormData) {
 
 export async function completeEvidenceReviewAction(formData: FormData) {
   const businessId = text(formData, "businessId");
+  const runId = text(formData, "extractionRunId");
+  const sessionId = text(formData, "reviewSessionId");
   let target: string;
   try {
     await getEvidenceReviewService().completeReview({
       businessId,
-      reviewSessionId: text(formData, "reviewSessionId"),
+      reviewSessionId: sessionId,
       reviewerId: text(formData, "reviewerId"),
     });
-    target = `/businesses/${businessId}/evidence`;
+    target = `/businesses/${businessId}/reviews/${runId}?session=${sessionId}`;
   } catch (error) {
-    const runId = text(formData, "extractionRunId");
-    const sessionId = text(formData, "reviewSessionId");
     target = `/businesses/${businessId}/reviews/${runId}?session=${sessionId}&error=${encodeURIComponent(errorMessage(error))}`;
   }
   redirect(target);

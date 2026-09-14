@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   evidenceExtractionRuns,
@@ -86,6 +86,14 @@ export class EvidenceExtractionRepository {
         eq(evidenceExtractionRuns.id, runId),
         eq(evidenceExtractionRuns.businessId, businessId),
       ));
+    return run;
+  }
+
+  async getLatestRun(businessId: string) {
+    const [run] = await this.database.select().from(evidenceExtractionRuns)
+      .where(eq(evidenceExtractionRuns.businessId, businessId))
+      .orderBy(desc(evidenceExtractionRuns.createdAt))
+      .limit(1);
     return run;
   }
 
