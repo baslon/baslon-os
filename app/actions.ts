@@ -53,6 +53,26 @@ export async function restoreBusinessAction(formData: FormData) {
   redirect(`/businesses/${business.id}`);
 }
 
+export async function permanentlyDeleteBusinessAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  try {
+    await getBusinessService().permanentlyDelete({
+      businessId,
+      confirmation: text(formData, "confirmation"),
+    });
+  } catch (error) {
+    const safeMessage = error instanceof Error && [
+      "Business must be archived before it can be permanently deleted.",
+      "Business confirmation does not match.",
+      "Business not found.",
+    ].includes(error.message)
+      ? error.message
+      : "Business could not be permanently deleted.";
+    redirect(`/businesses/${businessId}/delete?error=${encodeURIComponent(safeMessage)}`);
+  }
+  redirect("/businesses/archived?deleted=1");
+}
+
 export async function runEvidenceExtractionAction(formData: FormData) {
   const businessId = text(formData, "businessId");
   const rawIntakeText = text(formData, "rawIntakeText");

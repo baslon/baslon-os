@@ -42,6 +42,22 @@ Businesses use archive semantics. Foreign keys from strategic history use
 Composite foreign keys enforce same-Business ownership for Claim/Evidence links,
 Metric source Evidence, and Claim supersession.
 
+## Business lifecycle
+
+Archive is reversible. It makes a Business read-only and removes it from active
+work surfaces while preserving its identity, canonical Evidence State, snapshots,
+extraction/review records, and workflow history. Restore reactivates that same
+Business and history without regenerating strategic records.
+
+Permanent Delete is irreversible and is available only after Archive. It removes
+the complete Business-owned graph in one explicit transaction. The target is
+always the immutable Business ID; the typed, server-derived confirmation phrase
+is a human safety check and supports duplicate Business names. Ordinary root and
+immutable-history deletion remains restricted outside this pathway. The narrow
+trigger exception uses a transaction-local, Business-specific context and is an
+accidental-deletion safeguard, not a security boundary against arbitrary SQL or
+a compromised database credential. No Business-owned deletion receipt survives.
+
 Flexible JSONB is limited to profile data, provenance/support metadata, transition
 metadata, and snapshot payloads. Strategic entities and relationships remain
 relational and queryable.

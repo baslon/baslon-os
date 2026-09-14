@@ -11,11 +11,12 @@ function archivedDate(value: Date | null) {
   }).format(value) : "Archive date unavailable";
 }
 
-export function ArchivedBusinesses({ businesses }: { businesses: ArchivedBusinessModel[] }) {
+export function ArchivedBusinesses({ businesses, deleted = false }: { businesses: ArchivedBusinessModel[]; deleted?: boolean }) {
   return <main>
     <nav className="breadcrumbs"><Link href="/">Baslon OS Home</Link> <span aria-hidden="true">/</span> <Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> Archived</nav>
     <section className="dashboard-section">
       <div className="page-header"><h1 className="task-title">Archived businesses</h1><p className="lede">Archived businesses are preserved but cannot be changed until restored.</p></div>
+      {deleted ? <p className="notice" role="status">Business permanently deleted.</p> : null}
       {businesses.length === 0 ? <p className="empty-state">No archived businesses.</p> : <div className="business-grid">
         {businesses.map(({ business }) => <article className="business-card" key={business.id}>
           <div><h3><Link href={`/businesses/${business.id}`}>{business.name}</Link></h3><p className="muted">Archived {archivedDate(business.archivedAt)}</p></div>

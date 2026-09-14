@@ -85,6 +85,11 @@ export function BusinessWorkspace({ model }: { model: WorkspaceModel }) {
         <p>Archiving removes this business from active work but preserves all of its data and history.</p>
         <ArchiveBusinessAction businessId={model.business.id} businessName={model.business.name} />
       </section>
-    </> : null}
+    </> : <section className="danger-zone" aria-labelledby="danger-zone-heading">
+      <p className="eyebrow danger-text">Danger zone</p>
+      <h2 id="danger-zone-heading">Permanently delete business</h2>
+      <p>This permanently deletes this business and all of its analysis data. This cannot be undone.</p>
+      <Link className="button-link danger-link" href={`/businesses/${model.business.id}/delete`}>Permanently delete business</Link>
+    </section>}
   </main>;
 }

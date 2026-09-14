@@ -13,6 +13,7 @@ import { FactAdmissionService } from "@/services/fact-admission-service";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { BusinessOverviewRepository } from "@/repositories/business-overview-repository";
 import { BusinessOverviewService } from "@/services/business-overview-service";
+import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
 
 let repository: FoundationRepository | undefined;
 
@@ -26,7 +27,10 @@ export function getFactAdmissionService() {
 }
 
 export function getBusinessService() {
-  return new BusinessService(getFoundationRepository());
+  return new BusinessService(
+    getFoundationRepository(),
+    new BusinessDeletionRepository(getDatabase()),
+  );
 }
 
 export function getBusinessOverviewService() {

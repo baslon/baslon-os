@@ -22,6 +22,13 @@
       "when": 1789324424225,
       "tag": "0002_evidence_review",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789416000000,
+      "tag": "0003_business_permanent_delete",
+      "breakpoints": true
     }
   ]
 }

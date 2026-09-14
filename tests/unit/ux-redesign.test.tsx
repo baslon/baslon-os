@@ -10,6 +10,7 @@ import { EvidenceValue } from "../../app/evidence-value";
 import { WorkspaceHome } from "../../app/home";
 import { ArchivedBusinesses } from "../../app/archived-businesses";
 import { confirmArchiveBusiness } from "../../app/business-lifecycle-actions";
+import { PermanentDeleteConfirmation } from "../../app/permanent-delete-confirmation";
 import RootLayout from "../../app/layout";
 import { deriveBusinessProgress } from "@/domain/business-progress";
 import { deriveIntakePresentation } from "@/domain/intake-presentation";
@@ -179,6 +180,36 @@ describe("Baslon OS UX redesign", () => {
     expect(html).not.toContain("Add more information");
     expect(html).not.toContain("Continue Evidence Review");
     expect(html).not.toContain("Archive business");
+    expect(html).toContain("Danger zone");
+    expect(html).toContain("Permanently delete business");
+  });
+
+  it("keeps Permanent Delete absent from active Business Workspaces", () => {
+    const progress = deriveBusinessProgress({ workflowState: "NEW" });
+    const html = renderToStaticMarkup(createElement(BusinessWorkspace, { model: {
+      business, progress, primaryHref: "/businesses/business-1/intake",
+      canAddInformation: true, counts: [], metrics: [],
+    } }));
+    expect(html).not.toContain("Danger zone");
+    expect(html).not.toContain("Permanently delete business");
+  });
+
+  it("renders explicit Permanent Delete confirmation with a disabled submit and Cancel", () => {
+    const html = renderToStaticMarkup(createElement(PermanentDeleteConfirmation, {
+      businessId: "business-1",
+      businessName: "ABC Consulting",
+      phrase: "ABC Consulting — abcconsulting.co.uk",
+      duplicateName: true,
+      website: "abcconsulting.co.uk",
+      geography: "London, UK",
+    }));
+    expect(html).toContain("This action cannot be undone");
+    expect(html).toContain("Another business with the same name exists");
+    expect(html).toContain("ABC Consulting — abcconsulting.co.uk");
+    expect(html).toContain("Business details, Claims, Evidence, Metrics");
+    expect(html).toContain("disabled");
+    expect(html).toContain("Cancel");
+    expect(html).not.toContain("expectedConfirmation");
   });
 
   it("renders archived Businesses and their empty state without exposing IDs as text", () => {
