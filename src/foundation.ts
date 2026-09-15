@@ -14,6 +14,8 @@ import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { BusinessOverviewRepository } from "@/repositories/business-overview-repository";
 import { BusinessOverviewService } from "@/services/business-overview-service";
 import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
+import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
+import { SourceSubmissionService } from "@/services/source-submission-service";
 
 let repository: FoundationRepository | undefined;
 
@@ -35,6 +37,10 @@ export function getBusinessService() {
 
 export function getBusinessOverviewService() {
   return new BusinessOverviewService(new BusinessOverviewRepository(getDatabase()));
+}
+
+export function getSourceSubmissionService() {
+  return new SourceSubmissionService(new SourceSubmissionRepository(getDatabase()));
 }
 
 export function getBusinessStateService() {

@@ -3,11 +3,14 @@ import type { Database } from "@/db/client";
 import {
   evidenceExtractionRuns,
   evidenceProposals,
+  sourceSubmissions,
 } from "@/db/schema";
+import { SourceSubmissionOwnershipError } from "@/domain/source-submission";
 import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
 
 export type ExtractionRunStart = {
   businessId: string;
+  sourceSubmissionId?: string;
   rawIntakeText: string;
   sourceType?: string;
   sourceReference?: string;
@@ -32,6 +35,14 @@ export class EvidenceExtractionRepository {
   }
 
   async createRun(input: ExtractionRunStart) {
+    if (input.sourceSubmissionId) {
+      const [submission] = await this.database.select({ id: sourceSubmissions.id })
+        .from(sourceSubmissions).where(and(
+          eq(sourceSubmissions.id, input.sourceSubmissionId),
+          eq(sourceSubmissions.businessId, input.businessId),
+        ));
+      if (!submission) throw new SourceSubmissionOwnershipError();
+    }
     const [run] = await this.database.insert(evidenceExtractionRuns).values(input).returning();
     return run;
   }

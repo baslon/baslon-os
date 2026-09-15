@@ -28,6 +28,37 @@ validated result. Evidence and Metric excerpts must occur in the supplied raw
 intake. Failed results persist no proposals, and neither successful nor failed
 extraction mutates Claims, Evidence, Metrics, snapshots, or workflow state.
 
+## Milestone 3A — Continuous Evidence foundation
+
+A Source Submission is the immutable original information supplied to Baslon OS.
+It is distinct from an Extraction Run, which is one processing attempt against
+that source, and from Evidence Proposals, which remain AI interpretations until
+human review. Existing historical Extraction Runs retain a null Source Submission
+reference because provenance is never fabricated.
+
+```text
+Source Submission
+       ↓
+1..* Extraction Runs over time
+       ↓
+Evidence Proposals
+       ↓
+Human Review
+       ↓
+Canonical Evidence State
+```
+
+A Source Submission can also own `0..*` attachment metadata records. Milestone 3A
+stores ownership and provenance metadata only: it does not provide file upload,
+binary storage, document parsing, or an Add Information user interface.
+
+Source Submissions and attachment metadata are immutable during ordinary
+application activity. Composite foreign keys prevent cross-Business source,
+attachment, and Extraction Run associations. Archived Businesses cannot receive
+new submissions. The authorised permanent Business deletion transaction removes
+the complete Source Submission graph using its existing Business-specific,
+transaction-local deletion context.
+
 ## Milestone 2B — Human Evidence Review and Evidence State
 
 A human can open one review session for a successful extraction run and record

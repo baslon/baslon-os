@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   check,
+  bigint,
   date,
   foreignKey,
   index,
@@ -75,9 +76,42 @@ export const businessProfiles = pgTable("business_profiles", {
   ...timestamps,
 });
 
+export const sourceSubmissions = pgTable("source_submissions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  sourceType: text("source_type").notNull(),
+  description: text("description"),
+  rawText: text("raw_text"),
+  sourceReference: text("source_reference"),
+  sourceOccurredAt: timestamp("source_occurred_at", { withTimezone: true }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("source_submissions_id_business_unique").on(table.id, table.businessId),
+  index("source_submissions_business_submitted_idx").on(table.businessId, table.submittedAt),
+]);
+
+export const sourceSubmissionAttachments = pgTable("source_submission_attachments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  sourceSubmissionId: uuid("source_submission_id").notNull(),
+  originalFilename: text("original_filename").notNull(),
+  mediaType: text("media_type").notNull(),
+  byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("source_submission_attachments_submission_idx").on(table.sourceSubmissionId, table.createdAt),
+  foreignKey({
+    columns: [table.sourceSubmissionId, table.businessId],
+    foreignColumns: [sourceSubmissions.id, sourceSubmissions.businessId],
+    name: "source_submission_attachments_same_business_fk",
+  }).onDelete("restrict"),
+  check("source_submission_attachments_byte_size_check", sql`${table.byteSize} >= 0`),
+]);
+
 export const evidenceExtractionRuns = pgTable("evidence_extraction_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
   businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  sourceSubmissionId: uuid("source_submission_id"),
   rawIntakeText: text("raw_intake_text").notNull(),
   sourceType: text("source_type"),
   sourceReference: text("source_reference"),
@@ -93,7 +127,13 @@ export const evidenceExtractionRuns = pgTable("evidence_extraction_runs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 }, (table) => [
   index("evidence_extraction_runs_business_idx").on(table.businessId, table.createdAt),
+  index("evidence_extraction_runs_source_submission_idx").on(table.sourceSubmissionId),
   unique("evidence_extraction_runs_id_business_unique").on(table.id, table.businessId),
+  foreignKey({
+    columns: [table.sourceSubmissionId, table.businessId],
+    foreignColumns: [sourceSubmissions.id, sourceSubmissions.businessId],
+    name: "evidence_extraction_runs_source_submission_same_business_fk",
+  }).onDelete("restrict"),
 ]);
 
 export const evidenceProposals = pgTable("evidence_proposals", {
@@ -336,4 +376,37 @@ export const businessRelations = relations(businesses, ({ one, many }) => ({
   workflow: one(strategyWorkflows),
   evidenceExtractionRuns: many(evidenceExtractionRuns),
   evidenceReviewSessions: many(evidenceReviewSessions),
+  sourceSubmissions: many(sourceSubmissions),
+  sourceSubmissionAttachments: many(sourceSubmissionAttachments),
+}));
+
+export const sourceSubmissionRelations = relations(sourceSubmissions, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [sourceSubmissions.businessId],
+    references: [businesses.id],
+  }),
+  attachments: many(sourceSubmissionAttachments),
+  extractionRuns: many(evidenceExtractionRuns),
+}));
+
+export const sourceSubmissionAttachmentRelations = relations(sourceSubmissionAttachments, ({ one }) => ({
+  business: one(businesses, {
+    fields: [sourceSubmissionAttachments.businessId],
+    references: [businesses.id],
+  }),
+  sourceSubmission: one(sourceSubmissions, {
+    fields: [sourceSubmissionAttachments.sourceSubmissionId],
+    references: [sourceSubmissions.id],
+  }),
+}));
+
+export const evidenceExtractionRunRelations = relations(evidenceExtractionRuns, ({ one }) => ({
+  business: one(businesses, {
+    fields: [evidenceExtractionRuns.businessId],
+    references: [businesses.id],
+  }),
+  sourceSubmission: one(sourceSubmissions, {
+    fields: [evidenceExtractionRuns.sourceSubmissionId],
+    references: [sourceSubmissions.id],
+  }),
 }));

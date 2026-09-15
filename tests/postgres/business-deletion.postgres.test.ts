@@ -17,6 +17,8 @@ import {
   evidenceReviewSessions,
   metrics,
   proposalReviews,
+  sourceSubmissionAttachments,
+  sourceSubmissions,
   strategyWorkflows,
   workflowTransitions,
 } from "@/db/schema";
@@ -24,10 +26,12 @@ import { BusinessDeletionRepository } from "@/repositories/business-deletion-rep
 import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
 import { EvidenceReviewRepository } from "@/repositories/evidence-review-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
+import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { BusinessService } from "@/services/business-service";
 import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
 import { EvidenceReviewService } from "@/services/evidence-review-service";
+import { SourceSubmissionService } from "@/services/source-submission-service";
 import {
   baslonClaims,
   baslonEvidence,
@@ -60,7 +64,7 @@ let service: BusinessService;
 async function graphCounts(target: PopulatedBusiness) {
   const directTables = [businessProfiles, businessStateSnapshots, claims, evidence, metrics,
     claimEvidence, strategyWorkflows, evidenceExtractionRuns, evidenceProposals,
-    evidenceReviewSessions, proposalReviews] as const;
+    evidenceReviewSessions, proposalReviews, sourceSubmissionAttachments, sourceSubmissions] as const;
   const direct = await Promise.all(directTables.map(async (table) => {
     const [result] = await database.select({ value: count() }).from(table)
       .where(eq(table.businessId, target.business.id));
@@ -90,6 +94,8 @@ async function graphSnapshot(target: PopulatedBusiness) {
     proposalRows,
     reviewSessionRows,
     proposalReviewRows,
+    sourceAttachmentRows,
+    sourceSubmissionRows,
   ] = await Promise.all([
     database.select().from(businessTable).where(eq(businessTable.id, businessId)).orderBy(businessTable.id),
     database.select().from(businessProfiles).where(eq(businessProfiles.businessId, businessId))
@@ -113,6 +119,11 @@ async function graphSnapshot(target: PopulatedBusiness) {
       .orderBy(evidenceReviewSessions.id),
     database.select().from(proposalReviews).where(eq(proposalReviews.businessId, businessId))
       .orderBy(proposalReviews.id),
+    database.select().from(sourceSubmissionAttachments)
+      .where(eq(sourceSubmissionAttachments.businessId, businessId))
+      .orderBy(sourceSubmissionAttachments.id),
+    database.select().from(sourceSubmissions).where(eq(sourceSubmissions.businessId, businessId))
+      .orderBy(sourceSubmissions.id),
   ]);
   return {
     businesses: businessRows,
@@ -128,6 +139,8 @@ async function graphSnapshot(target: PopulatedBusiness) {
     evidenceProposals: proposalRows,
     evidenceReviewSessions: reviewSessionRows,
     proposalReviews: proposalReviewRows,
+    sourceSubmissionAttachments: sourceAttachmentRows,
+    sourceSubmissions: sourceSubmissionRows,
   };
 }
 
@@ -158,6 +171,21 @@ async function populateBusiness(input: {
   });
   await foundation.addMetric(baslonMetric(business.id, evidenceItem.id));
   const snapshot = await foundation.createSnapshot(business.id);
+  const sourceService = new SourceSubmissionService(new SourceSubmissionRepository(database));
+  const sourceSubmission = await sourceService.create({
+    businessId: business.id,
+    sourceType: "initial_intake",
+    description: "Permanent deletion source fixture",
+    rawText: baslonMessyIntake,
+    sourceReference: "business-deletion-postgres-test",
+  });
+  const sourceAttachment = await sourceService.addAttachment({
+    businessId: business.id,
+    sourceSubmissionId: sourceSubmission.id,
+    originalFilename: "supporting-notes.txt",
+    mediaType: "text/plain",
+    byteSize: 256,
+  });
   const orchestrator = createStrategyOrchestrator(database);
   await orchestrator.transition({
     businessId: business.id,
@@ -168,7 +196,11 @@ async function populateBusiness(input: {
   const extraction = await new EvidenceExtractionService(
     new EvidenceExtractionRepository(database),
     new FakeModel(),
-  ).extract({ businessId: business.id, rawIntakeText: baslonMessyIntake });
+  ).extract({
+    businessId: business.id,
+    sourceSubmissionId: sourceSubmission.id,
+    rawIntakeText: baslonMessyIntake,
+  });
   const reviewService = new EvidenceReviewService(
     new EvidenceReviewRepository(database),
     orchestrator,
@@ -194,6 +226,8 @@ async function populateBusiness(input: {
     snapshot,
     extraction,
     session,
+    sourceSubmission,
+    sourceAttachment,
     workflowIds: [workflow!.id],
   };
 }
@@ -246,7 +280,7 @@ describe("real PostgreSQL 17 permanent Business deletion", () => {
       confirmation: `  ${target.business.name}  `,
     });
     expect(result.businessId).toBe(target.business.id);
-    expect(await graphCounts(target)).toEqual({ root: 0, direct: Array(11).fill(0), transitions: 0 });
+    expect(await graphCounts(target)).toEqual({ root: 0, direct: Array(13).fill(0), transitions: 0 });
     expect(await service.getIncludingArchived(target.business.id)).toBeUndefined();
     expect((await service.list()).map((business) => business.id)).not.toContain(target.business.id);
     expect((await service.listArchived()).map((business) => business.id)).not.toContain(target.business.id);
@@ -266,7 +300,7 @@ describe("real PostgreSQL 17 permanent Business deletion", () => {
     await expect(service.permanentlyDelete({ businessId: first.business.id, confirmation: name }))
       .rejects.toThrow("does not match");
     await service.permanentlyDelete({ businessId: first.business.id, confirmation: confirmation.phrase });
-    expect(await graphCounts(first)).toEqual({ root: 0, direct: Array(11).fill(0), transitions: 0 });
+    expect(await graphCounts(first)).toEqual({ root: 0, direct: Array(13).fill(0), transitions: 0 });
     const secondCountsAfter = await graphCounts(second);
     const secondRowsAfter = await graphSnapshot(second);
     expect(secondCountsAfter).toEqual(secondCountsBefore);

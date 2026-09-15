@@ -74,6 +74,7 @@ export class EvidenceExtractionService {
     const configuration = this.model.getConfiguration();
     const run = await this.repository.createRun({
       businessId: parsed.businessId,
+      sourceSubmissionId: parsed.sourceSubmissionId,
       rawIntakeText: parsed.rawIntakeText,
       sourceType: parsed.sourceType,
       sourceReference: parsed.sourceReference,

@@ -24,6 +24,7 @@ const dimensionDataSchema = z.object({
 
 export const evidenceExtractionInputSchema = z.object({
   businessId: z.uuid(),
+  sourceSubmissionId: z.uuid().optional(),
   rawIntakeText: z.string().trim().min(1),
   sourceType: z.string().trim().min(1).optional(),
   sourceReference: z.string().trim().min(1).optional(),
@@ -99,7 +100,7 @@ export const evidenceExtractionOutputSchema = z.object({
 }).strict();
 
 export type EvidenceExtractionInput = z.output<typeof evidenceExtractionInputSchema>;
-export type EvidenceExtractionModelInput = Omit<EvidenceExtractionInput, "businessId">;
+export type EvidenceExtractionModelInput = Omit<EvidenceExtractionInput, "businessId" | "sourceSubmissionId">;
 export type EvidenceExtractionOutput = z.output<typeof evidenceExtractionOutputSchema>;
 
 export const evidenceExtractionJsonSchema = z.toJSONSchema(

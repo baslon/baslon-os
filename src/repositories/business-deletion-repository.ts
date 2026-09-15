@@ -12,6 +12,8 @@ import {
   evidenceReviewSessions,
   metrics,
   proposalReviews,
+  sourceSubmissionAttachments,
+  sourceSubmissions,
   strategyWorkflows,
   workflowTransitions,
 } from "@/db/schema";
@@ -67,6 +69,9 @@ export class BusinessDeletionRepository {
       await tx.delete(evidenceReviewSessions).where(eq(evidenceReviewSessions.businessId, business.id));
       await tx.delete(evidenceProposals).where(eq(evidenceProposals.businessId, business.id));
       await tx.delete(evidenceExtractionRuns).where(eq(evidenceExtractionRuns.businessId, business.id));
+      await tx.delete(sourceSubmissionAttachments)
+        .where(eq(sourceSubmissionAttachments.businessId, business.id));
+      await tx.delete(sourceSubmissions).where(eq(sourceSubmissions.businessId, business.id));
       await tx.delete(claimEvidence).where(eq(claimEvidence.businessId, business.id));
       await tx.delete(metrics).where(eq(metrics.businessId, business.id));
       await tx.update(claims).set({ supersededByClaimId: null })
@@ -85,6 +90,8 @@ export class BusinessDeletionRepository {
         evidenceReviewSessions,
         evidenceProposals,
         evidenceExtractionRuns,
+        sourceSubmissionAttachments,
+        sourceSubmissions,
         claimEvidence,
         metrics,
         claims,

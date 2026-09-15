@@ -21,8 +21,10 @@ import {
 import * as schema from "@/db/schema";
 import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
+import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { BusinessService } from "@/services/business-service";
 import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
+import { SourceSubmissionService } from "@/services/source-submission-service";
 import {
   baslonBusiness,
   baslonExtractionOutput,
@@ -60,6 +62,8 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
     for (const migrationPath of [
       "../../drizzle/0000_furry_wolf_cub.sql",
       "../../drizzle/0001_evidence_extraction.sql",
+      "../../drizzle/0003_business_permanent_delete.sql",
+      "../../drizzle/0004_spotty_harpoon.sql",
     ]) {
       const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
       for (const statement of migration.split("--> statement-breakpoint")) {
@@ -137,6 +141,89 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
     expect(model.inputs).toHaveLength(1);
     expect(model.inputs[0]).not.toHaveProperty("businessId");
     expect(await strategicState(business.id)).toEqual(before);
+  });
+
+  it("links an extraction to its Source Submission without sending internal IDs to the model", async () => {
+    const business = await new BusinessService(foundationRepository).create({
+      ...baslonBusiness,
+      name: "Source-linked extraction test",
+    });
+    const sourceService = new SourceSubmissionService(new SourceSubmissionRepository(database));
+    const submission = await sourceService.create({
+      businessId: business.id,
+      sourceType: "additional_text",
+      rawText: baslonMessyIntake,
+      sourceReference: "source-linked-integration-test",
+    });
+    const model = new FakeEvidenceExtractionModel({
+      output: baslonExtractionOutput,
+      rawOutput: baslonExtractionOutput,
+    });
+    const service = new EvidenceExtractionService(extractionRepository, model);
+
+    const result = await service.extract({
+      businessId: business.id,
+      sourceSubmissionId: submission.id,
+      rawIntakeText: baslonMessyIntake,
+      sourceType: submission.sourceType,
+      sourceReference: submission.sourceReference ?? undefined,
+    });
+
+    expect(result.run.sourceSubmissionId).toBe(submission.id);
+    expect(await sourceService.getForExtractionRun(business.id, result.run.id)).toEqual(submission);
+    expect(model.inputs[0]).not.toHaveProperty("businessId");
+    expect(model.inputs[0]).not.toHaveProperty("sourceSubmissionId");
+  });
+
+  it("preserves a Source Submission after failed extraction and reuses it for a later run", async () => {
+    const business = await new BusinessService(foundationRepository).create({
+      ...baslonBusiness,
+      name: "Source-linked extraction retry test",
+    });
+    const sourceService = new SourceSubmissionService(new SourceSubmissionRepository(database));
+    const submission = await sourceService.create({
+      businessId: business.id,
+      sourceType: "additional_text",
+      rawText: baslonMessyIntake,
+      sourceReference: "source-linked-retry-test",
+    });
+    const malformedService = new EvidenceExtractionService(
+      extractionRepository,
+      new FakeEvidenceExtractionModel({
+        output: "malformed model response",
+        rawOutput: "malformed model response",
+      }),
+    );
+
+    await expect(malformedService.extract({
+      businessId: business.id,
+      sourceSubmissionId: submission.id,
+      rawIntakeText: baslonMessyIntake,
+    })).rejects.toThrow();
+    const failedRun = await extractionRepository.getLatestRun(business.id);
+    expect(failedRun).toMatchObject({
+      sourceSubmissionId: submission.id,
+      status: "FAILED",
+    });
+    expect(await sourceService.getById(business.id, submission.id)).toEqual(submission);
+
+    const retry = await new EvidenceExtractionService(
+      extractionRepository,
+      new FakeEvidenceExtractionModel({
+        output: baslonExtractionOutput,
+        rawOutput: baslonExtractionOutput,
+      }),
+    ).extract({
+      businessId: business.id,
+      sourceSubmissionId: submission.id,
+      rawIntakeText: baslonMessyIntake,
+    });
+    expect(retry.run).toMatchObject({
+      sourceSubmissionId: submission.id,
+      status: "SUCCEEDED",
+    });
+    expect(retry.run.id).not.toBe(failedRun?.id);
+    expect(await sourceService.getById(business.id, submission.id)).toEqual(submission);
   });
 
   it("records malformed output as failed and persists no proposals or strategic state", async () => {
