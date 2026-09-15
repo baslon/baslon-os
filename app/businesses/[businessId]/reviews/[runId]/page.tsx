@@ -5,7 +5,7 @@ import {
   reviewProposalAction,
   startEvidenceReviewAction,
 } from "../../../../actions";
-import { getBusinessService, getEvidenceReviewService } from "@/foundation";
+import { getBusinessService, getEvidenceReviewService, getSourceSubmissionService } from "@/foundation";
 import { ProposalReviewControls } from "../../../../proposal-review-controls";
 import { RelationshipEndpoints } from "../../../../relationship-endpoints";
 import { buildReviewQueue } from "@/domain/review-queue";
@@ -37,6 +37,11 @@ export default async function EvidenceReviewPage({
   const extraction = await service.getExtraction(runId, businessId).catch(() => null);
   const business = await getBusinessService().getIncludingArchived(businessId);
   if (!extraction || !business) notFound();
+  const source = await getSourceSubmissionService().getForExtractionRun(businessId, runId);
+  const sourceDetails = source ? <details className="panel"><summary>Submitted information</summary>
+    {source.sourceReference ? <p>Source: {source.sourceReference}</p> : null}
+    <p className="source-block" style={{ whiteSpace: "pre-wrap" }}>{source.rawText}</p>
+  </details> : null;
   if (business.status === "archived") return <main className="narrow">
     <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${businessId}`}>{business.name}</Link> <span aria-hidden="true">/</span> Evidence Review</nav>
     <p className="context-name">{business.name}</p>
@@ -53,6 +58,7 @@ export default async function EvidenceReviewPage({
       <p className="context-name">{business.name}</p>
       <p className="eyebrow">Evidence Review</p>
       <h1 className="task-title">Review the findings</h1>
+      {sourceDetails}
       {query.error && <p className="error" role="alert">The review could not be started. Please try again.</p>}
       <section className="panel">
         <h2>{extraction.proposals.length} proposals are ready</h2>
@@ -81,6 +87,7 @@ export default async function EvidenceReviewPage({
     <p className="context-name">{business.name}</p>
     <h1 className="task-title">Evidence Review</h1>
     {query.error && <p className="error" role="alert">That decision could not be saved. Please review it and try again.</p>}
+    {sourceDetails}
 
     <section className="review-progress" aria-labelledby="review-progress-heading">
       <div className="section-heading">

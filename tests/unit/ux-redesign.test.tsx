@@ -177,7 +177,7 @@ describe("Baslon OS UX redesign", () => {
     expect(html).toContain("Archived business");
     expect(html).toContain("read-only");
     expect(html).toContain("Restore business");
-    expect(html).not.toContain("Add more information");
+    expect(html).not.toContain("Add Information");
     expect(html).not.toContain("Continue Evidence Review");
     expect(html).not.toContain("Archive business");
     expect(html).toContain("Danger zone");

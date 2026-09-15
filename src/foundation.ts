@@ -16,6 +16,11 @@ import { BusinessOverviewService } from "@/services/business-overview-service";
 import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
 import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { SourceSubmissionService } from "@/services/source-submission-service";
+import { AddInformationService } from "@/services/add-information-service";
+
+export function getAddInformationService() {
+  return new AddInformationService(getSourceSubmissionService(), getEvidenceExtractionService(), getEvidenceReviewService(), getStrategyOrchestrator());
+}
 
 let repository: FoundationRepository | undefined;
 

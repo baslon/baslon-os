@@ -49,6 +49,7 @@ export const transitionRules: readonly Rule[] = [
   { from: "INTAKE_READY", event: "PROCESS_EVIDENCE", to: "EVIDENCE_PROCESSING" },
   { from: "EVIDENCE_PROCESSING", event: "MARK_ANALYSIS_COMPLETE", to: "EVIDENCE_READY" },
   { from: "EVIDENCE_READY", event: "RUN_GAP_ANALYSIS", to: "GAP_ANALYSIS" },
+  { from: "EVIDENCE_READY", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
   { from: "GAP_ANALYSIS", event: "MARK_ANALYSIS_COMPLETE", to: "GAP_RESOLUTION_REQUIRED" },
   { from: "GAP_RESOLUTION_REQUIRED", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
   { from: "GAP_RESOLUTION_REQUIRED", event: "MARK_UNKNOWN", to: "GAP_RESOLUTION_REQUIRED" },

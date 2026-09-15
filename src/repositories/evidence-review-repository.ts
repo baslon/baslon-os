@@ -220,7 +220,11 @@ export class EvidenceReviewRepository {
           tx.select().from(strategyWorkflows)
             .where(eq(strategyWorkflows.businessId, input.businessId)),
         ]);
-        return { session, snapshot, completedNow: false, workflowState: workflow?.state };
+        const [latestRun] = await tx.select({ id: evidenceExtractionRuns.id }).from(evidenceExtractionRuns)
+          .where(eq(evidenceExtractionRuns.businessId, input.businessId))
+          .orderBy(sql`${evidenceExtractionRuns.createdAt} desc`).limit(1);
+        return { session, snapshot, completedNow: false,
+          workflowState: latestRun?.id === session.extractionRunId ? workflow?.state : undefined };
       }
 
       const [proposals, reviews] = await Promise.all([

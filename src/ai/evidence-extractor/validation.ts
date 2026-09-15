@@ -25,6 +25,57 @@ function numbersExplicitlyPresentIn(sourceExcerpt: string): number[] {
     values.push(value);
   }
 
+  return [...values, ...writtenCardinalValuesExplicitlyPresentIn(sourceExcerpt)];
+}
+
+const writtenCardinalValues = new Map<string, number>([
+  ["zero", 0], ["one", 1], ["two", 2], ["three", 3], ["four", 4],
+  ["five", 5], ["six", 6], ["seven", 7], ["eight", 8], ["nine", 9],
+  ["ten", 10], ["eleven", 11], ["twelve", 12], ["thirteen", 13],
+  ["fourteen", 14], ["fifteen", 15], ["sixteen", 16], ["seventeen", 17],
+  ["eighteen", 18], ["nineteen", 19],
+]);
+
+const writtenCardinalTens = new Map<string, number>([
+  ["twenty", 20], ["thirty", 30], ["forty", 40], ["fifty", 50],
+  ["sixty", 60], ["seventy", 70], ["eighty", 80], ["ninety", 90],
+]);
+
+const writtenCardinalPattern = /(?<![\p{L}\p{N}_])(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)(?![\p{L}\p{N}_])/giu;
+
+function writtenCardinalValuesExplicitlyPresentIn(sourceExcerpt: string): number[] {
+  const values: number[] = [];
+
+  for (const match of sourceExcerpt.matchAll(writtenCardinalPattern)) {
+    const text = match[0].toLowerCase();
+    const matchIndex = match.index ?? 0;
+    const precedingText = sourceExcerpt.slice(0, matchIndex);
+    const followingText = sourceExcerpt.slice(matchIndex + match[0].length);
+
+    // A compound such as "three-day" names a qualitative form, not an explicit
+    // numeric measurement. Tens compounds such as "twenty-five" are consumed
+    // whole by the pattern and therefore remain valid cardinal numbers.
+    if (/^-[\p{L}]/u.test(followingText)) continue;
+
+    // Do not turn approximate written language into an exact numeric value.
+    if (/\b(?:about|approximately|approx\.?|roughly|around|nearly|almost|circa)\s*$/iu.test(precedingText)) {
+      continue;
+    }
+
+    const parts = text.split(/[- ]/u);
+    const directValue = writtenCardinalValues.get(parts[0]);
+    if (directValue !== undefined) {
+      values.push(directValue);
+      continue;
+    }
+
+    const tensValue = writtenCardinalTens.get(parts[0]);
+    const unitValue = parts[1] ? writtenCardinalValues.get(parts[1]) : 0;
+    if (tensValue !== undefined && unitValue !== undefined) {
+      values.push(tensValue + unitValue);
+    }
+  }
+
   return values;
 }
 

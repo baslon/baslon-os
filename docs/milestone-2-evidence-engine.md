@@ -59,7 +59,29 @@ new submissions. The authorised permanent Business deletion transaction removes
 the complete Source Submission graph using its existing Business-specific,
 transaction-local deletion context.
 
-## Milestone 2B — Human Evidence Review and Evidence State
+## Milestone 3B — Repeatable Add Information
+
+Completed Businesses expose `/businesses/[businessId]/information`. A dedicated
+AddInformationService validates text, persists an immutable `additional_text`
+Source Submission, and uses the Orchestrator's human-only ADD_EVIDENCE transition
+from EVIDENCE_READY to EVIDENCE_PROCESSING. Initial intake remains a separate action.
+The extractor still receives only the new source and uses evidence_extractor_v4.
+No schema or prompt change is required.
+
+Failed extraction retains its source and run. The retry action accepts a failed
+run identifier, resolves its same-Business source on the server, and creates a
+new run using that original text. Retry fields cannot alter the original source.
+Only the latest failed run can be retried; successful proposals proceed to review.
+
+Existing per-decision transactions append Accepted/Corrected records with their
+audit entries. Rejected/Unresolved records do not enter canonical state. Completion
+creates a full cumulative snapshot; it does not batch-apply decisions. Earlier
+snapshots and unrelated canonical records survive each cycle. Completing an old
+review again cannot advance a newer extraction's workflow. The review page exposes
+the full linked source text. Semantic comparison, canonical replacement and
+historical relationship targeting remain deferred.
+
+## Milestone 2B — Human Evidence Review and Evidence State (existing semantics)
 
 A human can open one review session for a successful extraction run and record
 an explicit decision for every immutable proposal: accepted, corrected,

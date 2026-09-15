@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { admitFactAction } from "../../../actions";
-import { getEvidenceStateService } from "@/foundation";
+import { getEvidenceStateService, getEvidenceReviewService } from "@/foundation";
 import { buildEvidenceStateSummary } from "@/domain/evidence-state-summary";
 import { EvidenceStateSummary } from "../../../evidence-state-summary";
 import { EvidenceStateOverview } from "../../../evidence-state-overview";
@@ -61,6 +61,7 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
   const { businessId } = await params;
   const query = await searchParams;
   const state = await getEvidenceStateService().getCurrent(businessId);
+  const workflowState = await getEvidenceReviewService().getWorkflowState(businessId);
   const view = ["overview", "claims", "evidence", "metrics", "relationships"].includes(query.view ?? "") ? query.view! : "overview";
   const reviewedEvidence = state.evidence.filter((item) => item.lineage && ["ACCEPTED", "CORRECTED"].includes(item.lineage.review.decision));
   const groups = claimGroups.map(([key, label]) => ({ key, label, items: state.claims[key] }));
@@ -88,6 +89,7 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     <p className="context-name">{state.business.name}</p>
     <h1 className="task-title">Evidence State</h1>
     <p className="lede">Reviewed information currently held about this business.</p>
+    {!archived && workflowState === "EVIDENCE_READY" ? <Link className="button-link secondary-link" href={`/businesses/${businessId}/information`}>Add Information</Link> : null}
     {archived ? <div className="notice"><strong>Archived — read-only</strong><p>Restore this business before making changes to its Evidence State.</p></div> : null}
     {query.error ? <p className="error" role="alert">That change could not be saved. Please review it and try again.</p> : null}
 

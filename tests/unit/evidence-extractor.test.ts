@@ -172,6 +172,83 @@ describe("Evidence Extractor contracts and business rules", () => {
       .not.toThrow();
   });
 
+  it("matches an unambiguous written number to its numeric form", () => {
+    const source = "A referral partnership generated three enquiries.";
+    const output = outputWith((value) => {
+      const item = (value.evidence as Array<Record<string, unknown>>)[0];
+      const metric = (value.metrics as Array<Record<string, unknown>>)[0];
+      item.sourceExcerpt = source;
+      item.valueNumeric = 3;
+      metric.sourceExcerpt = source;
+      metric.numericValue = 3;
+    });
+
+    expect(() => validateEvidenceExtractionOutput(output, source)).not.toThrow();
+  });
+
+  it.each(["twenty five", "twenty-five"])(
+    "matches the multi-word written number %s to 25",
+    (writtenNumber) => {
+      const source = `The partnership generated ${writtenNumber} enquiries.`;
+      const output = outputWith((value) => {
+        const item = (value.evidence as Array<Record<string, unknown>>)[0];
+        const metric = (value.metrics as Array<Record<string, unknown>>)[0];
+        item.sourceExcerpt = source;
+        item.valueNumeric = 25;
+        metric.sourceExcerpt = source;
+        metric.numericValue = 25;
+      });
+
+      expect(() => validateEvidenceExtractionOutput(output, source)).not.toThrow();
+    },
+  );
+
+  it("rejects a numeric value not represented by the written number", () => {
+    const source = "A referral partnership generated three enquiries.";
+    const output = outputWith((value) => {
+      const item = (value.evidence as Array<Record<string, unknown>>)[0];
+      const metric = (value.metrics as Array<Record<string, unknown>>)[0];
+      item.sourceExcerpt = source;
+      item.valueNumeric = 4;
+      metric.sourceExcerpt = source;
+      metric.numericValue = 4;
+    });
+
+    expect(() => validateEvidenceExtractionOutput(output, source))
+      .toThrow("numeric value 4 is not explicitly present");
+  });
+
+  it("does not convert an approximate written number into an exact value", () => {
+    const source = "The partnership generated roughly three enquiries.";
+    const output = outputWith((value) => {
+      const item = (value.evidence as Array<Record<string, unknown>>)[0];
+      const metric = (value.metrics as Array<Record<string, unknown>>)[0];
+      item.sourceExcerpt = source;
+      item.valueNumeric = 3;
+      metric.sourceExcerpt = source;
+      metric.numericValue = 3;
+    });
+
+    expect(() => validateEvidenceExtractionOutput(output, source))
+      .toThrow("numeric value 3 is not explicitly present");
+  });
+
+  it("restricts written-number provenance to the cited source excerpt", () => {
+    const rawIntake = "Three enquiries arrived. The referral partnership is new.";
+    const citedExcerpt = "The referral partnership is new.";
+    const output = outputWith((value) => {
+      const item = (value.evidence as Array<Record<string, unknown>>)[0];
+      const metric = (value.metrics as Array<Record<string, unknown>>)[0];
+      item.sourceExcerpt = citedExcerpt;
+      item.valueNumeric = 3;
+      metric.sourceExcerpt = citedExcerpt;
+      metric.numericValue = 3;
+    });
+
+    expect(() => validateEvidenceExtractionOutput(output, rawIntake))
+      .toThrow("numeric value 3 is not explicitly present");
+  });
+
   it("rejects a mismatched Metric numeric value", () => {
     const output = outputWith((value) => {
       (value.metrics as Array<Record<string, unknown>>)[0].numericValue = 81000;

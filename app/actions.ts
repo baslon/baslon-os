@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import {
   getBusinessService,
+  getAddInformationService,
   getEvidenceExtractionService,
   getEvidenceReviewService,
   getFactAdmissionService,
@@ -10,6 +11,22 @@ import {
 } from "@/foundation";
 import { deriveHumanAuthority } from "@/domain/server-authority";
 import { evidenceExtractionFailureTarget } from "@/domain/intake-retry";
+
+export async function addInformationAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target: string;
+  try {
+    const service = getAddInformationService();
+    const runId = optionalText(formData, "runId");
+    const result = runId
+      ? await service.retry({ businessId, runId })
+      : await service.submit({ businessId, rawText: text(formData, "rawText"), sourceReference: optionalText(formData, "sourceReference") });
+    target = `/businesses/${businessId}/reviews/${result.run.id}`;
+  } catch {
+    target = `/businesses/${businessId}/information?error=1`;
+  }
+  redirect(target);
+}
 
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -77,6 +94,8 @@ export async function runEvidenceExtractionAction(formData: FormData) {
   const businessId = text(formData, "businessId");
   const rawIntakeText = text(formData, "rawIntakeText");
   const sourceReference = optionalText(formData, "sourceReference");
+  const latestRun = await getEvidenceExtractionService().getLatestRun(businessId);
+  if (latestRun?.sourceSubmissionId) redirect(`/businesses/${businessId}/information`);
   let target: string;
   try {
     const reviewService = getEvidenceReviewService();

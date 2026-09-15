@@ -42,7 +42,9 @@ export class BusinessOverviewService {
         ? `/businesses/${row.business.id}/evidence`
         : progress.primaryActionPath === "review" && row.latestExtraction
           ? `/businesses/${row.business.id}/reviews/${row.latestExtraction.id}`
-          : `/businesses/${row.business.id}/intake`;
+          : row.latestExtraction?.sourceSubmissionId
+            ? `/businesses/${row.business.id}/information`
+            : `/businesses/${row.business.id}/intake`;
     return { ...row, progress, primaryHref };
   }
 }

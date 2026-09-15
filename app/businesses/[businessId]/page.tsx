@@ -34,7 +34,7 @@ export default async function BusinessWorkspacePage({ params }: { params: Promis
     progress: workspaceProgress,
     primaryHref: workspacePrimaryHref,
     activeReviewHref,
-    canAddInformation: overview.workflow?.state !== "EVIDENCE_READY",
+    canAddInformation: overview.workflow?.state === "EVIDENCE_READY",
     counts,
     metrics: selectWorkspaceKeyMetrics(state.metrics),
   }} />;
