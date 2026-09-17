@@ -22,6 +22,19 @@ describe("Add Information UI and action", () => {
     expect(retry).not.toContain('name="rawText"');
   });
 
+  it("shows a generated question as read-only context and keeps the human answer blank", () => {
+    const html = renderToStaticMarkup(createElement(InformationForm, {
+      businessId: "business", action: async () => {},
+      question: { id: "question", questionText: "How many active clients are there?" },
+    }));
+    expect(html).toContain("Question Baslon OS is asking");
+    expect(html).toContain("How many active clients are there?");
+    expect(html).toContain("The question provides context only");
+    expect(html).toContain('name="questionId" value="question"');
+    expect(html).toContain("Your information");
+    expect(html).not.toContain("How many active clients are there?</textarea>");
+  });
+
   it("routes fresh submissions and retries to distinct service operations", async () => {
     mocks.submit.mockResolvedValue({ run: { id: "new-run" } });
     mocks.retry.mockResolvedValue({ run: { id: "retry-run" } });
@@ -29,7 +42,13 @@ describe("Add Information UI and action", () => {
     form.set("businessId", "business");
     form.set("rawText", "New notes");
     await expect(addInformationAction(form)).rejects.toThrow("/businesses/business/reviews/new-run");
-    expect(mocks.submit).toHaveBeenCalledWith({ businessId: "business", rawText: "New notes", sourceReference: undefined });
+    expect(mocks.submit).toHaveBeenCalledWith({ businessId: "business", rawText: "New notes", sourceReference: undefined, questionId: undefined });
+    form.set("questionId", "11111111-1111-4111-8111-111111111111");
+    await expect(addInformationAction(form)).rejects.toThrow("/businesses/business/reviews/new-run");
+    expect(mocks.submit).toHaveBeenLastCalledWith({
+      businessId: "business", rawText: "New notes", sourceReference: undefined,
+      questionId: "11111111-1111-4111-8111-111111111111",
+    });
     form.set("runId", "failed-run");
     form.set("rawText", "Tampered retry text");
     await expect(addInformationAction(form)).rejects.toThrow("/businesses/business/reviews/retry-run");

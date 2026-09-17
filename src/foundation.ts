@@ -17,6 +17,10 @@ import { BusinessDeletionRepository } from "@/repositories/business-deletion-rep
 import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { SourceSubmissionService } from "@/services/source-submission-service";
 import { AddInformationService } from "@/services/add-information-service";
+import { OpenAIEvidenceCoherenceModel } from "@/ai/evidence-coherence/openai-adapter";
+import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
+import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
+import { EvidenceQualityService } from "@/services/evidence-quality-service";
 
 export function getAddInformationService() {
   return new AddInformationService(getSourceSubmissionService(), getEvidenceExtractionService(), getEvidenceReviewService(), getStrategyOrchestrator());
@@ -73,4 +77,17 @@ export function getEvidenceStateService() {
 
 export function getStrategyOrchestrator() {
   return createStrategyOrchestrator(getDatabase());
+}
+
+export function getEvidenceCoherenceService() {
+  const database = getDatabase();
+  return new EvidenceCoherenceService(
+    new EvidenceCoherenceRepository(database),
+    new OpenAIEvidenceCoherenceModel(),
+    createStrategyOrchestrator(database),
+  );
+}
+
+export function getEvidenceQualityService() {
+  return new EvidenceQualityService(new EvidenceCoherenceRepository(getDatabase()));
 }

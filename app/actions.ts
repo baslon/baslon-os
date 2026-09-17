@@ -8,6 +8,7 @@ import {
   getEvidenceReviewService,
   getFactAdmissionService,
   getStrategyOrchestrator,
+  getEvidenceCoherenceService,
 } from "@/foundation";
 import { deriveHumanAuthority } from "@/domain/server-authority";
 import { evidenceExtractionFailureTarget } from "@/domain/intake-retry";
@@ -18,12 +19,14 @@ export async function addInformationAction(formData: FormData) {
   try {
     const service = getAddInformationService();
     const runId = optionalText(formData, "runId");
+    const questionId = optionalText(formData, "questionId");
     const result = runId
       ? await service.retry({ businessId, runId })
-      : await service.submit({ businessId, rawText: text(formData, "rawText"), sourceReference: optionalText(formData, "sourceReference") });
+      : await service.submit({ businessId, rawText: text(formData, "rawText"), sourceReference: optionalText(formData, "sourceReference"), questionId });
     target = `/businesses/${businessId}/reviews/${result.run.id}`;
   } catch {
-    target = `/businesses/${businessId}/information?error=1`;
+    const questionId = optionalText(formData, "questionId");
+    target = `/businesses/${businessId}/information?${questionId ? `question=${questionId}&` : ""}error=1`;
   }
   redirect(target);
 }
@@ -262,6 +265,17 @@ export async function admitFactAction(formData: FormData) {
     target = `/businesses/${businessId}/evidence`;
   } catch (error) {
     target = `/businesses/${businessId}/evidence?error=${encodeURIComponent(errorMessage(error))}`;
+  }
+  redirect(target);
+}
+
+export async function analyseEvidenceAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = `/businesses/${businessId}/evidence-quality`;
+  try {
+    await getEvidenceCoherenceService().analyseCurrentSnapshot({ businessId });
+  } catch {
+    target += "?error=1";
   }
   redirect(target);
 }

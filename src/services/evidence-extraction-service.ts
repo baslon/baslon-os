@@ -4,7 +4,7 @@ import {
   type EvidenceExtractionOutput,
 } from "@/ai/evidence-extractor/contracts";
 import type { EvidenceExtractionModel } from "@/ai/evidence-extractor/model";
-import { EVIDENCE_EXTRACTOR_PROMPT_VERSION } from "@/ai/evidence-extractor/prompt";
+import { evidenceExtractorPromptVersion } from "@/ai/evidence-extractor/prompt";
 import {
   EvidenceExtractionBusinessRuleError,
   validateEvidenceExtractionOutput,
@@ -71,15 +71,27 @@ export class EvidenceExtractionService {
   async extract(input: unknown) {
     const parsed = evidenceExtractionInputSchema.parse(input);
     await this.repository.assertBusinessActive(parsed.businessId);
-    const configuration = this.model.getConfiguration();
+    const modelInput = {
+      rawIntakeText: parsed.rawIntakeText,
+      sourceType: parsed.sourceType,
+      sourceReference: parsed.sourceReference,
+      sourceMetadata: parsed.sourceMetadata,
+      interpretiveContext: parsed.interpretiveContext,
+    };
+    const configuration = this.model.getConfiguration(modelInput);
+    const promptVersion = configuration.promptVersion
+      ?? evidenceExtractorPromptVersion(Boolean(parsed.interpretiveContext));
+    const sourceMetadata = parsed.interpretiveContext
+      ? { ...parsed.sourceMetadata, interpretiveContext: parsed.interpretiveContext }
+      : parsed.sourceMetadata;
     const run = await this.repository.createRun({
       businessId: parsed.businessId,
       sourceSubmissionId: parsed.sourceSubmissionId,
       rawIntakeText: parsed.rawIntakeText,
       sourceType: parsed.sourceType,
       sourceReference: parsed.sourceReference,
-      sourceMetadata: parsed.sourceMetadata,
-      promptVersion: EVIDENCE_EXTRACTOR_PROMPT_VERSION,
+      sourceMetadata,
+      promptVersion,
       provider: configuration.provider,
       model: configuration.model,
       modelConfiguration: configuration.metadata,
@@ -87,12 +99,7 @@ export class EvidenceExtractionService {
 
     let rawModelOutput: unknown = null;
     try {
-      const result = await this.model.extract({
-        rawIntakeText: parsed.rawIntakeText,
-        sourceType: parsed.sourceType,
-        sourceReference: parsed.sourceReference,
-        sourceMetadata: parsed.sourceMetadata,
-      });
+      const result = await this.model.extract(modelInput);
       rawModelOutput = asJsonValue(result.rawOutput);
       const output = validateEvidenceExtractionOutput(
         result.output,

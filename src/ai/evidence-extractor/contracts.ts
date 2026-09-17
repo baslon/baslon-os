@@ -22,6 +22,12 @@ const dimensionDataSchema = z.object({
   value: z.string().nullable(),
 }).strict();
 
+export const evidenceExtractionInterpretiveContextSchema = z.object({
+  kind: z.literal("analysis_question"),
+  questionId: z.uuid(),
+  questionText: z.string().trim().min(1),
+}).strict();
+
 export const evidenceExtractionInputSchema = z.object({
   businessId: z.uuid(),
   sourceSubmissionId: z.uuid().optional(),
@@ -29,6 +35,7 @@ export const evidenceExtractionInputSchema = z.object({
   sourceType: z.string().trim().min(1).optional(),
   sourceReference: z.string().trim().min(1).optional(),
   sourceMetadata: z.record(z.string(), z.unknown()).default({}),
+  interpretiveContext: evidenceExtractionInterpretiveContextSchema.optional(),
 }).strict();
 
 export const claimProposalSchema = z.object({

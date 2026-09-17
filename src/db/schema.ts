@@ -14,8 +14,15 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import {
+  analysisFindingReferenceRoles,
+  analysisRunStatuses,
+  evidenceQualityAreas,
+  findingMaterialities,
+} from "@/domain/evidence-coherence";
 
 export const claimType = pgEnum("claim_type", [
   "fact", "observation", "management_belief", "hypothesis",
@@ -52,6 +59,13 @@ export const evidenceReviewDecision = pgEnum("evidence_review_decision", [
 export const reviewCanonicalEntityType = pgEnum("review_canonical_entity_type", [
   "claim", "evidence", "metric", "claim_evidence",
 ]);
+export const analysisRunStatus = pgEnum("analysis_run_status", analysisRunStatuses);
+export const evidenceQualityArea = pgEnum("evidence_quality_area", evidenceQualityAreas);
+export const findingMateriality = pgEnum("finding_materiality", findingMaterialities);
+export const analysisFindingReferenceRole = pgEnum(
+  "analysis_finding_reference_role",
+  analysisFindingReferenceRoles,
+);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -253,6 +267,7 @@ export const metrics = pgTable("metrics", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("metrics_business_key_idx").on(table.businessId, table.metricKey),
+  unique("metrics_id_business_unique").on(table.id, table.businessId),
   foreignKey({
     columns: [table.sourceEvidenceId, table.businessId],
     foreignColumns: [evidence.id, evidence.businessId],
@@ -272,6 +287,227 @@ export const businessStateSnapshots = pgTable("business_state_snapshots", {
   unique("business_state_snapshots_business_version_unique").on(table.businessId, table.version),
   unique("business_state_snapshots_id_business_unique").on(table.id, table.businessId),
   check("business_state_snapshots_version_check", sql`${table.version} > 0`),
+]);
+
+export const analysisRuns = pgTable("analysis_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  module: text("module").notNull(),
+  runType: text("run_type").notNull(),
+  inputSnapshotId: uuid("input_snapshot_id").notNull(),
+  inputProjectionVersion: text("input_projection_version").notNull(),
+  inputPayload: jsonb("input_payload").$type<Record<string, unknown>>().notNull(),
+  inputHash: text("input_hash").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  provider: text("provider").notNull(),
+  modelIdentifier: text("model_identifier").notNull(),
+  modelConfiguration: jsonb("model_configuration").$type<Record<string, unknown>>().default({}).notNull(),
+  status: analysisRunStatus("status").default("RUNNING").notNull(),
+  rawModelOutput: jsonb("raw_model_output").$type<unknown>(),
+  structuredOutput: jsonb("structured_output").$type<Record<string, unknown>>(),
+  validationErrors: jsonb("validation_errors").$type<unknown[]>().default([]).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("analysis_runs_id_business_unique").on(table.id, table.businessId),
+  index("analysis_runs_business_created_idx").on(table.businessId, table.createdAt),
+  index("analysis_runs_snapshot_created_idx").on(table.inputSnapshotId, table.createdAt),
+  uniqueIndex("analysis_runs_equivalent_active_unique").on(
+    table.businessId,
+    table.inputSnapshotId,
+    table.module,
+    table.inputProjectionVersion,
+    table.promptVersion,
+  ).where(sql`${table.status} in ('RUNNING', 'SUCCEEDED')`),
+  foreignKey({
+    columns: [table.inputSnapshotId, table.businessId],
+    foreignColumns: [businessStateSnapshots.id, businessStateSnapshots.businessId],
+    name: "analysis_runs_snapshot_same_business_fk",
+  }).onDelete("restrict"),
+  check("analysis_runs_input_payload_object_check", sql`jsonb_typeof(${table.inputPayload}) = 'object'`),
+  check("analysis_runs_model_configuration_object_check", sql`jsonb_typeof(${table.modelConfiguration}) = 'object'`),
+  check("analysis_runs_validation_errors_array_check", sql`jsonb_typeof(${table.validationErrors}) = 'array'`),
+  check("analysis_runs_required_text_check", sql`
+    length(btrim(${table.module})) > 0
+    and length(btrim(${table.runType})) > 0
+    and length(btrim(${table.inputProjectionVersion})) > 0
+    and length(btrim(${table.inputHash})) > 0
+    and length(btrim(${table.promptVersion})) > 0
+    and length(btrim(${table.provider})) > 0
+    and length(btrim(${table.modelIdentifier})) > 0
+  `),
+  check("analysis_runs_completion_check", sql`
+    (${table.status} = 'RUNNING' and ${table.completedAt} is null)
+    or (${table.status} in ('SUCCEEDED', 'FAILED') and ${table.completedAt} is not null)
+  `),
+  check("analysis_runs_structured_output_check", sql`
+    ${table.status} <> 'SUCCEEDED' or ${table.structuredOutput} is not null
+  `),
+]);
+
+export const contradictions = pgTable("contradictions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  area: evidenceQualityArea("area").notNull(),
+  statement: text("statement").notNull(),
+  rationale: text("rationale").notNull(),
+  materiality: findingMateriality("materiality").notNull(),
+  priorityRank: integer("priority_rank").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("contradictions_id_business_unique").on(table.id, table.businessId),
+  index("contradictions_run_priority_idx").on(table.analysisRunId, table.priorityRank),
+  index("contradictions_business_created_idx").on(table.businessId, table.createdAt),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "contradictions_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("contradictions_priority_rank_check", sql`${table.priorityRank} > 0`),
+  check("contradictions_required_text_check", sql`
+    length(btrim(${table.statement})) > 0 and length(btrim(${table.rationale})) > 0
+  `),
+]);
+
+export const evidenceGaps = pgTable("evidence_gaps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  area: evidenceQualityArea("area").notNull(),
+  missingInformation: text("missing_information").notNull(),
+  decisionImpact: text("decision_impact").notNull(),
+  materiality: findingMateriality("materiality").notNull(),
+  priorityRank: integer("priority_rank").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("evidence_gaps_id_business_unique").on(table.id, table.businessId),
+  index("evidence_gaps_run_priority_idx").on(table.analysisRunId, table.priorityRank),
+  index("evidence_gaps_business_created_idx").on(table.businessId, table.createdAt),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "evidence_gaps_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("evidence_gaps_priority_rank_check", sql`${table.priorityRank} > 0`),
+  check("evidence_gaps_required_text_check", sql`
+    length(btrim(${table.missingInformation})) > 0
+    and length(btrim(${table.decisionImpact})) > 0
+  `),
+]);
+
+export const analysisFindingReferences = pgTable("analysis_finding_references", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  contradictionId: uuid("contradiction_id"),
+  evidenceGapId: uuid("evidence_gap_id"),
+  claimId: uuid("claim_id"),
+  evidenceId: uuid("evidence_id"),
+  metricId: uuid("metric_id"),
+  role: analysisFindingReferenceRole("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("analysis_finding_references_business_idx").on(table.businessId),
+  index("analysis_finding_references_contradiction_idx").on(table.contradictionId),
+  index("analysis_finding_references_gap_idx").on(table.evidenceGapId),
+  uniqueIndex("analysis_finding_references_contradiction_claim_unique")
+    .on(table.contradictionId, table.claimId)
+    .where(sql`${table.contradictionId} is not null and ${table.claimId} is not null`),
+  uniqueIndex("analysis_finding_references_contradiction_evidence_unique")
+    .on(table.contradictionId, table.evidenceId)
+    .where(sql`${table.contradictionId} is not null and ${table.evidenceId} is not null`),
+  uniqueIndex("analysis_finding_references_contradiction_metric_unique")
+    .on(table.contradictionId, table.metricId)
+    .where(sql`${table.contradictionId} is not null and ${table.metricId} is not null`),
+  uniqueIndex("analysis_finding_references_gap_claim_unique")
+    .on(table.evidenceGapId, table.claimId)
+    .where(sql`${table.evidenceGapId} is not null and ${table.claimId} is not null`),
+  uniqueIndex("analysis_finding_references_gap_evidence_unique")
+    .on(table.evidenceGapId, table.evidenceId)
+    .where(sql`${table.evidenceGapId} is not null and ${table.evidenceId} is not null`),
+  uniqueIndex("analysis_finding_references_gap_metric_unique")
+    .on(table.evidenceGapId, table.metricId)
+    .where(sql`${table.evidenceGapId} is not null and ${table.metricId} is not null`),
+  foreignKey({
+    columns: [table.contradictionId, table.businessId],
+    foreignColumns: [contradictions.id, contradictions.businessId],
+    name: "analysis_finding_references_contradiction_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceGapId, table.businessId],
+    foreignColumns: [evidenceGaps.id, evidenceGaps.businessId],
+    name: "analysis_finding_references_gap_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.claimId, table.businessId],
+    foreignColumns: [claims.id, claims.businessId],
+    name: "analysis_finding_references_claim_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceId, table.businessId],
+    foreignColumns: [evidence.id, evidence.businessId],
+    name: "analysis_finding_references_evidence_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.metricId, table.businessId],
+    foreignColumns: [metrics.id, metrics.businessId],
+    name: "analysis_finding_references_metric_same_business_fk",
+  }).onDelete("restrict"),
+  check("analysis_finding_references_one_finding_check", sql`
+    num_nonnulls(${table.contradictionId}, ${table.evidenceGapId}) = 1
+  `),
+  check("analysis_finding_references_one_canonical_record_check", sql`
+    num_nonnulls(${table.claimId}, ${table.evidenceId}, ${table.metricId}) = 1
+  `),
+]);
+
+export const analysisQuestions = pgTable("analysis_questions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  contradictionId: uuid("contradiction_id"),
+  evidenceGapId: uuid("evidence_gap_id"),
+  question: text("question").notNull(),
+  priorityOrder: integer("priority_order").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("analysis_questions_id_business_unique").on(table.id, table.businessId),
+  index("analysis_questions_business_priority_idx").on(table.businessId, table.priorityOrder),
+  foreignKey({
+    columns: [table.contradictionId, table.businessId],
+    foreignColumns: [contradictions.id, contradictions.businessId],
+    name: "analysis_questions_contradiction_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceGapId, table.businessId],
+    foreignColumns: [evidenceGaps.id, evidenceGaps.businessId],
+    name: "analysis_questions_gap_same_business_fk",
+  }).onDelete("restrict"),
+  check("analysis_questions_one_finding_check", sql`
+    num_nonnulls(${table.contradictionId}, ${table.evidenceGapId}) = 1
+  `),
+  check("analysis_questions_priority_order_check", sql`${table.priorityOrder} > 0`),
+  check("analysis_questions_required_text_check", sql`length(btrim(${table.question})) > 0`),
+]);
+
+export const analysisQuestionSources = pgTable("analysis_question_sources", {
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  questionId: uuid("question_id").notNull(),
+  sourceSubmissionId: uuid("source_submission_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.questionId, table.sourceSubmissionId] }),
+  index("analysis_question_sources_business_idx").on(table.businessId),
+  foreignKey({
+    columns: [table.questionId, table.businessId],
+    foreignColumns: [analysisQuestions.id, analysisQuestions.businessId],
+    name: "analysis_question_sources_question_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.sourceSubmissionId, table.businessId],
+    foreignColumns: [sourceSubmissions.id, sourceSubmissions.businessId],
+    name: "analysis_question_sources_submission_same_business_fk",
+  }).onDelete("restrict"),
 ]);
 
 export const evidenceReviewSessions = pgTable("evidence_review_sessions", {

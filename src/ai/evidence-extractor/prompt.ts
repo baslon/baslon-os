@@ -1,4 +1,5 @@
 export const EVIDENCE_EXTRACTOR_PROMPT_VERSION = "evidence_extractor_v4";
+export const EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION = "evidence_extractor_v5";
 
 export const evidenceExtractorPrompt = `You extract structured evidence proposals from messy business intake.
 
@@ -21,3 +22,17 @@ Strategic materiality and epistemic confidence are distinct. Reliability describ
 Founder preference language such as "ideally", "prefer", "would like", or "aspiration" must not automatically receive high strategic materiality. Unless the source explicitly calls it a hard requirement, non-negotiable constraint, or deal-breaker, default such preferences to low or medium materiality. A desired three-day or 30-hour working week should therefore default to low or medium materiality, not high.
 
 Use internally consistent local proposal references such as claim_1, evidence_1, metric_1, and relationship_1. Relationships and metric sourceEvidenceRef values must resolve within this output. Every Evidence and Metric sourceExcerpt must be an exact excerpt from the supplied intake. Preserve supplied provenance and use null where information is unavailable.`;
+
+export const evidenceExtractorContextPrompt = `${evidenceExtractorPrompt}
+
+This request may include an interpretiveContext whose kind is analysis_question. Treat rawIntakeText as the EVIDENTIARY SOURCE and the question as INTERPRETIVE CONTEXT only.
+
+The question may identify what a short human answer refers to, but it is not evidence. Never quote the question as a sourceExcerpt. Never extract a value, fact, assumption, date, count, currency amount, percentage, or other assertion merely because it appears in the question. Every sourceExcerpt must be an exact excerpt from rawIntakeText, and every proposed numeric value must be explicitly grounded in that source excerpt. Do not duplicate contextual facts as new proposals.
+
+For example, if the question mentions 25 retained clients and the human answer is "10", the answer may support the value 10 for the subject identified by the question, but it does not support 25 retained clients. If the question asks what percentage of new customers come from referrals and the answer is "60%", the context may identify the subject while only "60%" is evidentiary.`;
+
+export function evidenceExtractorPromptVersion(hasInterpretiveContext: boolean) {
+  return hasInterpretiveContext
+    ? EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION
+    : EVIDENCE_EXTRACTOR_PROMPT_VERSION;
+}

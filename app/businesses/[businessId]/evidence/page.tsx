@@ -90,6 +90,7 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     <h1 className="task-title">Evidence State</h1>
     <p className="lede">Reviewed information currently held about this business.</p>
     {!archived && workflowState === "EVIDENCE_READY" ? <Link className="button-link secondary-link" href={`/businesses/${businessId}/information`}>Add Information</Link> : null}
+    <Link className="button-link secondary-link" href={`/businesses/${businessId}/evidence-quality`}>View Evidence Quality</Link>
     {archived ? <div className="notice"><strong>Archived — read-only</strong><p>Restore this business before making changes to its Evidence State.</p></div> : null}
     {query.error ? <p className="error" role="alert">That change could not be saved. Please review it and try again.</p> : null}
 

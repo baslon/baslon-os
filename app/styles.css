@@ -43,6 +43,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .breadcrumbs a { color: inherit; }
 .eyebrow + .task-title { margin-top: 0.625rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.question-list { display: grid; gap: 0.8rem; padding-left: 1.4rem; }
+.question-list li { padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 0.55rem; background: var(--paper); }
+.question-list span { display: block; margin-top: 0.35rem; font-size: 0.85rem; }
 
 section { margin: 2.5rem 0; }
 .dashboard-section { margin-top: 4rem; }

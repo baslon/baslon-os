@@ -6,6 +6,7 @@ export type EvidenceExtractionModelConfiguration = {
   provider: string;
   model: string;
   metadata: Record<string, unknown>;
+  promptVersion?: string;
 };
 
 export type EvidenceExtractionModelResult = {
@@ -14,6 +15,6 @@ export type EvidenceExtractionModelResult = {
 };
 
 export interface EvidenceExtractionModel {
-  getConfiguration(): EvidenceExtractionModelConfiguration;
+  getConfiguration(input?: EvidenceExtractionModelInput): EvidenceExtractionModelConfiguration;
   extract(input: EvidenceExtractionModelInput): Promise<EvidenceExtractionModelResult>;
 }

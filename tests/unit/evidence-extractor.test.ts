@@ -4,7 +4,13 @@ import {
   evidenceExtractionOutputSchema,
 } from "@/ai/evidence-extractor/contracts";
 import { validateEvidenceExtractionOutput } from "@/ai/evidence-extractor/validation";
-import { evidenceExtractorPrompt } from "@/ai/evidence-extractor/prompt";
+import {
+  EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION,
+  EVIDENCE_EXTRACTOR_PROMPT_VERSION,
+  evidenceExtractorContextPrompt,
+  evidenceExtractorPrompt,
+  evidenceExtractorPromptVersion,
+} from "@/ai/evidence-extractor/prompt";
 import {
   baslonExtractionOutput,
   baslonMessyIntake,
@@ -420,5 +426,88 @@ describe("Evidence Extractor contracts and business rules", () => {
       ...baslonExtractionOutput,
       businessId: "7daebfd8-e321-4a45-8e2c-532c05667f8f",
     })).toThrow();
+  });
+
+  it("accepts only a strict, validated question context and selects v5 without changing v4", () => {
+    const base = {
+      businessId: "7daebfd8-e321-4a45-8e2c-532c05667f8f",
+      rawIntakeText: "25 active clients",
+    };
+    expect(evidenceExtractionInputSchema.parse(base).interpretiveContext).toBeUndefined();
+    const contextual = evidenceExtractionInputSchema.parse({
+      ...base,
+      interpretiveContext: {
+        kind: "analysis_question",
+        questionId: "11111111-1111-4111-8111-111111111111",
+        questionText: "How many active clients are there?",
+      },
+    });
+    expect(contextual.interpretiveContext?.questionText).toBe("How many active clients are there?");
+    expect(() => evidenceExtractionInputSchema.parse({
+      ...base,
+      interpretiveContext: { ...contextual.interpretiveContext, suppliedAnswer: "25" },
+    })).toThrow();
+    expect(() => evidenceExtractionInputSchema.parse({
+      ...base,
+      interpretiveContext: { kind: "diagnosis", questionId: "11111111-1111-4111-8111-111111111111", questionText: "Why?" },
+    })).toThrow();
+    expect(() => evidenceExtractionInputSchema.parse({
+      ...base,
+      interpretiveContext: { kind: "analysis_question", questionId: "not-an-id", questionText: "Why?" },
+    })).toThrow();
+    expect(evidenceExtractorPromptVersion(false)).toBe(EVIDENCE_EXTRACTOR_PROMPT_VERSION);
+    expect(evidenceExtractorPromptVersion(true)).toBe(EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION);
+    expect(EVIDENCE_EXTRACTOR_PROMPT_VERSION).toBe("evidence_extractor_v4");
+    expect(EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION).toBe("evidence_extractor_v5");
+  });
+
+  it("keeps question context interpretive and restricts provenance to the human answer", () => {
+    expect(evidenceExtractorContextPrompt).toContain("rawIntakeText as the EVIDENTIARY SOURCE");
+    expect(evidenceExtractorContextPrompt).toContain("question as INTERPRETIVE CONTEXT only");
+    expect(evidenceExtractorContextPrompt).toContain("Never quote the question as a sourceExcerpt");
+    const output = structuredClone(baslonExtractionOutput);
+    output.evidence[0].valueNumeric = 25;
+    output.evidence[0].sourceExcerpt = "25 retained clients";
+    output.evidence[0].rawPayload.excerpt = "25 retained clients";
+    output.metrics[0].numericValue = 25;
+    output.metrics[0].sourceExcerpt = "25 retained clients";
+    expect(() => validateEvidenceExtractionOutput(output, "10")).toThrow(
+      "source excerpt is not present",
+    );
+  });
+
+  it("accepts answer-only values and rejects context-only numbers and percentages", () => {
+    const answerOutput = structuredClone(baslonExtractionOutput);
+    answerOutput.claims = [];
+    answerOutput.relationships = [];
+    answerOutput.evidence = [{
+      ...answerOutput.evidence[0], valueNumeric: 10, valueText: "10", unit: "clients",
+      statement: "Ten clients came through referrals.", sourceExcerpt: "10",
+      rawPayload: { excerpt: "10" },
+    }];
+    answerOutput.metrics = [{
+      ...answerOutput.metrics[0], numericValue: 10, unit: "clients",
+      metricKey: "referral_clients", metricLabel: "Referral clients", sourceExcerpt: "10",
+    }];
+    expect(validateEvidenceExtractionOutput(answerOutput, "10").metrics[0].numericValue).toBe(10);
+
+    const contextOnly = structuredClone(answerOutput);
+    contextOnly.evidence[0].valueNumeric = 25;
+    contextOnly.evidence[0].sourceExcerpt = "25";
+    contextOnly.evidence[0].rawPayload.excerpt = "25";
+    contextOnly.metrics[0].numericValue = 25;
+    contextOnly.metrics[0].sourceExcerpt = "25";
+    expect(() => validateEvidenceExtractionOutput(contextOnly, "10")).toThrow("source excerpt is not present");
+
+    const answerPercent = structuredClone(answerOutput);
+    answerPercent.evidence[0].valueNumeric = 60;
+    answerPercent.evidence[0].unit = "percent";
+    answerPercent.evidence[0].sourceExcerpt = "60%";
+    answerPercent.evidence[0].rawPayload.excerpt = "60%";
+    answerPercent.metrics[0].numericValue = 60;
+    answerPercent.metrics[0].unit = "percent";
+    answerPercent.metrics[0].sourceExcerpt = "60%";
+    expect(validateEvidenceExtractionOutput(answerPercent, "60%").metrics[0].numericValue).toBe(60);
+    expect(() => validateEvidenceExtractionOutput(answerPercent, "Mostly referrals")).toThrow("source excerpt is not present");
   });
 });

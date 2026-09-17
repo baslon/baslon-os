@@ -303,3 +303,30 @@ It is the implementation that:
 - adds only the functionality currently required.
 
 When simplicity and speculative sophistication conflict, prefer simplicity.
+
+---
+
+## 17. Real Business data safety
+
+Never use Baslon Digital or another real Business for fictional smoke-test inputs.
+Synthetic, scenario-only or fabricated data must be submitted only to a clearly
+labelled test Business. Information may enter a real Business only when the user
+has explicitly confirmed that it is genuine.
+
+Real-model testing does not make synthetic data genuine. Any test that persists
+Source Submissions, canonical records, snapshots or analyses must use a dedicated
+synthetic Business unless the user has explicitly approved the information as
+genuine for that real Business.
+
+---
+
+## 18. Claim–Evidence relationship strength
+
+Claim ↔ Evidence relationship strength represents confidence that the selected
+relationship type accurately describes the semantic link between those two
+records. It must never be interpreted as the probability a Claim is true or as
+Evidence reliability, corroboration, quality, materiality or diagnostic
+importance.
+
+Models and deterministic logic must not use relationship strength as proof weight
+or as authority to promote a Claim's epistemic status.

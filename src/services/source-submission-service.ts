@@ -1,4 +1,5 @@
 import {
+  createQuestionAnswerSubmissionSchema,
   createSourceSubmissionAttachmentSchema,
   createSourceSubmissionSchema,
 } from "@/domain/source-submission";
@@ -11,6 +12,20 @@ export class SourceSubmissionService {
     const parsed = createSourceSubmissionSchema.parse(input);
     await this.repository.assertBusinessActive(parsed.businessId);
     return this.repository.create(parsed);
+  }
+
+  async createQuestionAnswer(input: unknown) {
+    const parsed = createQuestionAnswerSubmissionSchema.parse(input);
+    await this.repository.assertBusinessActive(parsed.businessId);
+    return this.repository.createQuestionAnswer(parsed);
+  }
+
+  getQuestionContext(businessId: string, questionId: string) {
+    return this.repository.getQuestionContext(businessId, questionId);
+  }
+
+  getQuestionContextForSource(businessId: string, sourceSubmissionId: string) {
+    return this.repository.getQuestionContextForSource(businessId, sourceSubmissionId);
   }
 
   getById(businessId: string, sourceSubmissionId: string) {

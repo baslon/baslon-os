@@ -10,18 +10,24 @@ import type {
   EvidenceExtractionModelResult,
 } from "@/ai/evidence-extractor/model";
 import {
+  EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION,
   EVIDENCE_EXTRACTOR_PROMPT_VERSION,
+  evidenceExtractorContextPrompt,
   evidenceExtractorPrompt,
 } from "@/ai/evidence-extractor/prompt";
 
 export class OpenAIEvidenceExtractionModel implements EvidenceExtractionModel {
-  getConfiguration(): EvidenceExtractionModelConfiguration {
+  getConfiguration(input?: EvidenceExtractionModelInput): EvidenceExtractionModelConfiguration {
+    const promptVersion = input?.interpretiveContext
+      ? EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION
+      : EVIDENCE_EXTRACTOR_PROMPT_VERSION;
     return {
       provider: "openai",
       model: process.env.OPENAI_MODEL || "not_configured",
+      promptVersion,
       metadata: {
         api: "responses",
-        promptVersion: EVIDENCE_EXTRACTOR_PROMPT_VERSION,
+        promptVersion,
         structuredOutput: "json_schema_strict",
         store: false,
       },
@@ -40,15 +46,19 @@ export class OpenAIEvidenceExtractionModel implements EvidenceExtractionModel {
     }
 
     const client = new OpenAI({ apiKey });
+    const contextual = Boolean(input.interpretiveContext);
+    const promptVersion = contextual
+      ? EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION
+      : EVIDENCE_EXTRACTOR_PROMPT_VERSION;
     const response = await client.responses.create({
       model,
-      instructions: evidenceExtractorPrompt,
+      instructions: contextual ? evidenceExtractorContextPrompt : evidenceExtractorPrompt,
       input: JSON.stringify(input),
       store: false,
       text: {
         format: {
           type: "json_schema",
-          name: EVIDENCE_EXTRACTOR_PROMPT_VERSION,
+          name: promptVersion,
           schema: evidenceExtractionJsonSchema,
           strict: true,
         },

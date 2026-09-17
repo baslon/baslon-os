@@ -14,6 +14,8 @@ import { EvidenceExtractionService } from "@/services/evidence-extraction-servic
 import { EvidenceReviewService } from "@/services/evidence-review-service";
 import { AddInformationService } from "@/services/add-information-service";
 import { baslonBusiness, baslonMessyIntake, baslonExtractionOutput } from "./baslon-business";
+import type { EvidenceExtractionModelInput } from "@/ai/evidence-extractor/contracts";
+import type { EvidenceExtractionOutput } from "@/ai/evidence-extractor/contracts";
 
 export function addInformationScenarios(getDatabase: () => Database) {
   async function setup() {
@@ -26,9 +28,14 @@ export function addInformationScenarios(getDatabase: () => Database) {
     const repository = new EvidenceReviewRepository(db);
     const reviews = new EvidenceReviewService(repository, orchestrator);
     let malformed = false;
+    let modelOutput: EvidenceExtractionOutput = structuredClone(baslonExtractionOutput);
+    const modelInputs: EvidenceExtractionModelInput[] = [];
     const extraction = new EvidenceExtractionService(runs, {
       getConfiguration: () => ({ provider: "test", model: "deterministic", metadata: {} }),
-      extract: async () => ({ output: malformed ? {} : structuredClone(baslonExtractionOutput), rawOutput: {} }),
+      extract: async (input) => {
+        modelInputs.push(input);
+        return { output: malformed ? {} : structuredClone(modelOutput), rawOutput: {} };
+      },
     });
     const service = new AddInformationService(sources, extraction, reviews, orchestrator);
     async function complete(runId: string) {
@@ -47,7 +54,36 @@ export function addInformationScenarios(getDatabase: () => Database) {
     const original = await extraction.extract({ businessId: business.id, rawIntakeText: baslonMessyIntake });
     const first = await complete(original.run.id);
     return { db, business, foundation, sources, runs, reviews, repository, service, complete, first,
-      fail: (value: boolean) => { malformed = value; } };
+      orchestrator, modelInputs,
+      fail: (value: boolean) => { malformed = value; },
+      output: (value: EvidenceExtractionOutput) => { modelOutput = value; } };
+  }
+
+  async function addQuestion(c: Awaited<ReturnType<typeof setup>>, questionText: string) {
+    const [run] = await c.db.insert(s.analysisRuns).values({
+      businessId: c.business.id,
+      inputSnapshotId: c.first.snapshot.id,
+      module: "evidence_coherence",
+      runType: "snapshot_analysis",
+      inputProjectionVersion: "evidence_coherence_input_v1",
+      inputPayload: {}, inputHash: randomUUID(), promptVersion: "evidence_coherence_v1",
+      provider: "test", modelIdentifier: "deterministic", modelConfiguration: {},
+    }).returning();
+    await c.db.update(s.analysisRuns).set({
+      status: "SUCCEEDED", structuredOutput: {}, validationErrors: [], completedAt: new Date(),
+    }).where(eq(s.analysisRuns.id, run.id));
+    const [gap] = await c.db.insert(s.evidenceGaps).values({
+      businessId: c.business.id, analysisRunId: run.id,
+      area: "customers_and_market", missingInformation: "Current client count is unknown.",
+      decisionImpact: "Capacity cannot be assessed.", materiality: "high", priorityRank: 1,
+    }).returning();
+    const [question] = await c.db.insert(s.analysisQuestions).values({
+      businessId: c.business.id, evidenceGapId: gap.id,
+      question: questionText, priorityOrder: 1,
+    }).returning();
+    await c.orchestrator.transition({ businessId: c.business.id, event: "RUN_GAP_ANALYSIS", actorType: "system" });
+    await c.orchestrator.transition({ businessId: c.business.id, event: "MARK_ANALYSIS_COMPLETE", actorType: "system" });
+    return { run, gap, question };
   }
 
   async function canonical(db: Database, businessId: string) {
@@ -162,5 +198,125 @@ export function addInformationScenarios(getDatabase: () => Database) {
     }
     const completed = await c.reviews.completeReview({ businessId: c.business.id, reviewSessionId: session.id, reviewerId: "test-human" });
     expect(completed.snapshot.version).toBe(2);
+  });
+
+  it("submits a question answer as the only evidence source and preserves its context through review", async () => {
+    const c = await setup();
+    const { question, gap } = await addQuestion(c, "How many active clients does the business currently serve?");
+    const [otherQuestion] = await c.db.insert(s.analysisQuestions).values({
+      businessId: c.business.id, evidenceGapId: gap.id,
+      question: "How many clients were active last quarter?", priorityOrder: 2,
+    }).returning();
+    c.output({
+      claims: [{
+        proposalRef: "claim_1", statement: "The active client count is stable.",
+        claimType: "management_belief", subjectArea: "customers",
+        confidenceLevel: "low", confidenceScore: 0.4,
+        confidenceBasis: { basis: "Short management answer" }, sourceType: "additional_text",
+      }],
+      evidence: [{
+        proposalRef: "evidence_1", evidenceType: "management_record",
+        statement: "The business currently serves 25 active clients.", valueNumeric: 25,
+        valueText: "25 active clients", unit: "clients", periodStart: null, periodEnd: null,
+        sourceType: "additional_text", sourceReference: null,
+        sourceMetadata: { suppliedBy: "business-user", notes: null },
+        reliabilityLevel: "medium", reliabilityScore: 0.7, directnessLevel: "direct",
+        recencyLevel: "current", rawPayload: { excerpt: "25 active clients" },
+        materiality: "high", sourceExcerpt: "25 active clients",
+      }],
+      metrics: [], relationships: [],
+    });
+    const before = await canonical(c.db, c.business.id);
+    const result = await c.service.submit({
+      businessId: c.business.id, questionId: question.id, rawText: "25 active clients",
+    });
+    expect(result.run.promptVersion).toBe("evidence_extractor_v5");
+    expect(result.run.sourceMetadata).toEqual({
+      suppliedBy: "human_ui",
+      interpretiveContext: {
+        kind: "analysis_question", questionId: question.id,
+        questionText: "How many active clients does the business currently serve?",
+      },
+    });
+    expect(c.modelInputs.at(-1)?.rawIntakeText).toBe("25 active clients");
+    expect(c.modelInputs.at(-1)?.interpretiveContext).toEqual({
+      kind: "analysis_question", questionId: question.id,
+      questionText: "How many active clients does the business currently serve?",
+    });
+    expect(await canonical(c.db, c.business.id)).toEqual(before);
+    const source = await c.sources.getById(c.business.id, result.run.sourceSubmissionId!);
+    expect(source?.rawText).toBe("25 active clients");
+    expect(source?.rawText).not.toContain(question.question);
+    const links = await c.db.select().from(s.analysisQuestionSources).where(eq(s.analysisQuestionSources.questionId, question.id));
+    expect(links).toEqual([expect.objectContaining({
+      businessId: c.business.id, questionId: question.id,
+      sourceSubmissionId: result.run.sourceSubmissionId,
+    })]);
+    await expect(c.sources.createQuestionAnswer({
+      businessId: c.business.id, questionId: question.id,
+      rawText: "26 active clients", sourceType: "additional_text",
+    })).rejects.toThrow("already has submitted information");
+    await expect(c.service.submit({
+      businessId: c.business.id, questionId: question.id, rawText: "26 active clients",
+    })).rejects.toThrow();
+    const session = await c.reviews.startReview({
+      businessId: c.business.id, extractionRunId: result.run.id, reviewerId: "test-human",
+    });
+    const details = await c.reviews.getReview(session.id, c.business.id);
+    for (const proposal of details.proposals) {
+      await c.reviews.reviewProposal({
+        businessId: c.business.id, reviewSessionId: session.id,
+        proposalId: proposal.id, reviewerId: "test-human",
+        decision: proposal.proposalRef === "evidence_1" ? "ACCEPTED" : "REJECTED",
+      });
+    }
+    const completed = await c.reviews.completeReview({
+      businessId: c.business.id, reviewSessionId: session.id, reviewerId: "test-human",
+    });
+    expect(completed.snapshot.version).toBe(2);
+    const after = await canonical(c.db, c.business.id);
+    expect(after.evidence).toEqual(expect.arrayContaining(before.evidence));
+    expect(after.evidence.some((item) => item.statement === "The business currently serves 25 active clients.")).toBe(true);
+    expect(after.claims.some((item) => item.statement === "The active client count is stable.")).toBe(false);
+    expect(after.snapshots[0]).toEqual(before.snapshots[0]);
+    await expect(c.sources.createQuestionAnswer({
+      businessId: c.business.id, questionId: otherQuestion.id,
+      rawText: "24 clients", sourceType: "additional_text",
+    })).rejects.toThrow("historical snapshot");
+  });
+
+  it("rejects cross-business question IDs and retries failed contextual extraction against the same answer", async () => {
+    const c = await setup();
+    const other = await setup();
+    const { question } = await addQuestion(c, "What is the current conversion rate?");
+    await addQuestion(other, "What is the current retention rate?");
+    await expect(other.service.submit({
+      businessId: other.business.id, questionId: question.id, rawText: "20%",
+    })).rejects.toThrow("question not found");
+    c.fail(true);
+    await expect(c.service.submit({
+      businessId: c.business.id, questionId: question.id, rawText: "20%",
+    })).rejects.toThrow();
+    const failed = (await c.runs.getLatestRun(c.business.id))!;
+    const sourcesBefore = await c.sources.listForBusiness(c.business.id);
+    expect(failed.promptVersion).toBe("evidence_extractor_v5");
+    c.fail(false);
+    c.output({ claims: [], evidence: [], metrics: [], relationships: [] });
+    const retried = await c.service.retry({ businessId: c.business.id, runId: failed.id });
+    expect(retried.run.sourceSubmissionId).toBe(failed.sourceSubmissionId);
+    expect(retried.run.promptVersion).toBe("evidence_extractor_v5");
+    expect(await c.sources.listForBusiness(c.business.id)).toEqual(sourcesBefore);
+    expect(c.modelInputs.at(-1)?.interpretiveContext?.questionId).toBe(question.id);
+  });
+
+  it("keeps historical questions readable but prevents an archived Business from answering", async () => {
+    const c = await setup();
+    const { question } = await addQuestion(c, "What is current delivery capacity?");
+    await new BusinessService(c.foundation).archive(c.business.id);
+    expect((await c.sources.getQuestionContext(c.business.id, question.id))?.questionText)
+      .toBe("What is current delivery capacity?");
+    await expect(c.service.submit({
+      businessId: c.business.id, questionId: question.id, rawText: "20 hours per week",
+    })).rejects.toThrow("archived");
   });
 }

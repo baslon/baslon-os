@@ -1,6 +1,10 @@
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  analysisFindingReferences,
+  analysisQuestionSources,
+  analysisQuestions,
+  analysisRuns,
   businessProfiles,
   businesses,
   businessStateSnapshots,
@@ -10,11 +14,13 @@ import {
   evidenceExtractionRuns,
   evidenceProposals,
   evidenceReviewSessions,
+  evidenceGaps,
   metrics,
   proposalReviews,
   sourceSubmissionAttachments,
   sourceSubmissions,
   strategyWorkflows,
+  contradictions,
   workflowTransitions,
 } from "@/db/schema";
 import {
@@ -65,6 +71,14 @@ export class BusinessDeletionRepository {
         .where(eq(strategyWorkflows.businessId, business.id));
       const workflowIds = workflowRows.map((workflow) => workflow.id);
 
+      await tx.delete(analysisQuestionSources)
+        .where(eq(analysisQuestionSources.businessId, business.id));
+      await tx.delete(analysisQuestions).where(eq(analysisQuestions.businessId, business.id));
+      await tx.delete(analysisFindingReferences)
+        .where(eq(analysisFindingReferences.businessId, business.id));
+      await tx.delete(contradictions).where(eq(contradictions.businessId, business.id));
+      await tx.delete(evidenceGaps).where(eq(evidenceGaps.businessId, business.id));
+      await tx.delete(analysisRuns).where(eq(analysisRuns.businessId, business.id));
       await tx.delete(proposalReviews).where(eq(proposalReviews.businessId, business.id));
       await tx.delete(evidenceReviewSessions).where(eq(evidenceReviewSessions.businessId, business.id));
       await tx.delete(evidenceProposals).where(eq(evidenceProposals.businessId, business.id));
@@ -86,6 +100,12 @@ export class BusinessDeletionRepository {
       await tx.delete(businessProfiles).where(eq(businessProfiles.businessId, business.id));
 
       const directTables = [
+        analysisQuestionSources,
+        analysisQuestions,
+        analysisFindingReferences,
+        contradictions,
+        evidenceGaps,
+        analysisRuns,
         proposalReviews,
         evidenceReviewSessions,
         evidenceProposals,
