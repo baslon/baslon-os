@@ -15,7 +15,10 @@ import {
   strategyWorkflows,
 } from "@/db/schema";
 import type { ReviewDecision } from "@/domain/evidence-review";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 export type CanonicalApplication =
   | { type: "none" }
@@ -53,6 +56,7 @@ export class EvidenceReviewRepository {
     reviewerId: string;
   }) {
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [run] = await tx.select().from(evidenceExtractionRuns).where(and(
         eq(evidenceExtractionRuns.id, input.extractionRunId),
         eq(evidenceExtractionRuns.businessId, input.businessId),
@@ -127,6 +131,7 @@ export class EvidenceReviewRepository {
     canonical: CanonicalApplication;
   }) {
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [session] = await tx.select().from(evidenceReviewSessions).where(and(
         eq(evidenceReviewSessions.id, input.reviewSessionId),
         eq(evidenceReviewSessions.businessId, input.businessId),
@@ -205,6 +210,7 @@ export class EvidenceReviewRepository {
     reviewerId: string;
   }) {
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [session] = await tx.select().from(evidenceReviewSessions).where(and(
         eq(evidenceReviewSessions.id, input.reviewSessionId),
         eq(evidenceReviewSessions.businessId, input.businessId),
@@ -258,7 +264,6 @@ export class EvidenceReviewRepository {
         throw new Error("Workflow must be EVIDENCE_PROCESSING to complete Evidence Review");
       }
 
-      await tx.execute(sql`select id from businesses where id = ${input.businessId} for update`);
       const [business] = await tx.select().from(businesses)
         .where(eq(businesses.id, input.businessId));
       if (!business) throw new Error("Business not found");

@@ -6,7 +6,10 @@ import {
   sourceSubmissions,
 } from "@/db/schema";
 import { SourceSubmissionOwnershipError } from "@/domain/source-submission";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 export type ExtractionRunStart = {
   businessId: string;
@@ -35,16 +38,19 @@ export class EvidenceExtractionRepository {
   }
 
   async createRun(input: ExtractionRunStart) {
-    if (input.sourceSubmissionId) {
-      const [submission] = await this.database.select({ id: sourceSubmissions.id })
-        .from(sourceSubmissions).where(and(
-          eq(sourceSubmissions.id, input.sourceSubmissionId),
-          eq(sourceSubmissions.businessId, input.businessId),
-        ));
-      if (!submission) throw new SourceSubmissionOwnershipError();
-    }
-    const [run] = await this.database.insert(evidenceExtractionRuns).values(input).returning();
-    return run;
+    return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, input.businessId);
+      if (input.sourceSubmissionId) {
+        const [submission] = await tx.select({ id: sourceSubmissions.id })
+          .from(sourceSubmissions).where(and(
+            eq(sourceSubmissions.id, input.sourceSubmissionId),
+            eq(sourceSubmissions.businessId, input.businessId),
+          ));
+        if (!submission) throw new SourceSubmissionOwnershipError();
+      }
+      const [run] = await tx.insert(evidenceExtractionRuns).values(input).returning();
+      return run;
+    });
   }
 
   async completeRun(input: {

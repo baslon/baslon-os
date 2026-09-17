@@ -9,7 +9,10 @@ import {
   StrategyOrchestrator,
   type WorkflowPersistence,
 } from "@/strategy/orchestrator";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 class PostgresWorkflowRepository implements WorkflowPersistence {
   constructor(private readonly database: Database) {}
@@ -27,6 +30,7 @@ class PostgresWorkflowRepository implements WorkflowPersistence {
   async commit(command: AuthorizedWorkflowTransition) {
     assertAuthorizedWorkflowTransition(command);
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, command.businessId);
       const [updated] = await tx.update(strategyWorkflows).set({
         state: command.toState,
         version: command.expectedVersion + 1,

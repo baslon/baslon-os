@@ -13,7 +13,10 @@ import {
 } from "@/db/schema";
 import type { EvidenceCoherenceOutput } from "@/ai/evidence-coherence/contracts";
 import type { EvidenceCoherenceModelInput } from "@/ai/evidence-coherence/contracts";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 export type AnalysisRunIdentity = {
   businessId: string;
@@ -78,7 +81,11 @@ export class EvidenceCoherenceRepository {
     modelConfiguration: Record<string, unknown>;
   }) {
     try {
-      const [run] = await this.database.insert(analysisRuns).values(input).returning();
+      const run = await this.database.transaction(async (tx) => {
+        await assertActiveBusinessForUpdate(tx, input.businessId);
+        const [created] = await tx.insert(analysisRuns).values(input).returning();
+        return created;
+      });
       return { run, created: true as const };
     } catch (error) {
       if ((error as { code?: string }).code !== "23505") throw error;

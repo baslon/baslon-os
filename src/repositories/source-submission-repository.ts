@@ -5,7 +5,6 @@ import {
   analysisQuestionSources,
   analysisRuns,
   businessStateSnapshots,
-  businesses,
   contradictions,
   evidenceGaps,
   evidenceExtractionRuns,
@@ -23,19 +22,9 @@ import {
   SourceSubmissionOwnershipError,
 } from "@/domain/source-submission";
 import {
+  assertActiveBusinessForUpdate,
   assertBusinessActive,
-  BusinessArchivedError,
 } from "@/repositories/business-lifecycle-guard";
-
-async function assertBusinessActiveForSourceWrite(
-  database: Pick<Database, "select">,
-  businessId: string,
-) {
-  const [business] = await database.select({ status: businesses.status }).from(businesses)
-    .where(eq(businesses.id, businessId)).for("update");
-  if (!business) throw new Error("Business not found");
-  if (business.status !== "active") throw new BusinessArchivedError();
-}
 
 export class SourceSubmissionRepository {
   constructor(private readonly database: Database) {}
@@ -46,7 +35,7 @@ export class SourceSubmissionRepository {
 
   async create(input: CreateSourceSubmission) {
     return this.database.transaction(async (tx) => {
-      await assertBusinessActiveForSourceWrite(tx, input.businessId);
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [submission] = await tx.insert(sourceSubmissions).values(input).returning();
       return submission;
     });
@@ -90,7 +79,7 @@ export class SourceSubmissionRepository {
 
   async createQuestionAnswer(input: CreateQuestionAnswerSubmission) {
     return this.database.transaction(async (tx) => {
-      await assertBusinessActiveForSourceWrite(tx, input.businessId);
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [question] = await tx.select().from(analysisQuestions).where(and(
         eq(analysisQuestions.id, input.questionId),
         eq(analysisQuestions.businessId, input.businessId),
@@ -170,7 +159,7 @@ export class SourceSubmissionRepository {
 
   async createAttachment(input: CreateSourceSubmissionAttachment) {
     return this.database.transaction(async (tx) => {
-      await assertBusinessActiveForSourceWrite(tx, input.businessId);
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const [submission] = await tx.select({ id: sourceSubmissions.id }).from(sourceSubmissions).where(and(
         eq(sourceSubmissions.id, input.sourceSubmissionId),
         eq(sourceSubmissions.businessId, input.businessId),

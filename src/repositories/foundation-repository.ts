@@ -23,7 +23,10 @@ import {
   type EvidenceInput,
   type MetricInput,
 } from "@/domain/schemas";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 export class FoundationRepository {
   constructor(private readonly database: Database) {}
@@ -112,12 +115,15 @@ export class FoundationRepository {
 
   async updateBusinessProfile(input: { businessId: string; profileData: Record<string, unknown> }) {
     const parsed = businessProfileInputSchema.parse(input);
-    const [profile] = await this.database.update(businessProfiles).set({
-      profileData: parsed.profileData,
-      updatedAt: new Date(),
-    }).where(eq(businessProfiles.businessId, parsed.businessId)).returning();
-    if (!profile) throw new Error("Business profile not found");
-    return profile;
+    return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, parsed.businessId);
+      const [profile] = await tx.update(businessProfiles).set({
+        profileData: parsed.profileData,
+        updatedAt: new Date(),
+      }).where(eq(businessProfiles.businessId, parsed.businessId)).returning();
+      if (!profile) throw new Error("Business profile not found");
+      return profile;
+    });
   }
 
   async addClaim(input: ClaimInput) {
@@ -125,11 +131,14 @@ export class FoundationRepository {
     if (parsed.claimType === "fact") {
       throw new Error("Facts must be created through FactAdmissionService");
     }
-    const [claim] = await this.database.insert(claims).values({
-      ...parsed,
-      confidenceScore: parsed.confidenceScore?.toString(),
-    }).returning();
-    return claim;
+    return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, parsed.businessId);
+      const [claim] = await tx.insert(claims).values({
+        ...parsed,
+        confidenceScore: parsed.confidenceScore?.toString(),
+      }).returning();
+      return claim;
+    });
   }
 
   async getClaim(claimId: string) {
@@ -146,6 +155,7 @@ export class FoundationRepository {
       throw new Error("Facts must be promoted through FactAdmissionService");
     }
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, parsed.businessId);
       const [current] = await tx.select().from(claims).where(eq(claims.id, claimId)).for("update");
       if (!current) throw new Error("Claim not found");
       if (current.supersededByClaimId) throw new Error("Claim has already been superseded");
@@ -167,12 +177,15 @@ export class FoundationRepository {
 
   async addEvidence(input: EvidenceInput) {
     const parsed = evidenceInputSchema.parse(input);
-    const [item] = await this.database.insert(evidence).values({
-      ...parsed,
-      valueNumeric: parsed.valueNumeric?.toString(),
-      reliabilityScore: parsed.reliabilityScore?.toString(),
-    }).returning();
-    return item;
+    return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, parsed.businessId);
+      const [item] = await tx.insert(evidence).values({
+        ...parsed,
+        valueNumeric: parsed.valueNumeric?.toString(),
+        reliabilityScore: parsed.reliabilityScore?.toString(),
+      }).returning();
+      return item;
+    });
   }
 
   async linkClaimEvidence(input: {
@@ -182,7 +195,11 @@ export class FoundationRepository {
     strengthScore?: number;
   }) {
     const parsed = claimEvidenceInputSchema.parse(input);
+    const [knownClaim] = await this.database.select({ businessId: claims.businessId })
+      .from(claims).where(eq(claims.id, parsed.claimId));
+    if (!knownClaim) throw new Error("Claim and evidence must exist");
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, knownClaim.businessId);
       const [claim] = await tx.select({ businessId: claims.businessId })
         .from(claims).where(eq(claims.id, parsed.claimId));
       const [item] = await tx.select({ businessId: evidence.businessId })
@@ -202,23 +219,26 @@ export class FoundationRepository {
 
   async addMetric(input: MetricInput) {
     const parsed = metricInputSchema.parse(input);
-    if (parsed.sourceEvidenceId) {
-      const [source] = await this.database.select({ businessId: evidence.businessId })
-        .from(evidence).where(eq(evidence.id, parsed.sourceEvidenceId));
-      if (!source || source.businessId !== parsed.businessId) {
-        throw new Error("Metric source evidence must belong to the same business");
+    return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, parsed.businessId);
+      if (parsed.sourceEvidenceId) {
+        const [source] = await tx.select({ businessId: evidence.businessId })
+          .from(evidence).where(eq(evidence.id, parsed.sourceEvidenceId));
+        if (!source || source.businessId !== parsed.businessId) {
+          throw new Error("Metric source evidence must belong to the same business");
+        }
       }
-    }
-    const [metric] = await this.database.insert(metrics).values({
-      ...parsed,
-      numericValue: parsed.numericValue.toString(),
-    }).returning();
-    return metric;
+      const [metric] = await tx.insert(metrics).values({
+        ...parsed,
+        numericValue: parsed.numericValue.toString(),
+      }).returning();
+      return metric;
+    });
   }
 
   async createSnapshot(businessId: string) {
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select id from businesses where id = ${businessId} for update`);
+      await assertActiveBusinessForUpdate(tx, businessId);
       const [business] = await tx.select().from(businesses).where(eq(businesses.id, businessId));
       if (!business) throw new Error("Business not found");
       const [profile] = await tx.select().from(businessProfiles)

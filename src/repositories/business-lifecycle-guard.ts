@@ -16,3 +16,15 @@ export async function assertBusinessActive(database: Database, businessId: strin
   if (!business) throw new Error("Business not found");
   if (business.status !== "active") throw new BusinessArchivedError();
 }
+
+export async function assertActiveBusinessForUpdate(
+  database: Pick<Database, "select">,
+  businessId: string,
+) {
+  const [business] = await database.select({ status: businesses.status })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .for("update");
+  if (!business) throw new Error("Business not found");
+  if (business.status !== "active") throw new BusinessArchivedError();
+}

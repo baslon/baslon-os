@@ -5,7 +5,10 @@ import {
   assertAuthorizedFactAdmission,
   type AuthorizedFactAdmission,
 } from "@/domain/fact-admission";
-import { assertBusinessActive } from "@/repositories/business-lifecycle-guard";
+import {
+  assertActiveBusinessForUpdate,
+  assertBusinessActive,
+} from "@/repositories/business-lifecycle-guard";
 
 export class FactAdmissionRepository {
   constructor(private readonly database: Database) {}
@@ -17,6 +20,7 @@ export class FactAdmissionRepository {
   async apply(command: AuthorizedFactAdmission) {
     assertAuthorizedFactAdmission(command);
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, command.claim.businessId);
       for (const evidenceId of command.supportingEvidenceIds) {
         const [support] = await tx.select({ businessId: evidence.businessId })
           .from(evidence).where(eq(evidence.id, evidenceId));
