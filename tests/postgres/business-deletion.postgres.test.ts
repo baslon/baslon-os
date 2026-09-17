@@ -39,13 +39,12 @@ import {
   baslonMessyIntake,
   baslonMetric,
 } from "../fixtures/baslon-business";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL is required for destructive PostgreSQL verification");
-const targetDatabase = new URL(connectionString).pathname.replace(/^\//, "");
-if (targetDatabase !== "baslon_os_test") {
-  throw new Error(`Destructive tests require baslon_os_test; received ${targetDatabase || "no database"}`);
-}
+const connectionString = requirePostgresTestDatabaseUrl();
 
 class FakeModel implements EvidenceExtractionModel {
   getConfiguration() {
@@ -237,12 +236,10 @@ describe("real PostgreSQL 17 permanent Business deletion", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString, max: 8 });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
     foundation = new FoundationRepository(database);
     service = new BusinessService(foundation, new BusinessDeletionRepository(database));
-    const result = await database.execute<{ server_version_num: string }>(sql`show server_version_num`);
-    expect(Number(result.rows[0].server_version_num)).toBeGreaterThanOrEqual(170000);
-    expect(Number(result.rows[0].server_version_num)).toBeLessThan(180000);
   });
 
   afterAll(async () => pool.end());

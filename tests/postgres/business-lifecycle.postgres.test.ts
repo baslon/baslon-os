@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db/client";
@@ -9,9 +9,12 @@ import { FoundationRepository } from "@/repositories/foundation-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { BusinessService } from "@/services/business-service";
 import { baslonClaims, baslonEvidence, baslonMetric } from "../fixtures/baslon-business";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL is required for real PostgreSQL verification");
+const connectionString = requirePostgresTestDatabaseUrl();
 
 describe("real PostgreSQL 17 Business Archive and Restore", () => {
   let pool: Pool;
@@ -21,12 +24,10 @@ describe("real PostgreSQL 17 Business Archive and Restore", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
     foundation = new FoundationRepository(database);
     service = new BusinessService(foundation);
-    const result = await database.execute<{ server_version_num: string }>(sql`show server_version_num`);
-    expect(Number(result.rows[0].server_version_num)).toBeGreaterThanOrEqual(170000);
-    expect(Number(result.rows[0].server_version_num)).toBeLessThan(180000);
   });
 
   afterAll(async () => pool.end());

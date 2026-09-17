@@ -13,12 +13,12 @@ import {
   evidenceGaps,
 } from "@/db/schema";
 import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL is required for Evidence Coherence PostgreSQL verification");
-if (new URL(connectionString).pathname !== "/baslon_os_test") {
-  throw new Error("Evidence Coherence PostgreSQL tests require baslon_os_test");
-}
+const connectionString = requirePostgresTestDatabaseUrl();
 
 describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
   let pool: Pool;
@@ -26,11 +26,8 @@ describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString, max: 4 });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
-    const result = await pool.query("select current_database() name, current_setting('server_version_num')::int version");
-    expect(result.rows[0].name).toBe("baslon_os_test");
-    expect(result.rows[0].version).toBeGreaterThanOrEqual(170000);
-    expect(result.rows[0].version).toBeLessThan(180000);
   });
 
   afterAll(async () => pool.end());

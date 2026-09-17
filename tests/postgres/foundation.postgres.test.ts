@@ -12,11 +12,12 @@ import {
 import { FoundationRepository } from "@/repositories/foundation-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { baslonClaims, baslonEvidence } from "../fixtures/baslon-business";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) {
-  throw new Error("TEST_DATABASE_URL is required for real PostgreSQL verification");
-}
+const connectionString = requirePostgresTestDatabaseUrl();
 
 describe("real PostgreSQL 17 foundation verification", () => {
   let pool: Pool;
@@ -25,13 +26,9 @@ describe("real PostgreSQL 17 foundation verification", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString, max: 6 });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
     repository = new FoundationRepository(database);
-    const result = await database.execute<{ server_version_num: string }>(
-      sql`show server_version_num`,
-    );
-    expect(Number(result.rows[0].server_version_num)).toBeGreaterThanOrEqual(170000);
-    expect(Number(result.rows[0].server_version_num)).toBeLessThan(180000);
   });
 
   afterAll(async () => {

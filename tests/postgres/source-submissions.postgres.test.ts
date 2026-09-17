@@ -15,13 +15,12 @@ import { FoundationRepository } from "@/repositories/foundation-repository";
 import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { BusinessService } from "@/services/business-service";
 import { SourceSubmissionService } from "@/services/source-submission-service";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) throw new Error("TEST_DATABASE_URL is required for Source Submission verification");
-const targetDatabase = new URL(connectionString).pathname.replace(/^\//, "");
-if (targetDatabase !== "baslon_os_test") {
-  throw new Error(`Source Submission tests require baslon_os_test; received ${targetDatabase || "no database"}`);
-}
+const connectionString = requirePostgresTestDatabaseUrl();
 
 function extractionRunInput(businessId: string, sourceSubmissionId?: string) {
   return {
@@ -47,14 +46,12 @@ describe("real PostgreSQL 17 Source Submission foundation", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString, max: 6 });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
     const foundation = new FoundationRepository(database);
     businesses = new BusinessService(foundation, new BusinessDeletionRepository(database));
     sources = new SourceSubmissionService(new SourceSubmissionRepository(database));
     extractionRuns = new EvidenceExtractionRepository(database);
-    const result = await database.execute<{ server_version_num: string }>(sql`show server_version_num`);
-    expect(Number(result.rows[0].server_version_num)).toBeGreaterThanOrEqual(170000);
-    expect(Number(result.rows[0].server_version_num)).toBeLessThan(180000);
   });
 
   afterAll(async () => pool.end());

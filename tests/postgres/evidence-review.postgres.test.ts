@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -28,11 +28,12 @@ import {
   baslonExtractionOutput,
   baslonMessyIntake,
 } from "../fixtures/baslon-business";
+import {
+  requirePostgresTestDatabaseUrl,
+  verifyPostgresTestDatabase,
+} from "../helpers/postgres-test-guard";
 
-const connectionString = process.env.TEST_DATABASE_URL;
-if (!connectionString) {
-  throw new Error("TEST_DATABASE_URL is required for real PostgreSQL verification");
-}
+const connectionString = requirePostgresTestDatabaseUrl();
 
 class FakeModel implements EvidenceExtractionModel {
   getConfiguration(): EvidenceExtractionModelConfiguration {
@@ -63,12 +64,10 @@ describe("real PostgreSQL 17 Evidence Review verification", () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString, max: 6 });
+    await verifyPostgresTestDatabase(pool);
     database = drizzle({ client: pool });
     foundation = new FoundationRepository(database);
     reviewRepository = new EvidenceReviewRepository(database);
-    const version = await database.execute<{ server_version_num: string }>(sql`show server_version_num`);
-    expect(Number(version.rows[0].server_version_num)).toBeGreaterThanOrEqual(170000);
-    expect(Number(version.rows[0].server_version_num)).toBeLessThan(180000);
   });
 
   afterAll(async () => pool.end());
