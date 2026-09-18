@@ -22,6 +22,15 @@ import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-r
 import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
 import { EvidenceQualityService } from "@/services/evidence-quality-service";
 import { AddInformationRepository } from "@/repositories/add-information-repository";
+import { InitialIntakeRepository } from "@/repositories/initial-intake-repository";
+import { InitialIntakeService } from "@/services/initial-intake-service";
+
+export function getInitialIntakeService() {
+  return new InitialIntakeService(
+    new InitialIntakeRepository(getDatabase()),
+    getEvidenceExtractionService(),
+  );
+}
 
 export function getAddInformationService() {
   return new AddInformationService(

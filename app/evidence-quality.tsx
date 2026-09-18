@@ -51,5 +51,9 @@ export function EvidenceQuality({ model, error }: { model: Model; error?: boolea
           ? <Link className="button-link secondary-link" href={`/businesses/${business.id}/information?question=${item.id}`}>Answer this question</Link>
           : <span className="muted">This question belongs to a read-only analysis.</span>}</li>)}</ol> : <p className="empty-state">No high-priority questions were generated.</p>}</section>
     </> : null}
+    {!archived && model.workflow?.state === "GAP_RESOLUTION_REQUIRED" ? <section className="secondary-actions" aria-label="Other information">
+      <p>You can also add information that isn&apos;t an answer to one of these questions. It will be reviewed before it enters the Evidence State.</p>
+      <Link className="button-link secondary-link" href={`/businesses/${business.id}/information`}>Add other information</Link>
+    </section> : null}
   </main>;
 }

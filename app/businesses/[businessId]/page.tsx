@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getBusinessOverviewService, getEvidenceStateService } from "@/foundation";
 import { BusinessWorkspace } from "../../business-workspace";
 import { selectWorkspaceKeyMetrics } from "@/domain/workspace-metrics";
+import { acceptsAddInformation } from "@/domain/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function BusinessWorkspacePage({ params }: { params: Promis
     progress: workspaceProgress,
     primaryHref: workspacePrimaryHref,
     activeReviewHref,
-    canAddInformation: overview.workflow?.state === "EVIDENCE_READY",
+    canAddInformation: acceptsAddInformation(overview.workflow?.state),
     counts,
     metrics: selectWorkspaceKeyMetrics(state.metrics),
   }} />;

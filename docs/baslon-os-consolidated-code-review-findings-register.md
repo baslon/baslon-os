@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Ready to architect, subject to the Milestone 4-specific items below. Code verification found `GAP_RESOLUTION_REQUIRED` already accepts ordinary Add Information (M4-01 now partially resolved) and found one remaining UI path that can invalidate an open initial review (B-03, reclassified).  
+**Milestone 4:** Ready to architect, subject to the Milestone 4-specific items below. Following code verification, ordinary Add Information from `GAP_RESOLUTION_REQUIRED` now has navigation and documentation (M4-01 partially resolved), and the initial-intake path that could invalidate an open review is closed (B-03 resolved).  
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -125,6 +125,8 @@ The same stale-run recovery policy now applies to extraction runs, allowing safe
 
 ### Verification note (18 September 2026)
 Recovery applies to the Add Information retry path (`AddInformationService.retry`). Initial-intake extraction (`runEvidenceExtractionAction`) has no stale-run recovery; a resubmission simply creates a newer run and leaves any abandoned initial-intake run in `RUNNING` indefinitely. This is harmless to review eligibility (only the latest run is reviewable) but leaves untidy run history. Tracked with B-03.
+
+**Update (18 September 2026):** resolved with B-03. Initial intake now recovers a stale `RUNNING` run through the same conditional `stale_run_recovered` transition before starting again.
 
 ---
 
@@ -353,10 +355,14 @@ Milestone 3D already allows ordinary (unprompted) Add Information from `GAP_RESO
 - `/businesses/[businessId]/information` renders the form in both states;
 - covered by the test "accepts ordinary Add Information from GAP_RESOLUTION_REQUIRED without creating a question link".
 
-Remaining gaps:
+Navigation and documentation — **resolved 18 September 2026:**
 
-- no navigation entry: the workspace (`canAddInformation`) and Evidence State pages still show Add Information only in `EVIDENCE_READY`, and Evidence Quality offers no general Add Information link;
-- the behaviour is not documented in the milestone or status docs;
+- the workspace and Evidence State pages show Add Information in both `EVIDENCE_READY` and `GAP_RESOLUTION_REQUIRED` (shared `acceptsAddInformation` in `src/domain/workflow.ts`);
+- Evidence Quality shows "Add other information" in `GAP_RESOLUTION_REQUIRED`, including when no question was surfaced;
+- documented in `docs/milestone-3d-pre-diagnosis-hardening.md`.
+
+Remaining for Milestone 4:
+
 - whether Milestone 4 also needs an explicit continue/accept-gaps route remains a product decision.
 
 ### Original risk
@@ -835,7 +841,12 @@ Recommended:
 ## B-03 — Creation of a newer extraction run can invalidate an open review
 
 **Origin:** Milestone 3D architectural review; corrected by code verification 18 September 2026.  
-**Status:** **DEFERRED — MILESTONE 4** (reclassified from BACKLOG)
+**Status:** **RESOLVED — 18 September 2026** (initial-intake UI path); direct repository use of `EvidenceExtractionRepository.createRun` remains unguarded but has no application caller that can conflict with an open review.
+
+### Resolution
+Initial intake now runs through `InitialIntakeService` and `InitialIntakeRepository.prepare` (`src/repositories/initial-intake-repository.ts`). One transaction locks the Business and workflow, decides availability with `initialIntakeAvailability` (`src/domain/initial-intake.ts`), applies the intake transitions, recovers a stale run and creates the `RUNNING` run. A new intake is refused while the latest initial run succeeded and awaits review, or is fresh and still running. The intake page shows the same decision instead of the form, and the action redirects to the open review or to Add Information. This also brings stale-run recovery to initial intake (see R-03).
+
+Validation: shared initial-intake scenarios (PGlite and PostgreSQL), a PostgreSQL race test proving concurrent intake submissions commit exactly one run and one set of transitions, and unit tests for the availability rule.
 
 ### Correction
 The earlier statement that "normal application flow does not currently do this" is not accurate for **initial intake**.
@@ -1246,8 +1257,8 @@ The question is interpretive context only.
 
 Before Milestone 4 diagnosis implementation begins, explicitly close or approve the following:
 
-- [ ] Decide the `GAP_RESOLUTION_REQUIRED` no-surfaced-question path. Ordinary Add Information already works from this state; add navigation to it, document it, and decide whether an explicit continue/accept-gaps route is also needed (M4-01).
-- [ ] Block initial-intake resubmission while an initial review is open (B-03).
+- [ ] Decide whether an explicit continue/accept-gaps route is needed from `GAP_RESOLUTION_REQUIRED`. Ordinary Add Information from this state, with navigation and documentation, was completed 18 September 2026 (M4-01).
+- [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
 - [ ] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11).
 - [ ] Define one exact snapshot-bound diagnosis input contract.
 - [ ] Define diagnosis output as separate non-canonical analytical persistence.
