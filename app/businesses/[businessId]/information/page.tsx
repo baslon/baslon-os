@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getBusinessOverviewService, getEvidenceQualityService, getSourceSubmissionService } from "@/foundation";
 import { addInformationAction } from "../../../actions";
 import { InformationForm } from "../../../information-form";
+import { isAiRunStale } from "@/domain/ai-run-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,10 @@ export default async function AddInformationPage({ params, searchParams }: {
   const overview = await getBusinessOverviewService().getIncludingArchived(businessId);
   if (!overview) notFound();
   const latest = overview.latestExtraction;
-  const retry = latest?.status === "FAILED" && latest.sourceSubmissionId ? latest : undefined;
+  const retry = latest?.sourceSubmissionId && (
+    latest.status === "FAILED"
+    || (latest.status === "RUNNING" && isAiRunStale(latest.createdAt))
+  ) ? latest : undefined;
   const sourceService = getSourceSubmissionService();
   const retryContext = retry
     ? await sourceService.getQuestionContextForSource(businessId, retry.sourceSubmissionId!)
@@ -33,7 +37,7 @@ export default async function AddInformationPage({ params, searchParams }: {
     : undefined;
   const question = retry ? retryContext : currentQuestion;
   const available = overview.business.status === "active" && (
-    (!questionId && overview.workflow?.state === "EVIDENCE_READY")
+    (!questionId && ["EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED"].includes(overview.workflow?.state ?? ""))
     || (Boolean(currentQuestion && !currentQuestion.sourceSubmissionId) && overview.workflow?.state === "GAP_RESOLUTION_REQUIRED")
     || (overview.workflow?.state === "EVIDENCE_PROCESSING" && retry
       && (!questionId || retryContext?.questionId === questionId))

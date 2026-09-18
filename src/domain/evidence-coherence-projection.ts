@@ -74,6 +74,7 @@ export function buildEvidenceCoherenceProjection(snapshot: {
       claimId: text(item.claimId),
       evidenceId: text(item.evidenceId),
       relationshipType: text(item.relationshipType),
+      // Preserve the accepted semantic-link confidence without reinterpreting it.
       strengthScore: nullableText(item.strengthScore),
     })),
   };

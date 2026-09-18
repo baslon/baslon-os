@@ -192,6 +192,18 @@ async function populateBusiness(input: {
     actorType: "human",
     actorId: "deletion-test",
   });
+  await orchestrator.transition({
+    businessId: business.id,
+    event: "SUBMIT_INTAKE",
+    actorType: "human",
+    actorId: "deletion-test",
+  });
+  await orchestrator.transition({
+    businessId: business.id,
+    event: "PROCESS_EVIDENCE",
+    actorType: "system",
+    actorId: "deletion-test",
+  });
   const extraction = await new EvidenceExtractionService(
     new EvidenceExtractionRepository(database),
     new FakeModel(),

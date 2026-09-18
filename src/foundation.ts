@@ -21,9 +21,15 @@ import { OpenAIEvidenceCoherenceModel } from "@/ai/evidence-coherence/openai-ada
 import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
 import { EvidenceQualityService } from "@/services/evidence-quality-service";
+import { AddInformationRepository } from "@/repositories/add-information-repository";
 
 export function getAddInformationService() {
-  return new AddInformationService(getSourceSubmissionService(), getEvidenceExtractionService(), getEvidenceReviewService(), getStrategyOrchestrator());
+  return new AddInformationService(
+    new AddInformationRepository(getDatabase()),
+    getSourceSubmissionService(),
+    getEvidenceExtractionService(),
+    getEvidenceReviewService(),
+  );
 }
 
 let repository: FoundationRepository | undefined;

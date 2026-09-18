@@ -1,7 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
-  businessProfiles,
   businesses,
   businessStateSnapshots,
   claimEvidence,
@@ -19,6 +18,7 @@ import {
   assertActiveBusinessForUpdate,
   assertBusinessActive,
 } from "@/repositories/business-lifecycle-guard";
+import { createCanonicalSnapshot } from "@/repositories/canonical-snapshot";
 
 export type CanonicalApplication =
   | { type: "none" }
@@ -43,6 +43,22 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+async function assertCurrentReviewRun(
+  database: Pick<Database, "select">,
+  businessId: string,
+  extractionRunId: string,
+) {
+  const [workflow] = await database.select({ state: strategyWorkflows.state })
+    .from(strategyWorkflows).where(eq(strategyWorkflows.businessId, businessId));
+  const [latestRun] = await database.select({ id: evidenceExtractionRuns.id })
+    .from(evidenceExtractionRuns)
+    .where(eq(evidenceExtractionRuns.businessId, businessId))
+    .orderBy(desc(evidenceExtractionRuns.createdAt), desc(evidenceExtractionRuns.id)).limit(1);
+  if (workflow?.state !== "EVIDENCE_PROCESSING" || latestRun?.id !== extractionRunId) {
+    throw new Error("Only the current Evidence Extraction Run may be reviewed");
+  }
+}
+
 export class EvidenceReviewRepository {
   constructor(private readonly database: Database) {}
 
@@ -65,6 +81,7 @@ export class EvidenceReviewRepository {
       if (run.status !== "SUCCEEDED") {
         throw new Error("Only a SUCCEEDED Evidence Extraction Run may be reviewed");
       }
+      await assertCurrentReviewRun(tx, input.businessId, run.id);
 
       const [existing] = await tx.select().from(evidenceReviewSessions)
         .where(eq(evidenceReviewSessions.extractionRunId, run.id));
@@ -141,6 +158,7 @@ export class EvidenceReviewRepository {
       if (session.reviewerId !== input.reviewerId) {
         throw new Error("Reviewer does not match the Evidence Review Session");
       }
+      await assertCurrentReviewRun(tx, input.businessId, session.extractionRunId);
 
       const [proposal] = await tx.select().from(evidenceProposals).where(and(
         eq(evidenceProposals.id, input.proposalId),
@@ -220,25 +238,22 @@ export class EvidenceReviewRepository {
         throw new Error("Reviewer does not match the Evidence Review Session");
       }
       if (session.status === "COMPLETED") {
-        const [[snapshot], [workflow]] = await Promise.all([
-          tx.select().from(businessStateSnapshots)
-            .where(eq(businessStateSnapshots.id, session.resultingSnapshotId!)),
-          tx.select().from(strategyWorkflows)
-            .where(eq(strategyWorkflows.businessId, input.businessId)),
-        ]);
+        const [snapshot] = await tx.select().from(businessStateSnapshots)
+          .where(eq(businessStateSnapshots.id, session.resultingSnapshotId!));
+        const [workflow] = await tx.select().from(strategyWorkflows)
+          .where(eq(strategyWorkflows.businessId, input.businessId));
         const [latestRun] = await tx.select({ id: evidenceExtractionRuns.id }).from(evidenceExtractionRuns)
           .where(eq(evidenceExtractionRuns.businessId, input.businessId))
           .orderBy(sql`${evidenceExtractionRuns.createdAt} desc`).limit(1);
         return { session, snapshot, completedNow: false,
           workflowState: latestRun?.id === session.extractionRunId ? workflow?.state : undefined };
       }
+      await assertCurrentReviewRun(tx, input.businessId, session.extractionRunId);
 
-      const [proposals, reviews] = await Promise.all([
-        tx.select().from(evidenceProposals)
-          .where(eq(evidenceProposals.extractionRunId, session.extractionRunId)),
-        tx.select().from(proposalReviews)
-          .where(eq(proposalReviews.reviewSessionId, session.id)),
-      ]);
+      const proposals = await tx.select().from(evidenceProposals)
+        .where(eq(evidenceProposals.extractionRunId, session.extractionRunId));
+      const reviews = await tx.select().from(proposalReviews)
+        .where(eq(proposalReviews.reviewSessionId, session.id));
       if (proposals.length !== reviews.length) {
         throw new Error("Every proposal requires an explicit review decision");
       }
@@ -264,36 +279,7 @@ export class EvidenceReviewRepository {
         throw new Error("Workflow must be EVIDENCE_PROCESSING to complete Evidence Review");
       }
 
-      const [business] = await tx.select().from(businesses)
-        .where(eq(businesses.id, input.businessId));
-      if (!business) throw new Error("Business not found");
-      const [profile] = await tx.select().from(businessProfiles)
-        .where(eq(businessProfiles.businessId, input.businessId));
-      const businessClaims = await tx.select().from(claims)
-        .where(eq(claims.businessId, input.businessId));
-      const businessEvidence = await tx.select().from(evidence)
-        .where(eq(evidence.businessId, input.businessId));
-      const businessMetrics = await tx.select().from(metrics)
-        .where(eq(metrics.businessId, input.businessId));
-      const links = await tx.select().from(claimEvidence)
-        .innerJoin(claims, eq(claimEvidence.claimId, claims.id))
-        .where(eq(claims.businessId, input.businessId));
-      const [latest] = await tx.select({ version: businessStateSnapshots.version })
-        .from(businessStateSnapshots)
-        .where(eq(businessStateSnapshots.businessId, input.businessId))
-        .orderBy(sql`${businessStateSnapshots.version} desc`).limit(1);
-      const [snapshot] = await tx.insert(businessStateSnapshots).values({
-        businessId: input.businessId,
-        version: (latest?.version ?? 0) + 1,
-        snapshotData: {
-          business,
-          profile: profile?.profileData ?? {},
-          claims: businessClaims,
-          evidence: businessEvidence,
-          claimEvidence: links.map((row) => row.claim_evidence),
-          metrics: businessMetrics,
-        },
-      }).returning();
+      const snapshot = await createCanonicalSnapshot(tx, input.businessId);
       const completedAt = new Date();
       const [completed] = await tx.update(evidenceReviewSessions).set({
         status: "COMPLETED",

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { count, eq } from "drizzle-orm";
 import { Pool, type PoolClient } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import {
   analysisFindingReferences,
@@ -13,6 +13,22 @@ import {
   evidenceGaps,
 } from "@/db/schema";
 import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
+import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
+import { FoundationRepository } from "@/repositories/foundation-repository";
+import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
+import { BusinessService } from "@/services/business-service";
+import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
+import {
+  buildEvidenceCoherenceProjection,
+  evidenceCoherenceModelInput,
+  hashEvidenceCoherenceProjection,
+} from "@/domain/evidence-coherence-projection";
+import {
+  EVIDENCE_COHERENCE_INPUT_VERSION,
+  EVIDENCE_COHERENCE_MODULE,
+  EVIDENCE_COHERENCE_RUN_TYPE,
+} from "@/domain/evidence-coherence";
+import { EVIDENCE_COHERENCE_PROMPT_VERSION } from "@/ai/evidence-coherence/prompt";
 import {
   requirePostgresTestDatabaseUrl,
   verifyPostgresTestDatabase,
@@ -162,4 +178,85 @@ describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
       expect((await database.select({ value: count() }).from(table).where(eq(table.businessId, owner!.businessId)))[0].value).toBe(0);
     }
   });
+
+  it("recovers one abandoned run and reuses one competing equivalent PostgreSQL run", async () => {
+    vi.stubEnv("AI_RUN_STALE_AFTER_MS", "500");
+    const firstPool = new Pool({ connectionString, max: 1 });
+    const secondPool = new Pool({ connectionString, max: 1 });
+    try {
+      const firstDb = drizzle({ client: firstPool }) as unknown as Database;
+      const secondDb = drizzle({ client: secondPool }) as unknown as Database;
+      const foundation = new FoundationRepository(database);
+      const business = await new BusinessService(foundation).create({
+        name: `Coherence recovery concurrency ${randomUUID()}`,
+      });
+      const snapshot = await foundation.createSnapshot(business.id);
+      const orchestrator = createStrategyOrchestrator(database);
+      for (const [event, actorType] of [
+        ["START_INTAKE", "human"],
+        ["SUBMIT_INTAKE", "human"],
+        ["PROCESS_EVIDENCE", "system"],
+        ["MARK_ANALYSIS_COMPLETE", "system"],
+      ] as const) await orchestrator.transition({ businessId: business.id, event, actorType });
+      const projection = buildEvidenceCoherenceProjection({
+        ...snapshot,
+        snapshotData: snapshot.snapshotData as Record<string, unknown>,
+      });
+      const inputPayload = evidenceCoherenceModelInput(projection);
+      const identity = {
+        businessId: business.id,
+        inputSnapshotId: snapshot.id,
+        module: EVIDENCE_COHERENCE_MODULE,
+        runType: EVIDENCE_COHERENCE_RUN_TYPE,
+        inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
+        inputPayload,
+        inputHash: hashEvidenceCoherenceProjection(projection),
+        promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
+        provider: "test",
+        modelIdentifier: "abandoned",
+        modelConfiguration: {},
+      };
+      const abandoned = await new EvidenceCoherenceRepository(database).createRun(identity);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      let releaseModel!: () => void;
+      let announceModel!: () => void;
+      const modelStarted = new Promise<void>((resolve) => { announceModel = resolve; });
+      const modelRelease = new Promise<void>((resolve) => { releaseModel = resolve; });
+      let calls = 0;
+      const model = {
+        getConfiguration: () => ({ provider: "test", model: "deterministic", metadata: {} }),
+        analyse: async () => {
+          calls += 1;
+          announceModel();
+          await modelRelease;
+          const output = { contradictions: [], gaps: [], questions: [] };
+          return { output, rawOutput: output };
+        },
+      };
+      const firstService = new EvidenceCoherenceService(
+        new EvidenceCoherenceRepository(firstDb), model, createStrategyOrchestrator(firstDb),
+      );
+      const secondService = new EvidenceCoherenceService(
+        new EvidenceCoherenceRepository(secondDb), model, createStrategyOrchestrator(secondDb),
+      );
+      const firstRequest = firstService.analyseCurrentSnapshot({ businessId: business.id });
+      await modelStarted;
+      const competing = await secondService.analyseCurrentSnapshot({ businessId: business.id });
+      releaseModel();
+      const completed = await firstRequest;
+      expect(competing).toMatchObject({ reused: true, run: { id: completed.run.id } });
+      expect(calls).toBe(1);
+      const [oldRun] = await database.select().from(analysisRuns)
+        .where(eq(analysisRuns.id, abandoned.run.id));
+      expect(oldRun).toMatchObject({ status: "FAILED", modelIdentifier: "abandoned" });
+      const active = await database.select().from(analysisRuns)
+        .where(eq(analysisRuns.businessId, business.id));
+      expect(active.filter((run) => run.status === "SUCCEEDED")).toHaveLength(1);
+      expect(active.filter((run) => run.status === "RUNNING")).toHaveLength(0);
+    } finally {
+      vi.unstubAllEnvs();
+      await Promise.all([firstPool.end(), secondPool.end()]);
+    }
+  }, 15_000);
 });

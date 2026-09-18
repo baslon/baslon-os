@@ -1,5 +1,6 @@
 import { selectSurfacedQuestions } from "@/domain/evidence-coherence";
 import type { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
+import { isAiRunStale } from "@/domain/ai-run-recovery";
 
 export class EvidenceQualityService {
   constructor(private readonly repository: EvidenceCoherenceRepository) {}
@@ -34,6 +35,9 @@ export class EvidenceQualityService {
       workflow,
       latestSnapshot,
       analysis: result,
+      canRecoverAnalysis: Boolean(
+        latestRun?.status === "RUNNING" && isAiRunStale(latestRun.createdAt),
+      ),
       isHistorical: Boolean(latestRun && latestSnapshot && latestRun.inputSnapshotId !== latestSnapshot.id),
       surfacedQuestions: selectSurfacedQuestions(questions),
     };

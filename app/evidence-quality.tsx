@@ -11,6 +11,7 @@ type Model = {
     gaps: Array<{ id: string; area: string; missingInformation: string; decisionImpact: string; materiality: string }>;
   };
   isHistorical: boolean;
+  canRecoverAnalysis?: boolean;
   surfacedQuestions: Array<{ id: string; question: string; sourceSubmissionId?: string | null }>;
 };
 
@@ -36,7 +37,7 @@ export function EvidenceQuality({ model, error }: { model: Model; error?: boolea
 
     {!latestSnapshot ? <section className="empty-state"><h2>No canonical snapshot yet</h2><p>Complete Evidence Review before analysing Evidence Quality.</p></section> : null}
     {latestSnapshot && !analysis ? <section className="status-panel"><p className="eyebrow">Snapshot {latestSnapshot.version}</p><h2>No Evidence Quality analysis yet</h2><p>Analyse the current canonical snapshot for material contradictions and important evidence gaps.</p>{!archived ? <AnalyseAction businessId={business.id} /> : null}</section> : null}
-    {analysis?.run.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Analysis in progress</p><h2>Analysing snapshot {targetVersion ?? "history"}</h2><p>This analysis reads the immutable snapshot and does not modify canonical evidence.</p></section> : null}
+    {analysis?.run.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Analysis in progress</p><h2>Analysing snapshot {targetVersion ?? "history"}</h2><p>This analysis reads the immutable snapshot and does not modify canonical evidence.</p>{model.canRecoverAnalysis && !archived && !model.isHistorical ? <><p>The prior attempt exceeded the allowed running time and can be safely recovered.</p><AnalyseAction businessId={business.id} retry /></> : null}</section> : null}
     {analysis?.run.status === "FAILED" ? <section className="status-panel"><p className="eyebrow">Analysis failed</p><h2>Evidence Quality could not be completed</h2><p>Canonical evidence remains unchanged. You can safely retry this snapshot.</p>{!archived && !model.isHistorical ? <AnalyseAction businessId={business.id} retry /> : null}</section> : null}
     {model.isHistorical ? <section className="notice"><strong>Historical analysis</strong><p>This result applies to an earlier canonical snapshot. The latest snapshot is version {latestSnapshot?.version}.</p>{!archived ? <AnalyseAction businessId={business.id} /> : null}</section> : null}
 

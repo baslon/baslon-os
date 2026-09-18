@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { count, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import {
   analysisFindingReferences,
@@ -21,6 +21,17 @@ import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-r
 import { FoundationRepository } from "@/repositories/foundation-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
+import {
+  buildEvidenceCoherenceProjection,
+  evidenceCoherenceModelInput,
+  hashEvidenceCoherenceProjection,
+} from "@/domain/evidence-coherence-projection";
+import {
+  EVIDENCE_COHERENCE_INPUT_VERSION,
+  EVIDENCE_COHERENCE_MODULE,
+  EVIDENCE_COHERENCE_RUN_TYPE,
+} from "@/domain/evidence-coherence";
+import { EVIDENCE_COHERENCE_PROMPT_VERSION } from "@/ai/evidence-coherence/prompt";
 
 class FakeModel implements EvidenceCoherenceModel {
   calls = 0;
@@ -138,6 +149,128 @@ describe("Evidence Coherence application flow", () => {
     expect((await repository.getSnapshot(fixture.snapshot.id, fixture.business.id))?.snapshotData).toEqual(before.snapshotData);
   });
 
+  it("scopes every Evidence Coherence run lookup to its module", async () => {
+    const fixture = await readyBusiness("Coherence module scope");
+    const repository = new EvidenceCoherenceRepository(database);
+    const result = await new EvidenceCoherenceService(
+      repository,
+      new FakeModel(() => validOutput(fixture)),
+      fixture.orchestrator,
+    ).analyseCurrentSnapshot({ businessId: fixture.business.id });
+    const [secondary] = await database.insert(analysisRuns).values({
+      businessId: fixture.business.id,
+      inputSnapshotId: fixture.snapshot.id,
+      module: "phase1_diagnosis_test_only",
+      runType: "snapshot_analysis",
+      inputProjectionVersion: "test_projection_v1",
+      inputPayload: {},
+      inputHash: crypto.randomUUID(),
+      promptVersion: "test_prompt_v1",
+      provider: "fake",
+      modelIdentifier: "test-only",
+      modelConfiguration: {},
+    }).returning();
+    expect((await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id))?.id)
+      .toBe(result.run.id);
+    expect((await repository.getLatestRunForBusiness(fixture.business.id))?.id).toBe(result.run.id);
+    expect(await repository.getRun(secondary.id, fixture.business.id)).toBeUndefined();
+    expect(await repository.getRunResult(secondary.id, fixture.business.id)).toBeUndefined();
+  });
+
+  it("terminally fails an abandoned equivalent run and retries without rewriting it", async () => {
+    vi.stubEnv("AI_RUN_STALE_AFTER_MS", "1");
+    try {
+      const fixture = await readyBusiness("Coherence stale recovery");
+      const repository = new EvidenceCoherenceRepository(database);
+      const projection = buildEvidenceCoherenceProjection({
+        ...fixture.snapshot,
+        snapshotData: fixture.snapshot.snapshotData as Record<string, unknown>,
+      });
+      const modelInput = evidenceCoherenceModelInput(projection);
+      const abandoned = await repository.createRun({
+        businessId: fixture.business.id,
+        inputSnapshotId: fixture.snapshot.id,
+        module: EVIDENCE_COHERENCE_MODULE,
+        runType: EVIDENCE_COHERENCE_RUN_TYPE,
+        inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
+        inputPayload: modelInput,
+        inputHash: hashEvidenceCoherenceProjection(projection),
+        promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
+        provider: "fake",
+        modelIdentifier: "abandoned",
+        modelConfiguration: {},
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const retried = await new EvidenceCoherenceService(
+        repository,
+        new FakeModel(() => validOutput(fixture)),
+        fixture.orchestrator,
+      ).analyseCurrentSnapshot({ businessId: fixture.business.id });
+      const [historical] = await database.select().from(analysisRuns)
+        .where(eq(analysisRuns.id, abandoned.run.id));
+      expect(historical).toMatchObject({ status: "FAILED", modelIdentifier: "abandoned" });
+      expect(historical.validationErrors).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "stale_run_recovered" }),
+      ]));
+      expect(retried.run.id).not.toBe(abandoned.run.id);
+      expect(retried.run.status).toBe("SUCCEEDED");
+      expect(await repository.failStaleRun({
+        runId: retried.run.id,
+        businessId: fixture.business.id,
+        staleBefore: new Date(Date.now() + 60_000),
+        validationErrors: [],
+      })).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("rejects recovery of a current run and terminally records reconciliation failure", async () => {
+    const fixture = await readyBusiness("Coherence reconciliation recovery");
+    const repository = new EvidenceCoherenceRepository(database);
+    const projection = buildEvidenceCoherenceProjection({
+      ...fixture.snapshot,
+      snapshotData: fixture.snapshot.snapshotData as Record<string, unknown>,
+    });
+    const created = await repository.createRun({
+      businessId: fixture.business.id,
+      inputSnapshotId: fixture.snapshot.id,
+      module: EVIDENCE_COHERENCE_MODULE,
+      runType: EVIDENCE_COHERENCE_RUN_TYPE,
+      inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
+      inputPayload: evidenceCoherenceModelInput(projection),
+      inputHash: hashEvidenceCoherenceProjection(projection),
+      promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
+      provider: "fake",
+      modelIdentifier: "current",
+      modelConfiguration: {},
+    });
+    expect(await repository.failStaleRun({
+      runId: created.run.id,
+      businessId: fixture.business.id,
+      staleBefore: new Date(0),
+      validationErrors: [],
+    })).toBeUndefined();
+
+    // Make this run terminal so a fresh service request can create its own run.
+    await repository.failRun({
+      runId: created.run.id,
+      businessId: fixture.business.id,
+      rawModelOutput: null,
+      validationErrors: [{ code: "test_cleanup" }],
+    });
+    const model = new FakeModel(() => validOutput(fixture));
+    const failingOrchestrator = {
+      transition: async () => { throw new Error("forced workflow reconciliation failure"); },
+    } as unknown as typeof fixture.orchestrator;
+    await expect(new EvidenceCoherenceService(repository, model, failingOrchestrator)
+      .analyseCurrentSnapshot({ businessId: fixture.business.id }))
+      .rejects.toThrow("Evidence Coherence analysis failed");
+    expect(model.calls).toBe(0);
+    expect((await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id)))
+      .toMatchObject({ status: "FAILED" });
+  });
+
   it("reuses a successful equivalent run without a second model call", async () => {
     const fixture = await readyBusiness("Coherence reuse");
     const repository = new EvidenceCoherenceRepository(database);
@@ -210,7 +343,7 @@ describe("Evidence Coherence application flow", () => {
     const created = await repository.createRun({
       businessId: fixture.business.id,
       inputSnapshotId: fixture.snapshot.id,
-      module: "atomic_rollback_test",
+      module: "evidence_coherence",
       runType: "snapshot_analysis",
       inputProjectionVersion: "evidence_coherence_input_v1",
       inputPayload: { projectionVersion: "evidence_coherence_input_v1", snapshot: {} as never },

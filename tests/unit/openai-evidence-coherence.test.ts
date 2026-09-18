@@ -16,7 +16,7 @@ describe("OpenAI Evidence Coherence configuration", () => {
       model: "not_configured",
       metadata: {
         api: "responses",
-        promptVersion: "evidence_coherence_v1",
+        promptVersion: "evidence_coherence_v2",
         structuredOutput: "json_schema_strict",
         store: false,
       },

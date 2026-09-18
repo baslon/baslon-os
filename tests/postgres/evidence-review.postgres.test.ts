@@ -77,11 +77,14 @@ describe("real PostgreSQL 17 Evidence Review verification", () => {
       ...baslonBusiness,
       name: `${label} ${randomUUID()}`,
     });
+    const orchestrator = createStrategyOrchestrator(database);
+    await orchestrator.transition({ businessId: business.id, event: "START_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "SUBMIT_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "PROCESS_EVIDENCE", actorType: "system" });
     const extraction = await new EvidenceExtractionService(
       new EvidenceExtractionRepository(database),
       new FakeModel(),
     ).extract({ businessId: business.id, rawIntakeText: baslonMessyIntake });
-    const orchestrator = createStrategyOrchestrator(database);
     const service = new EvidenceReviewService(reviewRepository, orchestrator);
     const session = await service.startReview({
       businessId: business.id,
@@ -139,18 +142,6 @@ describe("real PostgreSQL 17 Evidence Review verification", () => {
       canonicalEntityId: null,
     });
 
-    for (const [event, actorType] of [
-      ["START_INTAKE", "human"],
-      ["SUBMIT_INTAKE", "human"],
-      ["PROCESS_EVIDENCE", "system"],
-    ] as const) {
-      await context.orchestrator.transition({
-        businessId: context.business.id,
-        event,
-        actorType,
-        actorId: "postgres-review-test",
-      });
-    }
     const first = await context.service.completeReview({
       businessId: context.business.id,
       reviewSessionId: context.session.id,

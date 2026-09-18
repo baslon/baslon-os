@@ -15,6 +15,7 @@ import {
   claims,
   evidence,
   evidenceProposals,
+  evidenceReviewSessions,
   metrics,
   proposalReviews,
 } from "@/db/schema";
@@ -28,6 +29,7 @@ import { BusinessService } from "@/services/business-service";
 import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
 import { EvidenceReviewService } from "@/services/evidence-review-service";
 import { EvidenceStateService } from "@/services/evidence-state-service";
+import { StrategyOrchestrator } from "@/strategy/orchestrator";
 import { FactAdmissionService } from "@/services/fact-admission-service";
 import {
   baslonBusiness,
@@ -84,6 +86,10 @@ describe("Milestone 2B Evidence Review", () => {
       ...baslonBusiness,
       name: `${baslonBusiness.name} ${crypto.randomUUID()}`,
     });
+    const orchestrator = createStrategyOrchestrator(database);
+    await orchestrator.transition({ businessId: business.id, event: "START_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "SUBMIT_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "PROCESS_EVIDENCE", actorType: "system" });
     const extraction = await new EvidenceExtractionService(
       extractionRepository,
       new FakeModel({ output, rawOutput: output }),
@@ -146,6 +152,27 @@ describe("Milestone 2B Evidence Review", () => {
     expect(repeated.session.id).toBe(first.session.id);
     await expect(startReview(setup, "Another reviewer"))
       .rejects.toThrow("different reviewer");
+  });
+
+  it("rejects review of a superseded extraction run", async () => {
+    const setup = await extractedBusiness();
+    const newer = await new EvidenceExtractionService(
+      extractionRepository,
+      new FakeModel({
+        output: { claims: [], evidence: [], metrics: [], relationships: [] },
+        rawOutput: {},
+      }),
+    ).extract({
+      businessId: setup.business.id,
+      rawIntakeText: "A later extraction source.",
+      sourceType: "business_intake",
+    });
+    await expect(startReview(setup)).rejects.toThrow("current Evidence Extraction Run");
+    await expect(setup.reviewService.startReview({
+      businessId: setup.business.id,
+      extractionRunId: newer.run.id,
+      reviewerId: "David",
+    })).resolves.toMatchObject({ extractionRunId: newer.run.id });
   });
 
   it("applies Claim decisions with correction limits, audit, and idempotency", async () => {
@@ -391,18 +418,6 @@ describe("Milestone 2B Evidence Review", () => {
       canonicalEntityType: proposal.proposalType === "claim_evidence" ? "claim_evidence" as const : null,
       canonicalReference: {},
     })));
-    const orchestrator = createStrategyOrchestrator(database);
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "START_INTAKE", actorType: "human", actorId: "David",
-    });
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "SUBMIT_INTAKE", actorType: "human", actorId: "David",
-    });
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "PROCESS_EVIDENCE", actorType: "system",
-      actorId: "evidence-extraction-service",
-    });
-
     await expect(setup.reviewService.completeReview({
       businessId: setup.business.id,
       reviewSessionId: session.id,
@@ -482,18 +497,6 @@ describe("Milestone 2B Evidence Review", () => {
       authority: deriveHumanAuthority({ actorType: "human", actorId: "David" }),
     });
     expect(fact.claimType).toBe("fact");
-
-    const orchestrator = createStrategyOrchestrator(database);
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "START_INTAKE", actorType: "human", actorId: "David",
-    });
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "SUBMIT_INTAKE", actorType: "human", actorId: "David",
-    });
-    await orchestrator.transition({
-      businessId: setup.business.id, event: "PROCESS_EVIDENCE", actorType: "system",
-      actorId: "evidence-extraction-service",
-    });
 
     const completed = await setup.reviewService.completeReview({
       businessId: setup.business.id,
@@ -576,6 +579,42 @@ describe("Milestone 2B Evidence Review", () => {
     }
     expect((await database.select({ value: count() }).from(claims)
       .where(eq(claims.businessId, setup.business.id)))[0].value).toBe(0);
+  });
+
+  it("reconciles workflow after snapshot completion survives a transition failure", async () => {
+    const setup = await extractedBusiness({ claims: [], evidence: [], metrics: [], relationships: [] });
+    const { session } = await startReview(setup);
+    const failingOrchestrator = new StrategyOrchestrator({
+      assertBusinessActive: async () => undefined,
+      getWorkflow: (businessId) => foundationRepository.getWorkflow(businessId),
+      commit: async () => { throw new Error("forced workflow transition failure"); },
+    });
+    const interrupted = new EvidenceReviewService(reviewRepository, failingOrchestrator);
+    await expect(interrupted.completeReview({
+      businessId: setup.business.id,
+      reviewSessionId: session.id,
+      reviewerId: "David",
+    })).rejects.toThrow("forced workflow transition failure");
+    const [committedSession] = await database.select().from(evidenceReviewSessions)
+      .where(eq(evidenceReviewSessions.id, session.id));
+    expect(committedSession).toMatchObject({
+      status: "COMPLETED",
+      resultingSnapshotId: expect.any(String),
+    });
+    expect((await foundationRepository.getWorkflow(setup.business.id))?.state)
+      .toBe("EVIDENCE_PROCESSING");
+    const beforeRetry = await database.select().from(businessStateSnapshots)
+      .where(eq(businessStateSnapshots.businessId, setup.business.id));
+    await setup.reviewService.completeReview({
+      businessId: setup.business.id,
+      reviewSessionId: session.id,
+      reviewerId: "David",
+    });
+    const afterRetry = await database.select().from(businessStateSnapshots)
+      .where(eq(businessStateSnapshots.businessId, setup.business.id));
+    expect(afterRetry).toEqual(beforeRetry);
+    expect((await foundationRepository.getWorkflow(setup.business.id))?.state)
+      .toBe("EVIDENCE_READY");
   });
 
 });

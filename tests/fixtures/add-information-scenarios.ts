@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
-import { expect, it } from "vitest";
+import { and, eq, sql } from "drizzle-orm";
+import { expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import * as s from "@/db/schema";
 import { FoundationRepository } from "@/repositories/foundation-repository";
@@ -13,6 +13,7 @@ import { SourceSubmissionService } from "@/services/source-submission-service";
 import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
 import { EvidenceReviewService } from "@/services/evidence-review-service";
 import { AddInformationService } from "@/services/add-information-service";
+import { AddInformationRepository } from "@/repositories/add-information-repository";
 import { baslonBusiness, baslonMessyIntake, baslonExtractionOutput } from "./baslon-business";
 import type { EvidenceExtractionModelInput } from "@/ai/evidence-extractor/contracts";
 import type { EvidenceExtractionOutput } from "@/ai/evidence-extractor/contracts";
@@ -37,7 +38,13 @@ export function addInformationScenarios(getDatabase: () => Database) {
         return { output: malformed ? {} : structuredClone(modelOutput), rawOutput: {} };
       },
     });
-    const service = new AddInformationService(sources, extraction, reviews, orchestrator);
+    const addInformationRepository = new AddInformationRepository(db);
+    const service = new AddInformationService(
+      addInformationRepository,
+      sources,
+      extraction,
+      reviews,
+    );
     async function complete(runId: string) {
       const session = await reviews.startReview({ businessId: business.id, extractionRunId: runId, reviewerId: "test-human" });
       const details = await reviews.getReview(session.id, business.id);
@@ -54,6 +61,7 @@ export function addInformationScenarios(getDatabase: () => Database) {
     const original = await extraction.extract({ businessId: business.id, rawIntakeText: baslonMessyIntake });
     const first = await complete(original.run.id);
     return { db, business, foundation, sources, runs, reviews, repository, service, complete, first,
+      extraction, addInformationRepository,
       orchestrator, modelInputs,
       fail: (value: boolean) => { malformed = value; },
       output: (value: EvidenceExtractionOutput) => { modelOutput = value; } };
@@ -93,6 +101,39 @@ export function addInformationScenarios(getDatabase: () => Database) {
       metrics: await db.select().from(s.metrics).where(eq(s.metrics.businessId, businessId)).orderBy(s.metrics.id),
       links: await db.select().from(s.claimEvidence).where(eq(s.claimEvidence.businessId, businessId)).orderBy(s.claimEvidence.claimId),
       snapshots: await db.select().from(s.businessStateSnapshots).where(eq(s.businessStateSnapshots.businessId, businessId)).orderBy(s.businessStateSnapshots.version),
+    };
+  }
+
+  async function commandState(c: Awaited<ReturnType<typeof setup>>) {
+    const workflow = await c.foundation.getWorkflow(c.business.id);
+    return {
+      sources: await c.sources.listForBusiness(c.business.id),
+      runs: await c.db.select().from(s.evidenceExtractionRuns)
+        .where(eq(s.evidenceExtractionRuns.businessId, c.business.id))
+        .orderBy(s.evidenceExtractionRuns.createdAt, s.evidenceExtractionRuns.id),
+      questionLinks: await c.db.select().from(s.analysisQuestionSources)
+        .where(eq(s.analysisQuestionSources.businessId, c.business.id)),
+      workflow,
+      transitions: await c.foundation.getTransitionHistory(workflow!.id),
+    };
+  }
+
+  function triggerName(prefix: string) {
+    return `${prefix}_${randomUUID().replaceAll("-", "")}`;
+  }
+
+  async function installFailureTrigger(
+    db: Database,
+    table: string,
+    timing: "INSERT" | "UPDATE",
+    predicate: string,
+  ) {
+    const name = triggerName(`test_add_info_${timing.toLowerCase()}`);
+    await db.execute(sql.raw(`CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF ${predicate} THEN RAISE EXCEPTION 'forced Add Information command failure'; END IF; RETURN NEW; END $$`));
+    await db.execute(sql.raw(`CREATE TRIGGER ${name} BEFORE ${timing} ON ${table} FOR EACH ROW EXECUTE FUNCTION ${name}()`));
+    return async () => {
+      await db.execute(sql.raw(`DROP TRIGGER ${name} ON ${table}`));
+      await db.execute(sql.raw(`DROP FUNCTION ${name}()`));
     };
   }
 
@@ -155,6 +196,132 @@ export function addInformationScenarios(getDatabase: () => Database) {
     expect(await c.runs.getRun(failed.id, c.business.id)).toEqual(failed);
     expect(await canonical(c.db, c.business.id)).toEqual(before);
     await expect(c.service.retry({ businessId: c.business.id, runId: failed.id })).rejects.toThrow();
+  });
+
+  it("recovers an abandoned Add Information run without duplicating its source or transition", async () => {
+    vi.stubEnv("AI_RUN_STALE_AFTER_MS", "1");
+    try {
+      const c = await setup();
+      c.output({ claims: [], evidence: [], metrics: [], relationships: [] });
+      const prepared = c.extraction.prepare({
+        businessId: c.business.id,
+        rawIntakeText: "The business has 12 active clients.",
+        sourceType: "additional_text",
+        sourceMetadata: { suppliedBy: "human_ui" },
+      });
+      const abandoned = await c.addInformationRepository.prepare({
+        businessId: c.business.id,
+        rawText: "The business has 12 active clients.",
+        runStart: prepared.runStart,
+      });
+      const before = await commandState(c);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const retry = await c.service.retry({
+        businessId: c.business.id,
+        runId: abandoned.run.id,
+      });
+      const after = await commandState(c);
+      expect(retry.run.id).not.toBe(abandoned.run.id);
+      expect(retry.run.sourceSubmissionId).toBe(abandoned.source.id);
+      expect(after.sources).toEqual(before.sources);
+      expect(after.runs).toHaveLength(before.runs.length + 1);
+      expect(after.transitions.filter((item) => item.event === "ADD_EVIDENCE"))
+        .toHaveLength(before.transitions.filter((item) => item.event === "ADD_EVIDENCE").length);
+      expect(await c.runs.getRun(abandoned.run.id, c.business.id)).toMatchObject({
+        status: "FAILED",
+        validationErrors: expect.arrayContaining([
+          expect.objectContaining({ code: "stale_run_recovered" }),
+        ]),
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("accepts ordinary Add Information from GAP_RESOLUTION_REQUIRED without creating a question link", async () => {
+    const c = await setup();
+    await addQuestion(c, "What is the current retention rate?");
+    const result = await c.service.submit({
+      businessId: c.business.id,
+      rawText: baslonMessyIntake,
+      sourceReference: "Voluntary update",
+    });
+    expect(result.run.sourceSubmissionId).toBeTruthy();
+    expect((await c.foundation.getWorkflow(c.business.id))?.state).toBe("EVIDENCE_PROCESSING");
+    expect(await c.db.select().from(s.analysisQuestionSources).where(and(
+      eq(s.analysisQuestionSources.businessId, c.business.id),
+      eq(s.analysisQuestionSources.sourceSubmissionId, result.run.sourceSubmissionId!),
+    ))).toEqual([]);
+  });
+
+  it("rolls back source, workflow and run when workflow persistence fails", async () => {
+    const c = await setup();
+    const before = await commandState(c);
+    const modelCalls = c.modelInputs.length;
+    const remove = await installFailureTrigger(
+      c.db,
+      "strategy_workflows",
+      "UPDATE",
+      `OLD.id = '${before.workflow!.id}'::uuid`,
+    );
+    try {
+      await expect(c.service.submit({
+        businessId: c.business.id,
+        rawText: baslonMessyIntake,
+      })).rejects.toThrow();
+      expect(await commandState(c)).toEqual(before);
+      expect(c.modelInputs).toHaveLength(modelCalls);
+    } finally {
+      await remove();
+    }
+  });
+
+  it("rolls back source and workflow transition when extraction-run creation fails", async () => {
+    const c = await setup();
+    const before = await commandState(c);
+    const modelCalls = c.modelInputs.length;
+    const remove = await installFailureTrigger(
+      c.db,
+      "evidence_extraction_runs",
+      "INSERT",
+      `NEW.business_id = '${c.business.id}'::uuid`,
+    );
+    try {
+      await expect(c.service.submit({
+        businessId: c.business.id,
+        rawText: baslonMessyIntake,
+      })).rejects.toThrow();
+      expect(await commandState(c)).toEqual(before);
+      expect(c.modelInputs).toHaveLength(modelCalls);
+    } finally {
+      await remove();
+    }
+  });
+
+  it("rolls back a question answer when question-link creation fails", async () => {
+    const c = await setup();
+    const { question } = await addQuestion(c, "What is current delivery capacity?");
+    const before = await commandState(c);
+    const modelCalls = c.modelInputs.length;
+    const remove = await installFailureTrigger(
+      c.db,
+      "analysis_question_sources",
+      "INSERT",
+      `NEW.question_id = '${question.id}'::uuid`,
+    );
+    try {
+      await expect(c.service.submit({
+        businessId: c.business.id,
+        questionId: question.id,
+        rawText: "20 hours per week",
+      })).rejects.toThrow();
+      expect(await commandState(c)).toEqual(before);
+      expect(c.modelInputs).toHaveLength(modelCalls);
+      expect(await c.sources.getQuestionContext(c.business.id, question.id))
+        .toMatchObject({ questionId: question.id, sourceSubmissionId: undefined });
+    } finally {
+      await remove();
+    }
   });
 
   it("rolls back canonical application if the audit fails during an additional review", async () => {
@@ -299,6 +466,7 @@ export function addInformationScenarios(getDatabase: () => Database) {
     })).rejects.toThrow();
     const failed = (await c.runs.getLatestRun(c.business.id))!;
     const sourcesBefore = await c.sources.listForBusiness(c.business.id);
+    const commandBeforeRetry = await commandState(c);
     expect(failed.promptVersion).toBe("evidence_extractor_v5");
     c.fail(false);
     c.output({ claims: [], evidence: [], metrics: [], relationships: [] });
@@ -306,6 +474,10 @@ export function addInformationScenarios(getDatabase: () => Database) {
     expect(retried.run.sourceSubmissionId).toBe(failed.sourceSubmissionId);
     expect(retried.run.promptVersion).toBe("evidence_extractor_v5");
     expect(await c.sources.listForBusiness(c.business.id)).toEqual(sourcesBefore);
+    const commandAfterRetry = await commandState(c);
+    expect(commandAfterRetry.questionLinks).toEqual(commandBeforeRetry.questionLinks);
+    expect(commandAfterRetry.transitions.filter((item) => item.event === "ADD_EVIDENCE"))
+      .toEqual(commandBeforeRetry.transitions.filter((item) => item.event === "ADD_EVIDENCE"));
     expect(c.modelInputs.at(-1)?.interpretiveContext?.questionId).toBe(question.id);
   });
 

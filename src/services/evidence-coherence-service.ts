@@ -17,6 +17,7 @@ import {
 } from "@/domain/evidence-coherence-projection";
 import type { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import type { StrategyOrchestrator } from "@/strategy/orchestrator";
+import { staleRunCutoff, staleRunValidationErrors } from "@/domain/ai-run-recovery";
 
 const inputSchema = z.object({ businessId: z.uuid() }).strict();
 
@@ -67,7 +68,22 @@ export class EvidenceCoherenceService {
       inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
       promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
     };
-    const existing = await this.repository.findEquivalentActive(identity);
+    let existing: Awaited<ReturnType<EvidenceCoherenceRepository["findEquivalentActive"]>> | undefined
+      = await this.repository.findEquivalentActive(identity);
+    if (existing?.status === "RUNNING") {
+      const recovered = await this.repository.failStaleRun({
+        runId: existing.id,
+        businessId: parsed.businessId,
+        staleBefore: staleRunCutoff(),
+        validationErrors: staleRunValidationErrors,
+      });
+      if (recovered) {
+        existing = undefined;
+      } else {
+        const current = await this.repository.getRun(existing.id, parsed.businessId);
+        if (current?.status !== "RUNNING") existing = undefined;
+      }
+    }
     if (existing) {
       await this.reconcileWorkflow(existing.id, parsed.businessId, snapshot.id, existing.status);
       return { run: existing, reused: true };
@@ -91,10 +107,9 @@ export class EvidenceCoherenceService {
       await this.reconcileWorkflow(created.run.id, parsed.businessId, snapshot.id, created.run.status);
       return { run: created.run, reused: true };
     }
-    await this.reconcileWorkflow(created.run.id, parsed.businessId, snapshot.id, created.run.status);
-
     let rawModelOutput: unknown = null;
     try {
+      await this.reconcileWorkflow(created.run.id, parsed.businessId, snapshot.id, created.run.status);
       const result = await this.model.analyse(modelInput);
       rawModelOutput = asJsonValue(result.rawOutput);
       const output = validateEvidenceCoherenceOutput(result.output, projection);

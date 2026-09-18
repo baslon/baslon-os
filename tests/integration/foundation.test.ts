@@ -42,7 +42,7 @@ describe("Milestone 1 PostgreSQL foundation", () => {
     }
     database = drizzle(client, { schema }) as unknown as Database;
     repository = new FoundationRepository(database);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await client.close();

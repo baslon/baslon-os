@@ -12,6 +12,7 @@ import {
 import type {
   EvidenceExtractionRepository,
   ExtractionProposalRecord,
+  ExtractionRunStart,
 } from "@/repositories/evidence-extraction-repository";
 import { EvidenceExtractionFailedError } from "@/domain/evidence-extraction-error";
 
@@ -68,9 +69,8 @@ export class EvidenceExtractionService {
     private readonly model: EvidenceExtractionModel,
   ) {}
 
-  async extract(input: unknown) {
+  prepare(input: unknown) {
     const parsed = evidenceExtractionInputSchema.parse(input);
-    await this.repository.assertBusinessActive(parsed.businessId);
     const modelInput = {
       rawIntakeText: parsed.rawIntakeText,
       sourceType: parsed.sourceType,
@@ -84,7 +84,7 @@ export class EvidenceExtractionService {
     const sourceMetadata = parsed.interpretiveContext
       ? { ...parsed.sourceMetadata, interpretiveContext: parsed.interpretiveContext }
       : parsed.sourceMetadata;
-    const run = await this.repository.createRun({
+    const runStart: ExtractionRunStart = {
       businessId: parsed.businessId,
       sourceSubmissionId: parsed.sourceSubmissionId,
       rawIntakeText: parsed.rawIntakeText,
@@ -95,36 +95,51 @@ export class EvidenceExtractionService {
       provider: configuration.provider,
       model: configuration.model,
       modelConfiguration: configuration.metadata,
-    });
+    };
+    return { parsed, modelInput, runStart };
+  }
 
+  async extract(input: unknown) {
+    const prepared = this.prepare(input);
+    await this.repository.assertBusinessActive(prepared.parsed.businessId);
+    const run = await this.repository.createRun(prepared.runStart);
+    return this.executePrepared(run, prepared);
+  }
+
+  async executePrepared(
+    run: Awaited<ReturnType<EvidenceExtractionRepository["createRun"]>>,
+    prepared: ReturnType<EvidenceExtractionService["prepare"]>,
+  ) {
     let rawModelOutput: unknown = null;
+    let output: ReturnType<typeof validateEvidenceExtractionOutput>;
+    let completedRun: Awaited<ReturnType<EvidenceExtractionRepository["completeRun"]>>;
     try {
-      const result = await this.model.extract(modelInput);
+      const result = await this.model.extract(prepared.modelInput);
       rawModelOutput = asJsonValue(result.rawOutput);
-      const output = validateEvidenceExtractionOutput(
+      output = validateEvidenceExtractionOutput(
         result.output,
-        parsed.rawIntakeText,
+        prepared.parsed.rawIntakeText,
       );
-      const completedRun = await this.repository.completeRun({
+      completedRun = await this.repository.completeRun({
         runId: run.id,
-        businessId: parsed.businessId,
+        businessId: prepared.parsed.businessId,
         rawModelOutput,
         proposals: toProposalRecords(output),
       });
-      return {
-        run: completedRun,
-        output,
-        proposals: await this.repository.getProposals(run.id, parsed.businessId),
-      };
     } catch (error) {
       await this.repository.failRun({
         runId: run.id,
-        businessId: parsed.businessId,
+        businessId: prepared.parsed.businessId,
         rawModelOutput,
         validationErrors: serializeError(error),
       });
       throw new EvidenceExtractionFailedError(run.id, error);
     }
+    return {
+      run: completedRun,
+      output,
+      proposals: await this.repository.getProposals(run.id, prepared.parsed.businessId),
+    };
   }
 
   getRun(runId: string, businessId: string) {
@@ -133,5 +148,9 @@ export class EvidenceExtractionService {
 
   getLatestRun(businessId: string) {
     return this.repository.getLatestRun(businessId);
+  }
+
+  failStaleRun(runId: string, businessId: string, staleBefore: Date, validationErrors: unknown[]) {
+    return this.repository.failStaleRun({ runId, businessId, staleBefore, validationErrors });
   }
 }

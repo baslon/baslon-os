@@ -1,9 +1,8 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   businessProfiles,
   businesses,
-  businessStateSnapshots,
   claimEvidence,
   claims,
   evidence,
@@ -27,6 +26,7 @@ import {
   assertActiveBusinessForUpdate,
   assertBusinessActive,
 } from "@/repositories/business-lifecycle-guard";
+import { createCanonicalSnapshot } from "@/repositories/canonical-snapshot";
 
 export class FoundationRepository {
   constructor(private readonly database: Database) {}
@@ -239,33 +239,7 @@ export class FoundationRepository {
   async createSnapshot(businessId: string) {
     return this.database.transaction(async (tx) => {
       await assertActiveBusinessForUpdate(tx, businessId);
-      const [business] = await tx.select().from(businesses).where(eq(businesses.id, businessId));
-      if (!business) throw new Error("Business not found");
-      const [profile] = await tx.select().from(businessProfiles)
-        .where(eq(businessProfiles.businessId, businessId));
-      const businessClaims = await tx.select().from(claims).where(eq(claims.businessId, businessId));
-      const businessEvidence = await tx.select().from(evidence).where(eq(evidence.businessId, businessId));
-      const businessMetrics = await tx.select().from(metrics).where(eq(metrics.businessId, businessId));
-      const links = await tx.select().from(claimEvidence)
-        .innerJoin(claims, eq(claimEvidence.claimId, claims.id))
-        .where(eq(claims.businessId, businessId));
-      const [latest] = await tx.select({ version: businessStateSnapshots.version })
-        .from(businessStateSnapshots)
-        .where(eq(businessStateSnapshots.businessId, businessId))
-        .orderBy(sql`${businessStateSnapshots.version} desc`).limit(1);
-      const [snapshot] = await tx.insert(businessStateSnapshots).values({
-        businessId,
-        version: (latest?.version ?? 0) + 1,
-        snapshotData: {
-          business,
-          profile: profile?.profileData ?? {},
-          claims: businessClaims,
-          evidence: businessEvidence,
-          claimEvidence: links.map((row) => row.claim_evidence),
-          metrics: businessMetrics,
-        },
-      }).returning();
-      return snapshot;
+      return createCanonicalSnapshot(tx, businessId);
     });
   }
 

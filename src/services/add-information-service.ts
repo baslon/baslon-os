@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { SourceSubmissionService } from "./source-submission-service";
 import type { EvidenceExtractionService } from "./evidence-extraction-service";
 import type { EvidenceReviewService } from "./evidence-review-service";
-import type { StrategyOrchestrator } from "@/strategy/orchestrator";
+import type { AddInformationRepository } from "@/repositories/add-information-repository";
+import { staleRunCutoff, staleRunValidationErrors } from "@/domain/ai-run-recovery";
 
 const submissionSchema = z.object({
   businessId: z.uuid(),
@@ -14,36 +15,57 @@ const retrySchema = z.object({ businessId: z.uuid(), runId: z.uuid() }).strict()
 
 export class AddInformationService {
   constructor(
+    private readonly repository: AddInformationRepository,
     private readonly sources: SourceSubmissionService,
     private readonly extraction: EvidenceExtractionService,
     private readonly reviews: EvidenceReviewService,
-    private readonly orchestrator: StrategyOrchestrator,
   ) {}
 
   async submit(input: unknown) {
     const parsed = submissionSchema.parse(input);
-    const state = await this.reviews.getWorkflowState(parsed.businessId);
-    const requiredState = parsed.questionId ? "GAP_RESOLUTION_REQUIRED" : "EVIDENCE_READY";
-    if (state !== requiredState) {
-      throw new Error("Complete the current Evidence Review before adding information.");
+    const context = parsed.questionId
+      ? await this.sources.getQuestionContext(parsed.businessId, parsed.questionId)
+      : undefined;
+    if (parsed.questionId && !context) {
+      throw new Error("Evidence Quality question not found.");
     }
-    const result = parsed.questionId
-      ? await this.sources.createQuestionAnswer({ ...parsed, sourceType: "additional_text" })
-      : { source: await this.sources.create({ ...parsed, sourceType: "additional_text" }), context: undefined };
-    await this.orchestrator.transition({
-      businessId: parsed.businessId, event: "ADD_EVIDENCE", actorType: "human",
-      actorId: "business-user", metadata: {
-        sourceSubmissionId: result.source.id,
-        ...(parsed.questionId ? { analysisQuestionId: parsed.questionId } : {}),
-      },
+    const prepared = this.extraction.prepare({
+      businessId: parsed.businessId,
+      rawIntakeText: parsed.rawText,
+      sourceType: "additional_text",
+      sourceReference: parsed.sourceReference,
+      sourceMetadata: { suppliedBy: "human_ui" },
+      interpretiveContext: context ? {
+        kind: context.kind,
+        questionId: context.questionId,
+        questionText: context.questionText,
+      } : undefined,
     });
-    return this.extractSource(result.source, result.context);
+    const result = await this.repository.prepare({
+      businessId: parsed.businessId,
+      rawText: parsed.rawText,
+      sourceReference: parsed.sourceReference,
+      questionId: parsed.questionId,
+      expectedQuestionContext: context,
+      runStart: prepared.runStart,
+    });
+    return this.extraction.executePrepared(result.run, prepared);
   }
 
   async retry(input: unknown) {
     const parsed = retrySchema.parse(input);
-    const run = await this.extraction.getRun(parsed.runId, parsed.businessId);
+    let run = await this.extraction.getRun(parsed.runId, parsed.businessId);
     const latest = await this.extraction.getLatestRun(parsed.businessId);
+    if (run?.status === "RUNNING" && latest?.id === run.id) {
+      const recovered = await this.extraction.failStaleRun(
+        run.id,
+        parsed.businessId,
+        staleRunCutoff(),
+        staleRunValidationErrors,
+      );
+      if (!recovered) throw new Error("This analysis is still running and cannot be retried yet.");
+      run = recovered;
+    }
     if (!run || run.status !== "FAILED" || !run.sourceSubmissionId || latest?.id !== run.id) {
       throw new Error("Only the latest failed Add Information analysis can be retried.");
     }

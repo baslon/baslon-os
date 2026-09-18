@@ -6,9 +6,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db/client";
 import {
   analysisRuns,
+  analysisQuestions,
   businessStateSnapshots,
   businesses,
   claims,
+  contradictions,
+  evidenceGaps,
+  evidenceExtractionRuns,
+  evidenceProposals,
   evidenceReviewSessions,
   proposalReviews,
   workflowTransitions,
@@ -88,6 +93,10 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
     const business = await new BusinessService(foundation).create({
       name: `Archive race review ${randomUUID()}`,
     });
+    const orchestrator = createStrategyOrchestrator(database);
+    await orchestrator.transition({ businessId: business.id, event: "START_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "SUBMIT_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "PROCESS_EVIDENCE", actorType: "system" });
     const extraction = new EvidenceExtractionRepository(database);
     const run = await extraction.createRun({
       businessId: business.id,
@@ -195,12 +204,6 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
 
   it("rejects review completion when archive owns the Business lock first", async () => {
     const context = await createReview(0);
-    const orchestrator = createStrategyOrchestrator(database);
-    for (const [event, actorType] of [
-      ["START_INTAKE", "human"],
-      ["SUBMIT_INTAKE", "human"],
-      ["PROCESS_EVIDENCE", "system"],
-    ] as const) await orchestrator.transition({ businessId: context.business.id, event, actorType });
     const archiveClient = await controlPool.connect();
     const operation = namedDatabase("completion_archive_first");
     try {
@@ -225,12 +228,6 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
 
   it("lets review completion commit before a waiting archive", async () => {
     const context = await createReview(0);
-    const orchestrator = createStrategyOrchestrator(database);
-    for (const [event, actorType] of [
-      ["START_INTAKE", "human"],
-      ["SUBMIT_INTAKE", "human"],
-      ["PROCESS_EVIDENCE", "system"],
-    ] as const) await orchestrator.transition({ businessId: context.business.id, event, actorType });
     const blocker = await controlPool.connect();
     const operation = namedDatabase("completion_write_first");
     const archive = namedDatabase("completion_archive_waits");
@@ -284,6 +281,91 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
     } finally {
       await archiveClient.query("rollback").catch(() => undefined);
       archiveClient.release();
+    }
+  });
+
+  it("rejects extraction completion without proposals or success when archive wins", async () => {
+    const business = await new BusinessService(foundation).create({
+      name: `Extraction completion archive race ${randomUUID()}`,
+    });
+    const run = await new EvidenceExtractionRepository(database).createRun({
+      businessId: business.id,
+      rawIntakeText: "The business receives referrals.",
+      sourceMetadata: {},
+      promptVersion: "race-test-v1",
+      provider: "test",
+      model: "deterministic",
+      modelConfiguration: {},
+    });
+    const archiveClient = await controlPool.connect();
+    const operation = namedDatabase("extraction_complete_archive_first");
+    try {
+      await beginArchive(archiveClient, business.id);
+      const completion = new EvidenceExtractionRepository(operation.database).completeRun({
+        runId: run.id,
+        businessId: business.id,
+        rawModelOutput: {},
+        proposals: [{
+          proposalRef: "claim_1",
+          proposalType: "claim",
+          structuredPayload: structuredClone(baslonExtractionOutput.claims[0]),
+        }],
+      });
+      await waitUntilLockBlocked(operation.applicationName);
+      await archiveClient.query("commit");
+      await expect(completion).rejects.toBeInstanceOf(BusinessArchivedError);
+      expect(await database.select().from(evidenceProposals)
+        .where(eq(evidenceProposals.extractionRunId, run.id))).toEqual([]);
+      const [unchangedRun] = await database.select().from(evidenceExtractionRuns)
+        .where(eq(evidenceExtractionRuns.id, run.id));
+      expect(unchangedRun.status).toBe("RUNNING");
+    } finally {
+      await archiveClient.query("rollback").catch(() => undefined);
+      archiveClient.release();
+    }
+  });
+
+  it("commits extraction completion atomically before a waiting archive", async () => {
+    const business = await new BusinessService(foundation).create({
+      name: `Extraction completion wins ${randomUUID()}`,
+    });
+    const run = await new EvidenceExtractionRepository(database).createRun({
+      businessId: business.id,
+      rawIntakeText: "The business receives referrals.",
+      sourceMetadata: {},
+      promptVersion: "race-test-v1",
+      provider: "test",
+      model: "deterministic",
+      modelConfiguration: {},
+    });
+    const blocker = await controlPool.connect();
+    const operation = namedDatabase("extraction_complete_first");
+    const archive = namedDatabase("extraction_archive_waits");
+    try {
+      await blocker.query("begin");
+      await blocker.query("select id from evidence_extraction_runs where id = $1 for update", [run.id]);
+      const completion = new EvidenceExtractionRepository(operation.database).completeRun({
+        runId: run.id,
+        businessId: business.id,
+        rawModelOutput: {},
+        proposals: [{
+          proposalRef: "claim_1",
+          proposalType: "claim",
+          structuredPayload: structuredClone(baslonExtractionOutput.claims[0]),
+        }],
+      });
+      await waitUntilLockBlocked(operation.applicationName);
+      const archival = new BusinessService(new FoundationRepository(archive.database))
+        .archive(business.id);
+      await waitUntilLockBlocked(archive.applicationName);
+      await blocker.query("commit");
+      await expect(completion).resolves.toMatchObject({ status: "SUCCEEDED" });
+      await expect(archival).resolves.toMatchObject({ status: "archived" });
+      expect(await database.select().from(evidenceProposals)
+        .where(eq(evidenceProposals.extractionRunId, run.id))).toHaveLength(1);
+    } finally {
+      await blocker.query("rollback").catch(() => undefined);
+      blocker.release();
     }
   });
 
@@ -349,6 +431,90 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
       await expect(archival).resolves.toMatchObject({ status: "archived" });
       expect(await database.select().from(analysisRuns)
         .where(eq(analysisRuns.businessId, context.business.id))).toHaveLength(1);
+    } finally {
+      await blocker.query("rollback").catch(() => undefined);
+      blocker.release();
+    }
+  });
+
+  const coherenceOutput = {
+    contradictions: [],
+    gaps: [{
+      findingRef: "gap_1",
+      area: "customers_and_market" as const,
+      missingInformation: "Current client count is unknown.",
+      decisionImpact: "Capacity cannot be assessed.",
+      materiality: "high" as const,
+      priorityRank: 1,
+      references: [],
+    }],
+    questions: [{
+      findingType: "gap" as const,
+      findingRef: "gap_1",
+      question: "How many active clients are there?",
+      priorityOrder: 1,
+    }],
+  };
+
+  it("rejects coherence completion without findings or success when archive wins", async () => {
+    const context = await coherenceContext();
+    const repository = new EvidenceCoherenceRepository(database);
+    const created = await repository.createRun(context.input);
+    const archiveClient = await controlPool.connect();
+    const operation = namedDatabase("coherence_complete_archive_first");
+    try {
+      await beginArchive(archiveClient, context.business.id);
+      const completion = new EvidenceCoherenceRepository(operation.database).completeRun({
+        runId: created.run.id,
+        businessId: context.business.id,
+        rawModelOutput: {},
+        output: coherenceOutput,
+      });
+      await waitUntilLockBlocked(operation.applicationName);
+      await archiveClient.query("commit");
+      await expect(completion).rejects.toBeInstanceOf(BusinessArchivedError);
+      expect(await database.select().from(evidenceGaps)
+        .where(eq(evidenceGaps.analysisRunId, created.run.id))).toEqual([]);
+      expect(await database.select().from(contradictions)
+        .where(eq(contradictions.analysisRunId, created.run.id))).toEqual([]);
+      expect(await database.select().from(analysisQuestions)
+        .where(eq(analysisQuestions.businessId, context.business.id))).toEqual([]);
+      const [unchangedRun] = await database.select().from(analysisRuns)
+        .where(eq(analysisRuns.id, created.run.id));
+      expect(unchangedRun.status).toBe("RUNNING");
+    } finally {
+      await archiveClient.query("rollback").catch(() => undefined);
+      archiveClient.release();
+    }
+  });
+
+  it("commits coherence completion atomically before a waiting archive", async () => {
+    const context = await coherenceContext();
+    const repository = new EvidenceCoherenceRepository(database);
+    const created = await repository.createRun(context.input);
+    const blocker = await controlPool.connect();
+    const operation = namedDatabase("coherence_complete_first");
+    const archive = namedDatabase("coherence_complete_archive_waits");
+    try {
+      await blocker.query("begin");
+      await blocker.query("select id from analysis_runs where id = $1 for update", [created.run.id]);
+      const completion = new EvidenceCoherenceRepository(operation.database).completeRun({
+        runId: created.run.id,
+        businessId: context.business.id,
+        rawModelOutput: {},
+        output: coherenceOutput,
+      });
+      await waitUntilLockBlocked(operation.applicationName);
+      const archival = new BusinessService(new FoundationRepository(archive.database))
+        .archive(context.business.id);
+      await waitUntilLockBlocked(archive.applicationName);
+      await blocker.query("commit");
+      await expect(completion).resolves.toMatchObject({ status: "SUCCEEDED" });
+      await expect(archival).resolves.toMatchObject({ status: "archived" });
+      expect(await database.select().from(evidenceGaps)
+        .where(eq(evidenceGaps.analysisRunId, created.run.id))).toHaveLength(1);
+      expect(await database.select().from(analysisQuestions)
+        .where(eq(analysisQuestions.businessId, context.business.id))).toHaveLength(1);
     } finally {
       await blocker.query("rollback").catch(() => undefined);
       blocker.release();

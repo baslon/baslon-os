@@ -69,6 +69,7 @@ export type EvidenceCoherenceProjection = {
     claimId: string;
     evidenceId: string;
     relationshipType: string;
+    /** Semantic-link confidence only; not truth, credibility or proof weight. */
     strengthScore: string | null;
   }>;
 };

@@ -14,7 +14,7 @@ Materiality is `low`, `medium` or `high`; it is not confidence. The UI surfaces 
 
 ## Workflow and retries
 
-The existing workflow moves from `EVIDENCE_READY` through `GAP_ANALYSIS` to `GAP_RESOLUTION_REQUIRED`. Provider or validation failure leaves the workflow at `GAP_ANALYSIS`, records a failed run and permits retry. An equivalent successful run is reused; an equivalent running run prevents duplicate work. A late analysis remains valid history but cannot advance workflow when a newer snapshot exists.
+The existing workflow moves from `EVIDENCE_READY` through `GAP_ANALYSIS` to `GAP_RESOLUTION_REQUIRED`. Provider or validation failure leaves the workflow at `GAP_ANALYSIS`, records a failed run and permits retry. An equivalent successful run is reused; an equivalent running run prevents duplicate work. A demonstrably stale running run is terminally failed before retry. A late analysis remains valid history but cannot advance workflow when a newer snapshot exists. Current analysis uses `evidence_coherence_v2`; historical `v1` runs retain their original identity.
 
 Successful persistence of findings, references, questions and run completion is one transaction. Invalid output creates no analytical findings. Archived Businesses cannot start analysis but retain read access to history.
 

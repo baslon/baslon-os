@@ -147,6 +147,10 @@ describe("Business Archive and Restore lifecycle", () => {
     const extractionRepository = new EvidenceExtractionRepository(database);
     const model = new FakeModel();
     const extractionService = new EvidenceExtractionService(extractionRepository, model);
+    const orchestrator = createStrategyOrchestrator(database);
+    await orchestrator.transition({ businessId: business.id, event: "START_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "SUBMIT_INTAKE", actorType: "human" });
+    await orchestrator.transition({ businessId: business.id, event: "PROCESS_EVIDENCE", actorType: "system" });
     const extraction = await extractionService.extract({
       businessId: business.id,
       rawIntakeText: baslonMessyIntake,

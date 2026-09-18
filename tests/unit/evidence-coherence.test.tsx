@@ -101,7 +101,8 @@ describe("Evidence Coherence domain", () => {
   });
 
   it("keeps the v1 prompt constrained to evidence readiness", () => {
-    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v1");
+    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v2");
+    expect(evidenceCoherencePrompt).toContain("not Claim truth probability");
     expect(evidenceCoherencePrompt).toContain("Analyse only the supplied snapshot projection");
     expect(evidenceCoherencePrompt).toContain("Do not diagnose");
     expect(evidenceCoherencePrompt).toContain("Do not produce root causes");

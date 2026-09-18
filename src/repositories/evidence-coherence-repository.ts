@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, or } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   analysisFindingReferences,
@@ -115,6 +115,26 @@ export class EvidenceCoherenceRepository {
     return run;
   }
 
+  async failStaleRun(input: {
+    runId: string;
+    businessId: string;
+    staleBefore: Date;
+    validationErrors: unknown[];
+  }) {
+    const [run] = await this.database.update(analysisRuns).set({
+      status: "FAILED",
+      validationErrors: input.validationErrors,
+      completedAt: new Date(),
+    }).where(and(
+      eq(analysisRuns.id, input.runId),
+      eq(analysisRuns.businessId, input.businessId),
+      eq(analysisRuns.module, "evidence_coherence"),
+      eq(analysisRuns.status, "RUNNING"),
+      lte(analysisRuns.startedAt, input.staleBefore),
+    )).returning();
+    return run;
+  }
+
   async completeRun(input: {
     runId: string;
     businessId: string;
@@ -122,6 +142,7 @@ export class EvidenceCoherenceRepository {
     output: EvidenceCoherenceOutput;
   }) {
     return this.database.transaction(async (tx) => {
+      await assertActiveBusinessForUpdate(tx, input.businessId);
       const contradictionIds = new Map<string, string>();
       const gapIds = new Map<string, string>();
       if (input.output.contradictions.length) {
@@ -193,6 +214,7 @@ export class EvidenceCoherenceRepository {
   async getRun(runId: string, businessId: string) {
     const [run] = await this.database.select().from(analysisRuns).where(and(
       eq(analysisRuns.id, runId), eq(analysisRuns.businessId, businessId),
+      eq(analysisRuns.module, "evidence_coherence"),
     ));
     return run;
   }
@@ -200,13 +222,17 @@ export class EvidenceCoherenceRepository {
   async getLatestRunForSnapshot(snapshotId: string, businessId: string) {
     const [run] = await this.database.select().from(analysisRuns).where(and(
       eq(analysisRuns.inputSnapshotId, snapshotId), eq(analysisRuns.businessId, businessId),
+      eq(analysisRuns.module, "evidence_coherence"),
     )).orderBy(desc(analysisRuns.createdAt)).limit(1);
     return run;
   }
 
   async getLatestRunForBusiness(businessId: string) {
     const [run] = await this.database.select().from(analysisRuns)
-      .where(eq(analysisRuns.businessId, businessId))
+      .where(and(
+        eq(analysisRuns.businessId, businessId),
+        eq(analysisRuns.module, "evidence_coherence"),
+      ))
       .orderBy(desc(analysisRuns.createdAt)).limit(1);
     return run;
   }

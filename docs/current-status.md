@@ -1,6 +1,15 @@
 # Baslon OS — Current Development Status
 
-Updated: 16 September 2026
+Updated: 18 September 2026
+
+## Current engineering milestone
+
+Milestone 3D pre-diagnosis hardening is implemented in the working tree and is
+awaiting review. It adds module-scoped analytical reads, stale-run recovery,
+archive-safe and atomic strategic commands, current-review enforcement, shared
+snapshot construction, workflow artifact-precondition hooks and reviewer-visible
+relationship-strength semantics. No Milestone 4 diagnosis functionality or new
+database migration has been introduced.
 
 ## Active Baslon Digital Business
 
@@ -37,7 +46,7 @@ It must not be restored or permanently deleted without separate explicit approva
 - Clean Snapshot 1 Evidence Coherence run:
   `4d3c3221-cec2-458a-8baa-cb4a63efe64b`
 - Input Snapshot: `b9f55eae-66f1-46d4-817a-c9b74f665873`
-- Prompt: `evidence_coherence_v1`
+- Current Evidence Coherence prompt: `evidence_coherence_v2` (`v1` remains historical).
 - Result: succeeded with no material contradictions, five evidence gaps and five
   questions.
 - The first question received a genuine answer through the implemented Question →

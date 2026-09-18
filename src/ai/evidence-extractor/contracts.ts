@@ -96,6 +96,8 @@ export const claimEvidenceProposalSchema = z.object({
   claimRef: proposalRef,
   evidenceRef: proposalRef,
   relationshipType: z.enum(["supports", "contradicts", "context"]),
+  // Confidence that the selected semantic relationship type is appropriate;
+  // never Evidence credibility, Claim truth, proof weight or materiality.
   strengthScore: nullableScore,
 }).strict();
 

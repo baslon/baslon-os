@@ -71,6 +71,7 @@ describe("Milestone 2 stabilisation UI", () => {
     const html = renderToStaticMarkup(createElement(RelationshipEndpoints, {
       relationship: {
         claimRef: "claim_1", evidenceRef: "evidence_1", relationshipType: "supports",
+        strengthScore: 0.82,
       },
       proposals: [
         { proposalRef: "claim_1", structuredPayload: { statement: "Revenue is approximately £80k." } },
@@ -81,6 +82,8 @@ describe("Milestone 2 stabilisation UI", () => {
     expect(html).toContain("Founder records report £80k revenue.");
     expect(html).not.toContain("claim_1");
     expect(html).not.toContain("evidence_1");
+    expect(html).toContain("Semantic-link confidence: 0.82");
+    expect(html).toContain("not evidence credibility or claim truth");
   });
 
   it("builds a safe retry URL that references persisted intake without embedding it", () => {

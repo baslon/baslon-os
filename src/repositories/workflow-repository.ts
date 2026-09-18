@@ -2,12 +2,15 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { strategyWorkflows, workflowTransitions } from "@/db/schema";
 import {
+  authorizeWorkflowTransition,
   assertAuthorizedWorkflowTransition,
   type AuthorizedWorkflowTransition,
 } from "@/domain/workflow";
 import {
   StrategyOrchestrator,
   type WorkflowPersistence,
+  type WorkflowTransitionPrecondition,
+  type WorkflowTransitionPreconditions,
 } from "@/strategy/orchestrator";
 import {
   assertActiveBusinessForUpdate,
@@ -27,35 +30,79 @@ class PostgresWorkflowRepository implements WorkflowPersistence {
     return workflow;
   }
 
-  async commit(command: AuthorizedWorkflowTransition) {
+  async commit(
+    command: AuthorizedWorkflowTransition,
+    precondition?: WorkflowTransitionPrecondition,
+  ) {
     assertAuthorizedWorkflowTransition(command);
     return this.database.transaction(async (tx) => {
       await assertActiveBusinessForUpdate(tx, command.businessId);
-      const [updated] = await tx.update(strategyWorkflows).set({
-        state: command.toState,
-        version: command.expectedVersion + 1,
-        updatedAt: new Date(),
-      }).where(and(
+      const [workflow] = await tx.select().from(strategyWorkflows).where(and(
         eq(strategyWorkflows.id, command.workflowId),
-        eq(strategyWorkflows.version, command.expectedVersion),
-        eq(strategyWorkflows.state, command.fromState),
-      )).returning();
-      if (!updated) throw new Error("Workflow changed concurrently");
-      await tx.insert(workflowTransitions).values({
-        workflowId: command.workflowId,
-        fromState: command.fromState,
-        toState: command.toState,
+        eq(strategyWorkflows.businessId, command.businessId),
+      )).for("update");
+      if (
+        !workflow
+        || workflow.version !== command.expectedVersion
+        || workflow.state !== command.fromState
+      ) {
+        throw new Error("Workflow changed concurrently");
+      }
+      const authorized = authorizeWorkflowTransition({
+        businessId: command.businessId,
+        workflowId: workflow.id,
+        expectedVersion: workflow.version,
+        currentState: workflow.state,
         event: command.event,
         actorType: command.actorType,
         actorId: command.actorId,
         reason: command.reason,
         metadata: command.metadata,
       });
-      return updated;
+      await precondition?.({
+        businessId: command.businessId,
+        event: command.event,
+        actorType: command.actorType,
+        workflow,
+        metadata: command.metadata,
+        database: tx,
+      });
+      return persistAuthorizedWorkflowTransition(tx, authorized);
     });
   }
 }
 
-export function createStrategyOrchestrator(database: Database) {
-  return new StrategyOrchestrator(new PostgresWorkflowRepository(database));
+export async function persistAuthorizedWorkflowTransition(
+  database: Pick<Database, "update" | "insert">,
+  command: AuthorizedWorkflowTransition,
+) {
+  assertAuthorizedWorkflowTransition(command);
+  const [updated] = await database.update(strategyWorkflows).set({
+    state: command.toState,
+    version: command.expectedVersion + 1,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(strategyWorkflows.id, command.workflowId),
+    eq(strategyWorkflows.version, command.expectedVersion),
+    eq(strategyWorkflows.state, command.fromState),
+  )).returning();
+  if (!updated) throw new Error("Workflow changed concurrently");
+  await database.insert(workflowTransitions).values({
+    workflowId: command.workflowId,
+    fromState: command.fromState,
+    toState: command.toState,
+    event: command.event,
+    actorType: command.actorType,
+    actorId: command.actorId,
+    reason: command.reason,
+    metadata: command.metadata,
+  });
+  return updated;
+}
+
+export function createStrategyOrchestrator(
+  database: Database,
+  preconditions: WorkflowTransitionPreconditions = {},
+) {
+  return new StrategyOrchestrator(new PostgresWorkflowRepository(database), preconditions);
 }

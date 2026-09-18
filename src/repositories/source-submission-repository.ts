@@ -41,42 +41,6 @@ export class SourceSubmissionRepository {
     });
   }
 
-  private async resolveQuestionContext(
-    database: Pick<Database, "select">,
-    businessId: string,
-    question: typeof analysisQuestions.$inferSelect,
-  ): Promise<AnalysisQuestionContext> {
-    const finding = question.contradictionId
-      ? await database.select({ analysisRunId: contradictions.analysisRunId }).from(contradictions).where(and(
-        eq(contradictions.id, question.contradictionId),
-        eq(contradictions.businessId, businessId),
-      )).then((rows) => rows[0])
-      : await database.select({ analysisRunId: evidenceGaps.analysisRunId }).from(evidenceGaps).where(and(
-        eq(evidenceGaps.id, question.evidenceGapId!),
-        eq(evidenceGaps.businessId, businessId),
-      )).then((rows) => rows[0]);
-    if (!finding) throw new AnalysisQuestionAnswerError("Evidence Quality question not found.");
-    const [run] = await database.select({
-      id: analysisRuns.id,
-      inputSnapshotId: analysisRuns.inputSnapshotId,
-      module: analysisRuns.module,
-      status: analysisRuns.status,
-    }).from(analysisRuns).where(and(
-      eq(analysisRuns.id, finding.analysisRunId),
-      eq(analysisRuns.businessId, businessId),
-    ));
-    if (!run || run.module !== "evidence_coherence" || run.status !== "SUCCEEDED") {
-      throw new AnalysisQuestionAnswerError("Evidence Quality analysis not found.");
-    }
-    return {
-      kind: "analysis_question",
-      questionId: question.id,
-      questionText: question.question,
-      analysisRunId: run.id,
-      inputSnapshotId: run.inputSnapshotId,
-    };
-  }
-
   async createQuestionAnswer(input: CreateQuestionAnswerSubmission) {
     return this.database.transaction(async (tx) => {
       await assertActiveBusinessForUpdate(tx, input.businessId);
@@ -93,7 +57,7 @@ export class SourceSubmissionRepository {
       if (existing) {
         throw new AnalysisQuestionAnswerError("This Evidence Quality question already has submitted information.");
       }
-      const context = await this.resolveQuestionContext(tx, input.businessId, question);
+      const context = await resolveAnalysisQuestionContext(tx, input.businessId, question);
       const [latestSnapshot] = await tx.select({ id: businessStateSnapshots.id })
         .from(businessStateSnapshots)
         .where(eq(businessStateSnapshots.businessId, input.businessId))
@@ -124,7 +88,7 @@ export class SourceSubmissionRepository {
       eq(analysisQuestions.businessId, businessId),
     ));
     if (!question) return undefined;
-    const context = await this.resolveQuestionContext(this.database, businessId, question);
+    const context = await resolveAnalysisQuestionContext(this.database, businessId, question);
     const [link] = await this.database.select({ sourceSubmissionId: analysisQuestionSources.sourceSubmissionId })
       .from(analysisQuestionSources).where(and(
         eq(analysisQuestionSources.questionId, questionId),
@@ -190,4 +154,40 @@ export class SourceSubmissionRepository {
       ));
     return result?.submission;
   }
+}
+
+export async function resolveAnalysisQuestionContext(
+  database: Pick<Database, "select">,
+  businessId: string,
+  question: typeof analysisQuestions.$inferSelect,
+): Promise<AnalysisQuestionContext> {
+  const finding = question.contradictionId
+    ? await database.select({ analysisRunId: contradictions.analysisRunId }).from(contradictions).where(and(
+      eq(contradictions.id, question.contradictionId),
+      eq(contradictions.businessId, businessId),
+    )).then((rows) => rows[0])
+    : await database.select({ analysisRunId: evidenceGaps.analysisRunId }).from(evidenceGaps).where(and(
+      eq(evidenceGaps.id, question.evidenceGapId!),
+      eq(evidenceGaps.businessId, businessId),
+    )).then((rows) => rows[0]);
+  if (!finding) throw new AnalysisQuestionAnswerError("Evidence Quality question not found.");
+  const [run] = await database.select({
+    id: analysisRuns.id,
+    inputSnapshotId: analysisRuns.inputSnapshotId,
+    module: analysisRuns.module,
+    status: analysisRuns.status,
+  }).from(analysisRuns).where(and(
+    eq(analysisRuns.id, finding.analysisRunId),
+    eq(analysisRuns.businessId, businessId),
+  ));
+  if (!run || run.module !== "evidence_coherence" || run.status !== "SUCCEEDED") {
+    throw new AnalysisQuestionAnswerError("Evidence Quality analysis not found.");
+  }
+  return {
+    kind: "analysis_question",
+    questionId: question.id,
+    questionText: question.question,
+    analysisRunId: run.id,
+    inputSnapshotId: run.inputSnapshotId,
+  };
 }

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type {
   EvidenceExtractionModel,
   EvidenceExtractionModelConfiguration,
@@ -274,6 +274,30 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
     expect(failedRun.validationErrors).not.toEqual([]);
     expect(await extractionRepository.getProposals(failedRun.id, business.id)).toEqual([]);
     expect(await strategicState(business.id)).toEqual(before);
+  });
+
+  it("does not rewrite a succeeded run when the post-success proposal read fails", async () => {
+    const business = await new BusinessService(foundationRepository).create({
+      name: `Post-success read failure ${crypto.randomUUID()}`,
+    });
+    const read = vi.spyOn(extractionRepository, "getProposals")
+      .mockRejectedValueOnce(new Error("forced post-success read failure"));
+    try {
+      await expect(new EvidenceExtractionService(
+        extractionRepository,
+        new FakeEvidenceExtractionModel({
+          output: baslonExtractionOutput,
+          rawOutput: baslonExtractionOutput,
+        }),
+      ).extract({
+        businessId: business.id,
+        rawIntakeText: baslonMessyIntake,
+      })).rejects.toThrow("forced post-success read failure");
+      expect(await extractionRepository.getLatestRun(business.id))
+        .toMatchObject({ status: "SUCCEEDED" });
+    } finally {
+      read.mockRestore();
+    }
   });
 
   it("rejects mismatched numeric provenance without mutating strategic state", async () => {

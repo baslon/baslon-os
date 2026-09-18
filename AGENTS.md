@@ -330,3 +330,22 @@ importance.
 
 Models and deterministic logic must not use relationship strength as proof weight
 or as authority to promote a Claim's epistemic status.
+
+---
+
+## 19. Analysis and strategic-write safety
+
+Module-specific analysis code must scope every `analysis_runs` lookup by module.
+An abandoned `RUNNING` run must be terminally failed through a conditional,
+same-Business recovery operation before retry creates a new run; never rewrite or
+delete the historical run.
+
+Strategic writes must lock and recheck the active Business row first inside their
+transaction. Multi-record application commands such as Add Information must
+commit their source, provenance links, workflow transition and initial run
+atomically while keeping external AI calls outside the transaction.
+
+Workflow state and actor legality are necessary but not sufficient for future
+material transitions. Use the Orchestrator's event-specific precondition boundary
+to require the relevant persisted artifact; do not invent placeholder artifacts
+for a future milestone.

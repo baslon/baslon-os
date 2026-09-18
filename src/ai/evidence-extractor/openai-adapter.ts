@@ -45,7 +45,7 @@ export class OpenAIEvidenceExtractionModel implements EvidenceExtractionModel {
       );
     }
 
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 2 });
     const contextual = Boolean(input.interpretiveContext);
     const promptVersion = contextual
       ? EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION

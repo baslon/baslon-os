@@ -32,7 +32,7 @@ export class OpenAIEvidenceCoherenceModel implements EvidenceCoherenceModel {
     const apiKey = process.env.OPENAI_API_KEY;
     const model = process.env.OPENAI_MODEL;
     if (!apiKey || !model) throw new Error("OPENAI_API_KEY and OPENAI_MODEL are required to run Evidence Coherence analysis");
-    const response = await new OpenAI({ apiKey }).responses.create({
+    const response = await new OpenAI({ apiKey, timeout: 60_000, maxRetries: 2 }).responses.create({
       model,
       instructions: evidenceCoherencePrompt,
       input: JSON.stringify(input),
