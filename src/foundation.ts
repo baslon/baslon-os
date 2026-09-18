@@ -24,6 +24,7 @@ import { EvidenceQualityService } from "@/services/evidence-quality-service";
 import { AddInformationRepository } from "@/repositories/add-information-repository";
 import { InitialIntakeRepository } from "@/repositories/initial-intake-repository";
 import { InitialIntakeService } from "@/services/initial-intake-service";
+import { GapResolutionService } from "@/services/gap-resolution-service";
 
 export function getInitialIntakeService() {
   return new InitialIntakeService(
@@ -99,6 +100,14 @@ export function getEvidenceCoherenceService() {
   return new EvidenceCoherenceService(
     new EvidenceCoherenceRepository(database),
     new OpenAIEvidenceCoherenceModel(),
+    createStrategyOrchestrator(database),
+  );
+}
+
+export function getGapResolutionService() {
+  const database = getDatabase();
+  return new GapResolutionService(
+    new EvidenceCoherenceRepository(database),
     createStrategyOrchestrator(database),
   );
 }

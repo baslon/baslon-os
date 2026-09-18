@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { analyseEvidenceAction } from "./actions";
+import { analyseEvidenceAction, continueWithGapsAction } from "./actions";
 
 type Model = {
   business: { id: string; name: string; status: string };
@@ -22,7 +22,11 @@ function AnalyseAction({ businessId, retry = false }: { businessId: string; retr
   </form>;
 }
 
-export function EvidenceQuality({ model, error }: { model: Model; error?: boolean }) {
+export function EvidenceQuality({ model, error, continueError }: {
+  model: Model;
+  error?: boolean;
+  continueError?: boolean;
+}) {
   const { business, latestSnapshot, analysis } = model;
   const archived = business.status === "archived";
   const targetVersion = analysis && latestSnapshot?.id === analysis.run.inputSnapshotId
@@ -33,6 +37,7 @@ export function EvidenceQuality({ model, error }: { model: Model; error?: boolea
     <h1 className="task-title">Evidence Quality</h1>
     <p className="lede">Snapshot-bound analytical findings about contradictions and important gaps. These findings do not change canonical Evidence State.</p>
     {error ? <p className="error" role="alert">The analysis could not be completed. Canonical evidence remains unchanged.</p> : null}
+    {continueError ? <p className="error" role="alert">Phase 1 could not be started. The evidence may have changed since this page loaded; reload and try again.</p> : null}
     {archived ? <div className="notice"><strong>Archived — read-only</strong><p>Historical Evidence Quality analysis remains available.</p></div> : null}
 
     {!latestSnapshot ? <section className="empty-state"><h2>No canonical snapshot yet</h2><p>Complete Evidence Review before analysing Evidence Quality.</p></section> : null}
@@ -51,9 +56,25 @@ export function EvidenceQuality({ model, error }: { model: Model; error?: boolea
           ? <Link className="button-link secondary-link" href={`/businesses/${business.id}/information?question=${item.id}`}>Answer this question</Link>
           : <span className="muted">This question belongs to a read-only analysis.</span>}</li>)}</ol> : <p className="empty-state">No high-priority questions were generated.</p>}</section>
     </> : null}
-    {!archived && model.workflow?.state === "GAP_RESOLUTION_REQUIRED" ? <section className="secondary-actions" aria-label="Other information">
+    {!archived && model.workflow?.state === "GAP_RESOLUTION_REQUIRED" ? <section className="panel" aria-labelledby="gap-resolution-heading">
+      <h2 id="gap-resolution-heading">How would you like to proceed?</h2>
+      <h3>Add more information</h3>
       <p>You can also add information that isn&apos;t an answer to one of these questions. It will be reviewed before it enters the Evidence State.</p>
       <Link className="button-link secondary-link" href={`/businesses/${business.id}/information`}>Add other information</Link>
+      {analysis?.run.status === "SUCCEEDED" && !model.isHistorical ? <>
+        <h3>Continue to Phase 1 with current evidence</h3>
+        <p>Phase 1 will use the evidence reviewed so far. Any gaps above remain open: continuing does not resolve them, answer the questions or mark the evidence complete, and these findings stay on record unchanged.</p>
+        <form action={continueWithGapsAction}>
+          <input type="hidden" name="businessId" value={business.id} />
+          <button type="submit">Continue with current evidence</button>
+        </form>
+      </> : null}
+    </section> : null}
+    {model.workflow?.state === "PHASE1_READY" ? <section className="notice" aria-labelledby="phase1-ready-heading">
+      <h2 id="phase1-ready-heading">Continued to Phase 1 with current evidence</h2>
+      <p>You chose to proceed with the evidence reviewed so far. The findings above remain open and unchanged. Phase 1 diagnosis is not available yet.</p>
+      {!archived ? <><p>You can still add information; it will go through review and a new Evidence Quality analysis.</p>
+        <Link className="button-link secondary-link" href={`/businesses/${business.id}/information`}>Add Information</Link></> : null}
     </section> : null}
   </main>;
 }

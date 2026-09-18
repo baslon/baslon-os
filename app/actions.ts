@@ -8,6 +8,7 @@ import {
   getFactAdmissionService,
   getInitialIntakeService,
   getEvidenceCoherenceService,
+  getGapResolutionService,
 } from "@/foundation";
 import { deriveHumanAuthority } from "@/domain/server-authority";
 import {
@@ -241,6 +242,17 @@ export async function admitFactAction(formData: FormData) {
     target = `/businesses/${businessId}/evidence`;
   } catch (error) {
     target = `/businesses/${businessId}/evidence?error=${encodeURIComponent(errorMessage(error))}`;
+  }
+  redirect(target);
+}
+
+export async function continueWithGapsAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = `/businesses/${businessId}/evidence-quality`;
+  try {
+    await getGapResolutionService().continueWithGaps({ businessId });
+  } catch {
+    target += "?error=continue";
   }
   redirect(target);
 }

@@ -55,6 +55,7 @@ export const transitionRules: readonly Rule[] = [
   { from: "GAP_RESOLUTION_REQUIRED", event: "MARK_UNKNOWN", to: "GAP_RESOLUTION_REQUIRED" },
   { from: "GAP_RESOLUTION_REQUIRED", event: "CONTINUE_WITH_GAPS", to: "PHASE1_READY" },
   { from: "PHASE1_READY", event: "GENERATE_PHASE1", to: "PHASE1_ANALYSING" },
+  { from: "PHASE1_READY", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
   { from: "PHASE1_ANALYSING", event: "MARK_ANALYSIS_COMPLETE", to: "PHASE1_AWAITING_REVIEW" },
   { from: "PHASE1_AWAITING_REVIEW", event: "APPROVE_PHASE1", to: "PHASE1_APPROVED" },
   { from: "PHASE1_AWAITING_REVIEW", event: "REQUEST_REVISION", to: "REVISION_REQUIRED" },
@@ -64,16 +65,20 @@ export const transitionRules: readonly Rule[] = [
   { from: "REVISION_REQUIRED", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
 ] as const;
 
-/** States from which ordinary (unprompted) Add Information is accepted. */
+/**
+ * States from which ordinary (unprompted) Add Information is accepted.
+ * PHASE1_READY is included so a Business that continued with known gaps can
+ * still add evidence before Phase 1 diagnosis exists.
+ */
 export const addInformationStates: readonly WorkflowState[] = [
-  "EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED",
+  "EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED", "PHASE1_READY",
 ];
 
 export function acceptsAddInformation(state: string | undefined): boolean {
   return addInformationStates.includes(state as WorkflowState);
 }
 
-export const humanOnlyEvents =new Set<WorkflowEvent>([
+export const humanOnlyEvents = new Set<WorkflowEvent>([
   "START_INTAKE", "SUBMIT_INTAKE", "ADD_EVIDENCE", "MARK_UNKNOWN",
   "CONTINUE_WITH_GAPS", "GENERATE_PHASE1", "APPROVE_PHASE1",
   "REQUEST_REVISION", "REJECT_PHASE1",

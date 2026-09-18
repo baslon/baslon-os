@@ -227,6 +227,15 @@ export class EvidenceCoherenceRepository {
     return run;
   }
 
+  async getLatestSucceededRunForSnapshot(snapshotId: string, businessId: string) {
+    const [run] = await this.database.select().from(analysisRuns).where(and(
+      eq(analysisRuns.inputSnapshotId, snapshotId), eq(analysisRuns.businessId, businessId),
+      eq(analysisRuns.module, "evidence_coherence"),
+      eq(analysisRuns.status, "SUCCEEDED"),
+    )).orderBy(desc(analysisRuns.createdAt), desc(analysisRuns.id)).limit(1);
+    return run;
+  }
+
   async getLatestRunForBusiness(businessId: string) {
     const [run] = await this.database.select().from(analysisRuns)
       .where(and(
