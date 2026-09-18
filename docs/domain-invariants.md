@@ -1,5 +1,23 @@
 # Baslon OS — Domain Invariants
 
+## Continuing with known gaps
+
+`CONTINUE_WITH_GAPS` (`GAP_RESOLUTION_REQUIRED` → `PHASE1_READY`) is a human
+decision to begin Phase 1 using the current reviewed evidence despite known
+unresolved gaps. It never means a gap is resolved, a question is answered, a
+finding is closed or the evidence is complete, and it never changes Evidence
+Coherence findings, questions, runs or snapshots.
+
+Only a human actor may trigger it; no AI output, finding count, materiality or
+`strengthScore` may trigger or authorize it. It commits only when the latest
+canonical snapshot has a successful Evidence Coherence run, checked inside the
+transition transaction. Its `workflow_transitions` row is the durable audit and
+records the accepted `snapshotId`, `snapshotVersion`, `analysisRunId` and
+`analysisPromptVersion`.
+
+Adding information remains possible from `PHASE1_READY` through the normal Add
+Information command and evidence review loop.
+
 ## Claim–Evidence relationship strength
 
 `claim_evidence.strength_score` is a nullable 0–1 semantic-link-confidence value.

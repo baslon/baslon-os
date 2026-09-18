@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Ready to architect, subject to the Milestone 4-specific items below. Following code verification, ordinary Add Information from `GAP_RESOLUTION_REQUIRED` now has navigation and documentation (M4-01 partially resolved), and the initial-intake path that could invalidate an open review is closed (B-03 resolved).  
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved).\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -346,9 +346,23 @@ Prompt identity remains persisted per analysis run, and v1/v2 can coexist becaus
 ## M4-01 — `GAP_RESOLUTION_REQUIRED` can become a dead end when no question is surfaced
 
 **Origin:** Claude MEDIUM.  
-**Status:** **PARTIALLY RESOLVED — MILESTONE 4**
+**Status:** **RESOLVED — Milestone 4A (18 September 2026)**
 
-### Verification (18 September 2026)
+### Resolution — Milestone 4A
+Product decision: `GAP_RESOLUTION_REQUIRED` is a human resolution checkpoint, not a state that requires a surfaced question. From it a human can:
+
+- **add information**, with or without a surfaced question, through the unchanged atomic Add Information command; or
+- **continue with known gaps** via the human-only `CONTINUE_WITH_GAPS` event → `PHASE1_READY` (`GapResolutionService.continueWithGaps`).
+
+`CONTINUE_WITH_GAPS` commits through the central Orchestrator path (Business and workflow locks, version check, actor re-authorization). A default transaction-scoped precondition (`continueWithGapsPrecondition`, `src/repositories/workflow-preconditions.ts`) requires the recorded snapshot to be the latest canonical snapshot and the recorded run to be a successful `evidence_coherence` run of it.
+
+Durable audit is the existing `workflow_transitions` row: actor, time, states, event, reason, plus `metadata` with `snapshotId`, `snapshotVersion`, `analysisRunId` and `analysisPromptVersion`. There is no new table and no migration. Findings, questions, runs and snapshots are never modified or marked resolved.
+
+Human `ADD_EVIDENCE` from `PHASE1_READY` → `EVIDENCE_PROCESSING` was added so `PHASE1_READY` is not a dead end before Phase 1 diagnosis exists.
+
+Validation: shared scenarios on PGlite and PostgreSQL (zero surfaced questions with no findings and with low-materiality only, audit metadata, human-only actor, invalid source states, snapshot precondition, archive rejection, the `PHASE1_READY` Add Information loop); PostgreSQL races (concurrent continue commits once; a snapshot committed while the transition waits is rejected by the in-transaction precondition; archive winning the lock rejects it); and unit tests for the rules and UI. See `docs/milestone-4a-gap-resolution-phase1-entry.md`.
+
+### Verification (18 September 2026, before Milestone 4A)
 Milestone 3D already allows ordinary (unprompted) Add Information from `GAP_RESOLUTION_REQUIRED`:
 
 - `AddInformationRepository.prepare` accepts `EVIDENCE_READY` or `GAP_RESOLUTION_REQUIRED` when no question is supplied;
@@ -361,7 +375,7 @@ Navigation and documentation — **resolved 18 September 2026:**
 - Evidence Quality shows "Add other information" in `GAP_RESOLUTION_REQUIRED`, including when no question was surfaced;
 - documented in `docs/milestone-3d-pre-diagnosis-hardening.md`.
 
-Remaining for Milestone 4:
+Remaining for Milestone 4 at that time (since resolved by Milestone 4A above):
 
 - whether Milestone 4 also needs an explicit continue/accept-gaps route remains a product decision.
 
@@ -457,6 +471,9 @@ Examples may include:
 - completed human review/approval.
 
 Do not create placeholder diagnosis artifacts merely to satisfy the mechanism.
+
+### Progress note (Milestone 4A, 18 September 2026)
+The first concrete precondition is registered: `continueWithGapsPrecondition` for `CONTINUE_WITH_GAPS`, as a default on every orchestrator. This remains open for the diagnosis transitions (`GENERATE_PHASE1` onwards), whose artifacts do not exist yet. Note that the precondition interface is read-only by type only, and each precondition must hold its own locks if the artifact it checks can change (see R-07).
 
 ---
 
@@ -1257,7 +1274,7 @@ The question is interpretive context only.
 
 Before Milestone 4 diagnosis implementation begins, explicitly close or approve the following:
 
-- [ ] Decide whether an explicit continue/accept-gaps route is needed from `GAP_RESOLUTION_REQUIRED`. Ordinary Add Information from this state, with navigation and documentation, was completed 18 September 2026 (M4-01).
+- [x] Decide the `GAP_RESOLUTION_REQUIRED` path. Resolved by Milestone 4A: Add Information (with or without a question) or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`, with Add Information also available from `PHASE1_READY` (M4-01).
 - [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
 - [ ] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11).
 - [ ] Define one exact snapshot-bound diagnosis input contract.

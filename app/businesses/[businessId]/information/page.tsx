@@ -4,6 +4,7 @@ import { getBusinessOverviewService, getEvidenceQualityService, getSourceSubmiss
 import { addInformationAction } from "../../../actions";
 import { InformationForm } from "../../../information-form";
 import { isAiRunStale } from "@/domain/ai-run-recovery";
+import { acceptsAddInformation } from "@/domain/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function AddInformationPage({ params, searchParams }: {
     : undefined;
   const question = retry ? retryContext : currentQuestion;
   const available = overview.business.status === "active" && (
-    (!questionId && ["EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED"].includes(overview.workflow?.state ?? ""))
+    (!questionId && acceptsAddInformation(overview.workflow?.state))
     || (Boolean(currentQuestion && !currentQuestion.sourceSubmissionId) && overview.workflow?.state === "GAP_RESOLUTION_REQUIRED")
     || (overview.workflow?.state === "EVIDENCE_PROCESSING" && retry
       && (!questionId || retryContext?.questionId === questionId))

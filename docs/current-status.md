@@ -4,23 +4,36 @@ Updated: 18 September 2026
 
 ## Current engineering milestone
 
-Milestone 3D pre-diagnosis hardening is implemented in the working tree and is
-awaiting review. It adds module-scoped analytical reads, stale-run recovery,
-archive-safe and atomic strategic commands, current-review enforcement, shared
-snapshot construction, workflow artifact-precondition hooks and reviewer-visible
-relationship-strength semantics. No Milestone 4 diagnosis functionality or new
-database migration has been introduced.
+Milestone 3D pre-diagnosis hardening is merged (`8602b98`), followed by the
+initial-intake review guard (PR #1, `93e03e3`).
+
+Milestone 4A — Gap Resolution & Phase 1 Entry is implemented in the working tree
+on `claude/milestone-4` and awaiting review. `GAP_RESOLUTION_REQUIRED` is a human
+resolution checkpoint: a human can add information (with or without a surfaced
+question) or explicitly continue with known gaps to `PHASE1_READY`. From
+`PHASE1_READY` a human can still add information. No Phase 1 diagnosis engine,
+diagnosis persistence or new database migration has been introduced. See
+`docs/milestone-4a-gap-resolution-phase1-entry.md`.
 
 ## Active Baslon Digital Business
 
 - Business ID: `74230122-26a9-4268-92c0-0fe963d1ee8f`
 - Status: active
-- Current workflow state: `EVIDENCE_READY`
+- Current workflow state: `GAP_RESOLUTION_REQUIRED` (observed read-only on
+  17 September 2026)
 - Initial clean Snapshot 1: `b9f55eae-66f1-46d4-817a-c9b74f665873`
 - Current cumulative Snapshot 2: `2041745c-71c0-48ed-9c95-685f9f993b6a`
 - Snapshot 2 contains the approved clean rebuild source plus David's reviewed
   answer about recent meaningful client channels, approximate project values,
   sale outcomes, and unknown pipeline-entry dates.
+- Snapshot 2 Evidence Coherence run: `98ce12e0-953d-4f3a-88a6-4427355bd95e`
+  (succeeded; six non-low-materiality questions, none answered at observation).
+- 11 of its 12 numeric Evidence records come from "approximately" excerpts but
+  are stored as exact values (findings register M4-02).
+
+Continuing this Business with known gaps (`CONTINUE_WITH_GAPS`) is a product
+decision for David. Milestone 4A makes the action available in the UI; it must not
+be taken on the real Business as a test.
 
 Future work on the real Baslon Digital Business must use this active Business ID.
 Only information explicitly confirmed as genuine by David may be submitted to it.

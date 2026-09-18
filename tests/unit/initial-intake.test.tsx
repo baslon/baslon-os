@@ -106,6 +106,49 @@ describe("Add Information navigation", () => {
     expect(analysing).not.toContain("Add other information");
   });
 
+  it("offers a deliberate Continue with current evidence action that does not claim gaps are resolved", () => {
+    const business = { id: "business", name: "Example", status: "active" };
+    const model = {
+      business,
+      workflow: { state: "GAP_RESOLUTION_REQUIRED" },
+      latestSnapshot: { id: "snapshot", version: 2 },
+      analysis: { run: { id: "run", status: "SUCCEEDED" as const, inputSnapshotId: "snapshot" }, contradictions: [], gaps: [] },
+      isHistorical: false,
+      surfacedQuestions: [],
+    };
+    const html = renderToStaticMarkup(createElement(EvidenceQuality, { model }));
+    expect(html).toContain("Continue to Phase 1 with current evidence");
+    expect(html).toContain("Continue with current evidence");
+    expect(html).toContain("continuing does not resolve them");
+    expect(html).toContain("these findings stay on record unchanged");
+    expect(html).toContain('name="businessId" value="business"');
+
+    for (const variant of [
+      { ...model, business: { ...business, status: "archived" } },
+      { ...model, isHistorical: true },
+      { ...model, analysis: { ...model.analysis, run: { ...model.analysis.run, status: "FAILED" as const } } },
+      { ...model, workflow: { state: "EVIDENCE_READY" } },
+    ]) {
+      expect(renderToStaticMarkup(createElement(EvidenceQuality, { model: variant })))
+        .not.toContain("Continue with current evidence");
+    }
+  });
+
+  it("explains PHASE1_READY and keeps Add Information available", () => {
+    const html = renderToStaticMarkup(createElement(EvidenceQuality, { model: {
+      business: { id: "business", name: "Example", status: "active" },
+      workflow: { state: "PHASE1_READY" },
+      latestSnapshot: { id: "snapshot", version: 2 },
+      analysis: { run: { id: "run", status: "SUCCEEDED" as const, inputSnapshotId: "snapshot" }, contradictions: [], gaps: [] },
+      isHistorical: false,
+      surfacedQuestions: [],
+    } }));
+    expect(html).toContain("Continued to Phase 1 with current evidence");
+    expect(html).toContain("Phase 1 diagnosis is not available yet");
+    expect(html).toContain('href="/businesses/business/information"');
+    expect(html).not.toContain("Continue with current evidence</button>");
+  });
+
   it("shows the workspace Add Information link when the workspace allows it", () => {
     const html = renderToStaticMarkup(createElement(BusinessWorkspace, { model: {
       business: { id: "business", name: "Example", sector: null, primaryGeography: null, status: "active", archivedAt: null },

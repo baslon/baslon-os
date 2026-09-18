@@ -16,6 +16,7 @@ import {
   assertActiveBusinessForUpdate,
   assertBusinessActive,
 } from "@/repositories/business-lifecycle-guard";
+import { defaultWorkflowTransitionPreconditions } from "@/repositories/workflow-preconditions";
 
 class PostgresWorkflowRepository implements WorkflowPersistence {
   constructor(private readonly database: Database) {}
@@ -104,5 +105,8 @@ export function createStrategyOrchestrator(
   database: Database,
   preconditions: WorkflowTransitionPreconditions = {},
 ) {
-  return new StrategyOrchestrator(new PostgresWorkflowRepository(database), preconditions);
+  return new StrategyOrchestrator(new PostgresWorkflowRepository(database), {
+    ...defaultWorkflowTransitionPreconditions,
+    ...preconditions,
+  });
 }

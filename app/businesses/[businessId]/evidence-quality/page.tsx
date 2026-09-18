@@ -15,5 +15,9 @@ export default async function EvidenceQualityPage({
   const query = await searchParams;
   const model = await getEvidenceQualityService().get(businessId).catch(() => undefined);
   if (!model) notFound();
-  return <EvidenceQuality model={model} error={query.error === "1"} />;
+  return <EvidenceQuality
+    model={model}
+    error={query.error === "1"}
+    continueError={query.error === "continue"}
+  />;
 }

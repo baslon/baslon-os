@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveTransition } from "@/domain/workflow";
+import { acceptsAddInformation, resolveTransition } from "@/domain/workflow";
+import {
+  continueWithGapsPrecondition,
+  defaultWorkflowTransitionPreconditions,
+} from "@/repositories/workflow-preconditions";
 import { StrategyOrchestrator, type WorkflowPersistence } from "@/strategy/orchestrator";
 
 describe("workflow rules", () => {
@@ -28,6 +32,34 @@ describe("workflow rules", () => {
       .toBe("REVISION_REQUIRED");
     expect(resolveTransition("REVISION_REQUIRED", "GENERATE_PHASE1", "human"))
       .toBe("PHASE1_ANALYSING");
+  });
+
+  it("lets only a human continue with known gaps into PHASE1_READY", () => {
+    expect(resolveTransition("GAP_RESOLUTION_REQUIRED", "CONTINUE_WITH_GAPS", "human"))
+      .toBe("PHASE1_READY");
+    for (const actor of ["system", "ai"] as const) {
+      expect(() => resolveTransition("GAP_RESOLUTION_REQUIRED", "CONTINUE_WITH_GAPS", actor))
+        .toThrow("requires a human actor");
+    }
+    for (const state of [
+      "NEW", "EVIDENCE_PROCESSING", "EVIDENCE_READY", "GAP_ANALYSIS", "PHASE1_READY",
+    ] as const) {
+      expect(() => resolveTransition(state, "CONTINUE_WITH_GAPS", "human"))
+        .toThrow("Invalid workflow transition");
+    }
+  });
+
+  it("lets a human add evidence from PHASE1_READY before diagnosis exists", () => {
+    expect(resolveTransition("PHASE1_READY", "ADD_EVIDENCE", "human")).toBe("EVIDENCE_PROCESSING");
+    for (const actor of ["system", "ai"] as const) {
+      expect(() => resolveTransition("PHASE1_READY", "ADD_EVIDENCE", actor))
+        .toThrow("requires a human actor");
+    }
+    expect(acceptsAddInformation("PHASE1_READY")).toBe(true);
+  });
+
+  it("defines the Phase 1 entry precondition as an orchestrator default", () => {
+    expect(defaultWorkflowTransitionPreconditions.CONTINUE_WITH_GAPS).toBe(continueWithGapsPrecondition);
   });
 
   it("supports event-specific artifact preconditions without weakening authority", async () => {
