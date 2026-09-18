@@ -4,7 +4,8 @@
 **Current accepted baseline:** Milestone 3D — Pre-Diagnosis Hardening  
 **Current implementation commit:** `8602b98 Complete Milestone 3D pre-diagnosis hardening`  
 **Architectural review handoff commit:** `aeb00ef Add Milestone 3D architectural review handoff`  
-**Working tree:** Clean at last verification
+**Working tree:** Clean at last verification  
+**Code verification:** 18 September 2026 against `44e2bc1` (branch `claude/milestone-4`) — see [Section I](#i-code-verification-record--18-september-2026)
 
 ## Purpose
 
@@ -36,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Ready to architect, subject to the remaining workflow/product decision around `GAP_RESOLUTION_REQUIRED` and the Milestone 4-specific items below.  
+**Milestone 4:** Ready to architect, subject to the Milestone 4-specific items below. Code verification found `GAP_RESOLUTION_REQUIRED` already accepts ordinary Add Information (M4-01 now partially resolved) and found one remaining UI path that can invalidate an open initial review (B-03, reclassified).  
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -110,7 +111,7 @@ Milestone 3D added deterministic stale-run recovery:
 OpenAI calls use a 60-second request timeout with two SDK retries.
 
 ### Remaining limitation
-Recovery is request-driven rather than proactive. See B-01 / P-06.
+Recovery is request-driven rather than proactive. See P-06.
 
 ---
 
@@ -121,6 +122,9 @@ Recovery is request-driven rather than proactive. See B-01 / P-06.
 
 ### Resolution
 The same stale-run recovery policy now applies to extraction runs, allowing safe retry against the same immutable Source Submission.
+
+### Verification note (18 September 2026)
+Recovery applies to the Add Information retry path (`AddInformationService.retry`). Initial-intake extraction (`runEvidenceExtractionAction`) has no stale-run recovery; a resubmission simply creates a newer run and leaves any abandoned initial-intake run in `RUNNING` indefinitely. This is harmless to review eligibility (only the latest run is reviewable) but leaves untidy run history. Tracked with B-03.
 
 ---
 
@@ -142,6 +146,9 @@ Review start, decision application and open-session completion now require:
 - matching session/proposals.
 
 Completed-session retries remain idempotent.
+
+### Verification note (18 September 2026)
+Confirmed in `assertCurrentReviewRun` (`src/repositories/evidence-review-repository.ts`). The latest-run guard is sound, but one UI path can still create a newer run during an open initial review; see B-03 (reclassified to Milestone 4).
 
 ---
 
@@ -206,6 +213,9 @@ The precondition receives a transaction-scoped read-only database interface.
 
 ### Validation
 PostgreSQL concurrency tests prove artifact deletion remains blocked while the transition precondition/commit transaction holds the relevant lock.
+
+### Verification note (18 September 2026)
+The precondition's read-only interface is a TypeScript type (`Pick<Database, "select">`); at runtime it receives the full transaction. Atomicity also depends on each precondition taking its own row lock (`FOR SHARE` / `FOR UPDATE`) on any artifact that can change. Milestone 4 preconditions must do both: read only, and lock what they check.
 
 ---
 
@@ -302,6 +312,9 @@ It is explicitly **not**:
 
 Evidence Coherence v2 carries the same semantic contract.
 
+### Scope note (18 September 2026)
+This resolves relationship strength only. Other AI-assigned qualifiers are still committed on Accept without being shown on the review card; see M4-11.
+
 ---
 
 ## R-14 — Evidence Coherence prompt left `strengthScore` semantically undefined
@@ -331,9 +344,22 @@ Prompt identity remains persisted per analysis run, and v1/v2 can coexist becaus
 ## M4-01 — `GAP_RESOLUTION_REQUIRED` can become a dead end when no question is surfaced
 
 **Origin:** Claude MEDIUM.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **PARTIALLY RESOLVED — MILESTONE 4**
 
-### Risk
+### Verification (18 September 2026)
+Milestone 3D already allows ordinary (unprompted) Add Information from `GAP_RESOLUTION_REQUIRED`:
+
+- `AddInformationRepository.prepare` accepts `EVIDENCE_READY` or `GAP_RESOLUTION_REQUIRED` when no question is supplied;
+- `/businesses/[businessId]/information` renders the form in both states;
+- covered by the test "accepts ordinary Add Information from GAP_RESOLUTION_REQUIRED without creating a question link".
+
+Remaining gaps:
+
+- no navigation entry: the workspace (`canAddInformation`) and Evidence State pages still show Add Information only in `EVIDENCE_READY`, and Evidence Quality offers no general Add Information link;
+- the behaviour is not documented in the milestone or status docs;
+- whether Milestone 4 also needs an explicit continue/accept-gaps route remains a product decision.
+
+### Original risk
 If analysis produces no high/medium surfaced questions, or only low-materiality findings, the Business can enter `GAP_RESOLUTION_REQUIRED` with no obvious user action.
 
 Ordinary unprompted Add Information has historically been tied to `EVIDENCE_READY`.
@@ -362,6 +388,9 @@ Examples such as:
 - `10–15 projects`
 
 can be normalized to exact numeric values despite source uncertainty.
+
+### Confirmed in real data (17 September 2026)
+A read-only check of the development database found that 11 of the 12 numeric Evidence records in the active Baslon Digital Business come from excerpts stating "approximately" (for example total revenue £80,000, recurring revenue £1,200 per month, ad-hoc support 10% of revenue, and eight project values of £1,000–£6,000). Each is stored as an exact number with a matching Metric. Only the project-value Metric labels include the word "approximate". This is a confirmed data condition, not only a hypothetical risk.
 
 ### Why Milestone 4 matters
 Diagnosis may calculate or infer from these numbers.
@@ -507,18 +536,18 @@ Do not modify historical migrations; use forward migrations if approved.
 ## M4-09 — PostgreSQL test-database safety and CI
 
 **Origin:** Claude MEDIUM; Codex MEDIUM documentation/CI concern.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **PARTIALLY RESOLVED — guard done; CI DEFERRED — MILESTONE 4**
 
 ### Known review concern
 Claude reported that some PostgreSQL test files did not positively enforce `baslon_os_test`, and all reviews noted absence of CI.
 
-### Required verification
-Before adding Milestone 4 PostgreSQL suites:
+### Verification (18 September 2026)
+**Guard — resolved.** All 9 files in `tests/postgres/` use the shared `tests/helpers/postgres-test-guard.ts`: `requirePostgresTestDatabaseUrl()` before connecting and `verifyPostgresTestDatabase()` (checks `current_database()` and PostgreSQL 17.x) after connecting. The full suite passed: 9 files, 57 tests against `baslon_os_test`.
 
-1. verify every PostgreSQL test uses the shared positive database guard;
-2. add CI or explicitly document why CI remains deferred.
+**CI — outstanding.** No `.github/` workflow exists.
 
-The Milestone 3D reports confirm tests were run against `baslon_os_test`, but they do not establish that every historical test file now uses a shared guard.
+### Remaining requirement
+Add CI, or explicitly document why CI remains deferred. When adding CI, fix B-29 first: the unit test for the guard fails when `TEST_DATABASE_URL` is set in the same environment.
 
 ---
 
@@ -536,6 +565,28 @@ At the next approved extraction contract change:
 - align prompt and validator;
 - explicitly document bounded cardinal normalization;
 - bump prompt/contract version.
+
+---
+
+## M4-11 — Accept commits AI-assigned qualifiers the reviewer was not shown
+
+**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Finding
+R-13 made relationship `strengthScore` visible. The review card still does not show these AI-assigned values, which Accept commits to canonical state and the Evidence State page later labels as human-reviewed:
+
+- Claim `confidenceScore`;
+- Evidence `reliabilityLevel` and `reliabilityScore`;
+- Evidence `directnessLevel` and `recencyLevel`.
+
+They are visible only if the reviewer opens the correction form.
+
+### Why Milestone 4 matters
+Diagnosis will be tempted to treat these as human-validated weights (see M4-06).
+
+### Required action
+Before diagnosis consumes these fields, either show them read-only on the review card before Accept, or treat them explicitly as AI-assigned unless corrected.
 
 ---
 
@@ -758,6 +809,8 @@ Framework defaults are not a substitute for an explicit production review.
 
 No application route currently uses this partial path.
 
+Verified 18 September 2026: `SourceSubmissionService.createQuestionAnswer()` is called only by two tests in `tests/fixtures/add-information-scenarios.ts`. It locks the Business and question, but does not check workflow state or perform the `ADD_EVIDENCE` transition.
+
 Recommended later action:
 
 - remove it; or
@@ -779,14 +832,24 @@ Recommended:
 
 ---
 
-## B-03 — Repository-level creation of a newer extraction run can invalidate an open review
+## B-03 — Creation of a newer extraction run can invalidate an open review
 
-**Origin:** Milestone 3D architectural review.  
-**Status:** **BACKLOG**
+**Origin:** Milestone 3D architectural review; corrected by code verification 18 September 2026.  
+**Status:** **DEFERRED — MILESTONE 4** (reclassified from BACKLOG)
 
-Normal application flow does not currently do this.
+### Correction
+The earlier statement that "normal application flow does not currently do this" is not accurate for **initial intake**.
 
-If repository use broadens, add a direct invariant preventing run creation while a conflicting open review exists.
+`runEvidenceExtractionAction` (`app/actions.ts`) blocks resubmission only when the latest run has a `sourceSubmissionId`. Initial-intake runs have none, and the intake page does not check workflow state. While the first review is open (`EVIDENCE_PROCESSING`), a user can submit intake again from the UI. That:
+
+1. creates a newer extraction run;
+2. makes the open review ineligible under R-04's latest-run guard;
+3. leaves any decisions already accepted in that review in live canonical tables, where they will be included in the next snapshot created by a different review.
+
+Add Information cycles are not affected, because their runs have a Source Submission.
+
+### Required action
+Block initial-intake extraction while the workflow is `EVIDENCE_PROCESSING` and the latest run is `RUNNING` or `SUCCEEDED` without a completed review, allowing it only after a `FAILED` (or stale-recovered) latest run. Preferably, move the intake orchestration out of the server action into a service, so it uses the same transactional pattern as Add Information (see also B-13).
 
 ---
 
@@ -999,13 +1062,13 @@ Centralize migration setup if hardcoded lists still exist.
 ## B-22 — Metric correction can coerce blank string to zero
 
 **Origin:** Antigravity LOW.  
-**Status:** **BACKLOG — REVERIFY**
+**Status:** **BACKLOG — CONFIRMED STILL PRESENT (18 September 2026)**
 
 Original finding:
 
 `Number("") === 0`
 
-Before fixing, re-check the current Milestone 3D action parsing because later changes may have superseded the exact line/path.
+Verified: `app/actions.ts` line 190 still parses a metric correction with `Number(text(formData, "numericValue"))`, so a cleared field becomes `0`. Impact is low, because the corrected value must still appear in the original excerpt and usually fails that check. Parse blank as missing rather than zero.
 
 ---
 
@@ -1023,9 +1086,9 @@ Optimize only if measured transaction duration becomes material.
 ## B-24 — Claim-type contract differences (`decision`)
 
 **Origin:** Antigravity LOW; Claude related alternate-write-path concern.  
-**Status:** **BACKLOG — REVERIFY**
+**Status:** **BACKLOG — CONFIRMED STILL PRESENT (18 September 2026)**
 
-Before changing, verify whether Milestone 3D consolidation already removed or isolated the alternate Foundation write path.
+Verified: Milestone 3D added archive locking to the Foundation write path but did not remove it. `FoundationRepository.addClaim` and `supersedeClaim` block `fact` but still accept `decision`, whereas Evidence Review rejects both. The path has no UI caller (tests only). Block `decision` there, or restrict the Foundation writers to test use.
 
 ---
 
@@ -1071,6 +1134,35 @@ Before handing significant Milestone 4 work to new agents, ensure README/docs co
 - tests;
 - architecture;
 - current production-readiness restrictions.
+
+---
+
+## B-28 — Concurrent Add Information retries both call the model
+
+**Origin:** Code verification, 18 September 2026 (residual of the original Claude HIGH retry finding).  
+**Status:** **BACKLOG**
+
+`AddInformationService.retry` checks eligibility (latest failed run, `EVIDENCE_PROCESSING`) without a lock, and `EvidenceExtractionRepository.createRun` locks only the Business row. Two simultaneous retries can both create runs and both incur a model call.
+
+This is now safe for integrity (R-04 makes only the newest run reviewable), but it wastes spend and leaves an extra run. Re-check "latest run is FAILED" inside the `createRun` transaction after taking the Business lock.
+
+---
+
+## B-29 — PostgreSQL guard unit test depends on the environment
+
+**Origin:** Code verification, 18 September 2026.  
+**Status:** **BACKLOG — fix before adding CI**
+
+`tests/unit/postgres-test-guard.test.ts` line 25 calls `requirePostgresTestDatabaseUrl()` with no argument and expects it to throw. When `TEST_DATABASE_URL` is set, as CI would normally do when running both suites, the test fails. Pass `undefined` explicitly or stub the environment variable.
+
+---
+
+## B-30 — Snapshot relationship ordering is not fully deterministic
+
+**Origin:** Code verification, 18 September 2026.  
+**Status:** **BACKLOG**
+
+`createCanonicalSnapshot` orders `claim_evidence` by `(claim_id, evidence_id)`, but the primary key also includes `relationship_type`. If one Claim/Evidence pair has more than one relationship type, their order is unspecified. Add `relationship_type` to the ordering.
 
 ---
 
@@ -1154,7 +1246,9 @@ The question is interpretive context only.
 
 Before Milestone 4 diagnosis implementation begins, explicitly close or approve the following:
 
-- [ ] Decide the `GAP_RESOLUTION_REQUIRED` no-surfaced-question path.
+- [ ] Decide the `GAP_RESOLUTION_REQUIRED` no-surfaced-question path. Ordinary Add Information already works from this state; add navigation to it, document it, and decide whether an explicit continue/accept-gaps route is also needed (M4-01).
+- [ ] Block initial-intake resubmission while an initial review is open (B-03).
+- [ ] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11).
 - [ ] Define one exact snapshot-bound diagnosis input contract.
 - [ ] Define diagnosis output as separate non-canonical analytical persistence.
 - [ ] Define human diagnosis approval as a separate immutable record.
@@ -1163,7 +1257,7 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight.
 - [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut.
 - [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests.
-- [ ] Re-check PostgreSQL test database guards before adding new suites.
+- [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
 - [ ] Align written-number prompt/validator if the extractor contract changes during the milestone.
 - [ ] Do not implement production authentication/security work inside Milestone 4 unless explicitly scoped.
 
@@ -1204,3 +1298,47 @@ The remaining findings fall into three groups:
 3. **Lower-priority backlog** — performance, schema tightening, UI polish and internal API cleanup.
 
 The next milestone should therefore proceed from the clean Milestone 3D checkpoint without reopening already-settled architecture unless new evidence demonstrates a defect.
+
+---
+
+# I. Code Verification Record — 18 September 2026
+
+**Scope:** Every RESOLVED entry (R-01 to R-15) plus the REVERIFY items, checked against the code at `44e2bc1` on branch `claude/milestone-4` (application code identical to `aeb00ef` on `main`).  
+**Method:** Code inspection of the changes since `3c77a48`, plus a full test run. No application code or data was modified.
+
+## Test results
+
+| Gate | Result |
+|---|---|
+| Unit + integration (`npm test`) | 21 files, 153 tests passed with `TEST_DATABASE_URL` unset. One guard unit test fails when it is set (B-29). |
+| PostgreSQL (`npm run test:postgres`) | 9 files, 57 tests passed against `baslon_os_test` (PostgreSQL 17.11) |
+| TypeScript | Passed |
+| ESLint | Passed |
+
+## Outcome by entry
+
+| Entry | Verification outcome |
+|---|---|
+| R-01 | Confirmed: one transaction in `AddInformationRepository.prepare`, Business → workflow → question lock order, model call after commit. |
+| R-02 | Confirmed: conditional stale recovery, reconciliation inside the failure boundary, 60 s timeout with 2 retries. |
+| R-03 | Confirmed for Add Information retry. Not applied to initial intake (see R-03 note and B-03). |
+| R-04 | Confirmed in the repository. One UI path remains (B-03). |
+| R-05 | Confirmed across strategic write paths; covered by the archive race suite. |
+| R-06 | Confirmed: both completion transactions lock and re-check the Business. |
+| R-07 | Confirmed. Preconditions must also take their own locks (see R-07 note). |
+| R-08 | Confirmed: coherence reads filter on `module = 'evidence_coherence'`. |
+| R-09 | Confirmed; minor ordering gap recorded as B-30. |
+| R-10, R-11 | Superseded status accepted; no contrary evidence found. |
+| R-12 | Confirmed. This behaviour predates Milestone 3D. |
+| R-13 | Confirmed for `strengthScore`; the other qualifiers are recorded as M4-11. |
+| R-14, R-15 | Confirmed: `evidence_coherence_v2` defines the semantics; v1 and v2 identities coexist. |
+| M4-01 | Found partially resolved (ordinary Add Information from `GAP_RESOLUTION_REQUIRED` works). |
+| M4-09 | Guard resolved; CI outstanding. |
+| B-01 | Confirmed still callable; tests only. |
+| B-03 | Corrected and reclassified to Milestone 4. |
+| B-22 | Confirmed still present. |
+| B-24 | Confirmed still present. |
+
+## New entries
+
+M4-11, B-28, B-29, B-30.
