@@ -30,6 +30,30 @@ export type ExtractionProposalRecord = {
   structuredPayload: Record<string, unknown>;
 };
 
+export type StaleExtractionRunRecovery = {
+  runId: string;
+  businessId: string;
+  staleBefore: Date;
+  validationErrors: unknown[];
+};
+
+export async function failStaleExtractionRun(
+  database: Pick<Database, "update">,
+  input: StaleExtractionRunRecovery,
+) {
+  const [run] = await database.update(evidenceExtractionRuns).set({
+    status: "FAILED",
+    validationErrors: input.validationErrors,
+    completedAt: new Date(),
+  }).where(and(
+    eq(evidenceExtractionRuns.id, input.runId),
+    eq(evidenceExtractionRuns.businessId, input.businessId),
+    eq(evidenceExtractionRuns.status, "RUNNING"),
+    lte(evidenceExtractionRuns.createdAt, input.staleBefore),
+  )).returning();
+  return run;
+}
+
 export class EvidenceExtractionRepository {
   constructor(private readonly database: Database) {}
 
@@ -103,23 +127,8 @@ export class EvidenceExtractionRepository {
     return run;
   }
 
-  async failStaleRun(input: {
-    runId: string;
-    businessId: string;
-    staleBefore: Date;
-    validationErrors: unknown[];
-  }) {
-    const [run] = await this.database.update(evidenceExtractionRuns).set({
-      status: "FAILED",
-      validationErrors: input.validationErrors,
-      completedAt: new Date(),
-    }).where(and(
-      eq(evidenceExtractionRuns.id, input.runId),
-      eq(evidenceExtractionRuns.businessId, input.businessId),
-      eq(evidenceExtractionRuns.status, "RUNNING"),
-      lte(evidenceExtractionRuns.createdAt, input.staleBefore),
-    )).returning();
-    return run;
+  failStaleRun(input: StaleExtractionRunRecovery) {
+    return failStaleExtractionRun(this.database, input);
   }
 
   async getRun(runId: string, businessId: string) {

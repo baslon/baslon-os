@@ -8,8 +8,11 @@ export function deriveIntakePresentation(input: {
   latestRun?: RecoverableExtraction;
   hasCanonicalEvidence: boolean;
   hasErrorSignal: boolean;
+  latestRunRecoverable?: boolean;
 }) {
-  const failedRun = input.latestRun?.status === "FAILED" ? input.latestRun : undefined;
+  const failedRun = input.latestRun?.status === "FAILED" || input.latestRunRecoverable
+    ? input.latestRun
+    : undefined;
   return {
     heading: input.hasCanonicalEvidence ? "Add more information" : "Tell us about the business",
     returning: input.hasCanonicalEvidence,

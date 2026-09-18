@@ -64,7 +64,16 @@ export const transitionRules: readonly Rule[] = [
   { from: "REVISION_REQUIRED", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
 ] as const;
 
-export const humanOnlyEvents = new Set<WorkflowEvent>([
+/** States from which ordinary (unprompted) Add Information is accepted. */
+export const addInformationStates: readonly WorkflowState[] = [
+  "EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED",
+];
+
+export function acceptsAddInformation(state: string | undefined): boolean {
+  return addInformationStates.includes(state as WorkflowState);
+}
+
+export const humanOnlyEvents =new Set<WorkflowEvent>([
   "START_INTAKE", "SUBMIT_INTAKE", "ADD_EVIDENCE", "MARK_UNKNOWN",
   "CONTINUE_WITH_GAPS", "GENERATE_PHASE1", "APPROVE_PHASE1",
   "REQUEST_REVISION", "REJECT_PHASE1",

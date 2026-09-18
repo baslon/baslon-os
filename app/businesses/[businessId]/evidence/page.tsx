@@ -7,6 +7,7 @@ import { EvidenceStateOverview } from "../../../evidence-state-overview";
 import { FactAdmissionAction } from "../../../fact-admission-action";
 import { EvidenceValue } from "../../../evidence-value";
 import { formatWorkspaceMetric } from "@/domain/workspace-metrics";
+import { acceptsAddInformation } from "@/domain/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     <p className="context-name">{state.business.name}</p>
     <h1 className="task-title">Evidence State</h1>
     <p className="lede">Reviewed information currently held about this business.</p>
-    {!archived && workflowState === "EVIDENCE_READY" ? <Link className="button-link secondary-link" href={`/businesses/${businessId}/information`}>Add Information</Link> : null}
+    {!archived && acceptsAddInformation(workflowState) ? <Link className="button-link secondary-link" href={`/businesses/${businessId}/information`}>Add Information</Link> : null}
     <Link className="button-link secondary-link" href={`/businesses/${businessId}/evidence-quality`}>View Evidence Quality</Link>
     {archived ? <div className="notice"><strong>Archived — read-only</strong><p>Restore this business before making changes to its Evidence State.</p></div> : null}
     {query.error ? <p className="error" role="alert">That change could not be saved. Please review it and try again.</p> : null}

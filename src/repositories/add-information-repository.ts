@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import type { AnalysisQuestionContext } from "@/domain/source-submission";
 import { AnalysisQuestionAnswerError } from "@/domain/source-submission";
-import { authorizeWorkflowTransition } from "@/domain/workflow";
+import { acceptsAddInformation, authorizeWorkflowTransition } from "@/domain/workflow";
 import { assertActiveBusinessForUpdate } from "@/repositories/business-lifecycle-guard";
 import type { ExtractionRunStart } from "@/repositories/evidence-extraction-repository";
 import { resolveAnalysisQuestionContext } from "@/repositories/source-submission-repository";
@@ -37,10 +37,10 @@ export class AddInformationRepository {
         .for("update");
       if (!workflow) throw new Error("Workflow not found");
 
-      const allowedStates = command.questionId
-        ? ["GAP_RESOLUTION_REQUIRED"]
-        : ["EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED"];
-      if (!allowedStates.includes(workflow.state)) {
+      const allowed = command.questionId
+        ? workflow.state === "GAP_RESOLUTION_REQUIRED"
+        : acceptsAddInformation(workflow.state);
+      if (!allowed) {
         throw new Error(
           `Complete the current Evidence Review before adding information. Current workflow: ${workflow.state}`,
         );

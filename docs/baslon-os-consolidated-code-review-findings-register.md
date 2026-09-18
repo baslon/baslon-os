@@ -1,0 +1,1355 @@
+# Baslon OS — Consolidated Code Review Findings Register
+
+**Status date:** 18 September 2026  
+**Current accepted baseline:** Milestone 3D — Pre-Diagnosis Hardening  
+**Current implementation commit:** `8602b98 Complete Milestone 3D pre-diagnosis hardening`  
+**Architectural review handoff commit:** `aeb00ef Add Milestone 3D architectural review handoff`  
+**Working tree:** Clean at last verification  
+**Code verification:** 18 September 2026 against `44e2bc1` (branch `claude/milestone-4`) — see [Section I](#i-code-verification-record--18-september-2026)
+
+## Purpose
+
+This register reconciles findings from:
+
+1. Senior Code Review — Antigravity
+2. Whole-Solution Code Review — Codex
+3. Whole-Solution Code Review — Claude Code
+4. Milestone 3D architectural review
+5. Milestone 3D corrective-pass completion report
+
+It exists so that findings do not disappear into old review documents or chat history.
+
+Status values used here:
+
+- **RESOLVED** — implemented and validated in Milestone 3D or its corrective pass.
+- **SUPERSEDED** — the original finding was materially overstated, reframed by stronger evidence, or replaced by a more accurate finding that has now been handled.
+- **DEFERRED — MILESTONE 4** — should be handled as part of, or before significant implementation of, Phase 1 Diagnosis.
+- **DEFERRED — PRODUCTION** — not required for trusted local development, but required before shared/public production.
+- **BACKLOG** — valid lower-priority debt or future-proofing; does not currently block Milestone 4.
+- **ACCEPTED DESIGN** — reviewed behaviour that is intentional and should not be “fixed” casually.
+
+---
+
+# Executive Status
+
+## Current overall position
+
+**Architecture:** Sound.  
+**Rewrite required:** No.  
+**Milestone 3D:** Complete and accepted.  
+**Milestone 4:** Ready to architect, subject to the Milestone 4-specific items below. Following code verification, ordinary Add Information from `GAP_RESOLUTION_REQUIRED` now has navigation and documentation (M4-01 partially resolved), and the initial-intake path that could invalidate an open review is closed (B-03 resolved).  
+**Local/private development:** Appropriate.  
+**Shared/public production:** Not yet appropriate.
+
+## Main issues already closed
+
+Milestone 3D resolved the most material pre-diagnosis integrity risks:
+
+- Add Information command atomicity.
+- Stranded `RUNNING` extraction/coherence recovery.
+- Latest-run review eligibility.
+- Archive-safe strategic writes.
+- Archive-safe AI completion.
+- Transactional workflow preconditions.
+- Evidence Coherence module scoping.
+- Review-completion reconciliation.
+- Shared deterministic snapshot construction.
+- `strengthScore` semantic definition and review visibility.
+
+---
+
+# A. RESOLVED
+
+## R-01 — Add Information could leave orphan Source Submissions/question links
+
+**Origin:** Codex HIGH; Claude HIGH; Antigravity related workflow atomicity finding.  
+**Status:** **RESOLVED**
+
+### Original risk
+Source Submission creation, optional question linkage, workflow advancement and extraction-run creation occurred across separate commits. Failure between those steps could leave an immutable human answer with no recoverable application path.
+
+### Resolution
+Milestone 3D introduced `src/repositories/add-information-repository.ts`.
+
+One transaction now performs:
+
+1. active-Business row lock/check;
+2. workflow row lock;
+3. workflow-state validation;
+4. optional question lock/context validation;
+5. Source Submission creation;
+6. optional question/source link;
+7. `ADD_EVIDENCE` transition/history insertion;
+8. initial `RUNNING` extraction-run creation.
+
+The provider call remains outside the transaction.
+
+### Validation
+Concurrency and PostgreSQL tests verify rollback and competing submissions.
+
+---
+
+## R-02 — Abandoned `RUNNING` Evidence Coherence runs could block analysis indefinitely
+
+**Origin:** Codex HIGH; Claude HIGH; Antigravity related active-run recovery finding.  
+**Status:** **RESOLVED**
+
+### Original risk
+A process failure or reconciliation failure after run creation could leave a permanent `RUNNING` row. Equivalent-run uniqueness could then prevent future analysis.
+
+### Resolution
+Milestone 3D added deterministic stale-run recovery:
+
+- default stale threshold: 15 minutes;
+- configurable with `AI_RUN_STALE_AFTER_MS`;
+- conditional `RUNNING` → `FAILED`;
+- provenance preserved;
+- audited as `stale_run_recovered`;
+- terminal runs cannot be overwritten;
+- Evidence Coherence reconciliation now sits inside the failure boundary.
+
+OpenAI calls use a 60-second request timeout with two SDK retries.
+
+### Remaining limitation
+Recovery is request-driven rather than proactive. See P-06.
+
+---
+
+## R-03 — Abandoned `RUNNING` extraction runs were unrecoverable
+
+**Origin:** Claude HIGH; Codex HIGH grouped with AI-run lifecycle.  
+**Status:** **RESOLVED**
+
+### Resolution
+The same stale-run recovery policy now applies to extraction runs, allowing safe retry against the same immutable Source Submission.
+
+### Verification note (18 September 2026)
+Recovery applies to the Add Information retry path (`AddInformationService.retry`). Initial-intake extraction (`runEvidenceExtractionAction`) has no stale-run recovery; a resubmission simply creates a newer run and leaves any abandoned initial-intake run in `RUNNING` indefinitely. This is harmless to review eligibility (only the latest run is reviewable) but leaves untidy run history. Tracked with B-03.
+
+**Update (18 September 2026):** resolved with B-03. Initial intake now recovers a stale `RUNNING` run through the same conditional `stale_run_recovered` transition before starting again.
+
+---
+
+## R-04 — Review could proceed against a stale/non-current extraction run
+
+**Origin:** Claude HIGH; Antigravity related unsafe `latestRun` guard.  
+**Status:** **RESOLVED**
+
+### Original risk
+An older successful run could remain reviewable after a newer run existed, allowing workflow and snapshot lifecycle to advance out of order.
+
+### Resolution
+Review start, decision application and open-session completion now require:
+
+- same Business;
+- workflow state `EVIDENCE_PROCESSING`;
+- latest extraction run;
+- successful run;
+- matching session/proposals.
+
+Completed-session retries remain idempotent.
+
+### Verification note (18 September 2026)
+Confirmed in `assertCurrentReviewRun` (`src/repositories/evidence-review-repository.ts`). The latest-run guard is sound, but one UI path can still create a newer run during an open initial review; see B-03 (reclassified to Milestone 4).
+
+---
+
+## R-05 — Archive versus strategic write TOCTOU race
+
+**Origin:** Codex HIGH; Antigravity HIGH related lifecycle-guard TOCTOU.  
+**Status:** **RESOLVED**
+
+### Resolution
+Strategic mutation paths now lock/recheck the Business row using `assertActiveBusinessForUpdate()` inside the write transaction.
+
+Business-row-first lock ordering is used consistently.
+
+PostgreSQL concurrency tests verify:
+
+- archive-first → strategic write rejected;
+- write-first → write completes before archive.
+
+---
+
+## R-06 — AI completion could persist proposals/findings after archival
+
+**Origin:** Milestone 3D architectural review blocker.  
+**Status:** **RESOLVED**
+
+### Original residual risk
+A run could start while active, the Business could be archived during the external model call, and successful completion could then insert proposals/findings after archive.
+
+### Resolution
+Both successful completion transactions now re-lock/recheck the Business before inserting completion artifacts:
+
+- `EvidenceExtractionRepository.completeRun()`
+- `EvidenceCoherenceRepository.completeRun()`
+
+Archive-first and completion-first PostgreSQL race tests cover both extraction and coherence.
+
+---
+
+## R-07 — Workflow artifact precondition checks were outside the transition transaction
+
+**Origin:** Milestone 3D architectural review blocker.  
+**Status:** **RESOLVED**
+
+### Original risk
+An artifact could change between precondition evaluation and workflow commit.
+
+### Resolution
+The Orchestrator passes the selected precondition to workflow persistence.
+
+The repository now:
+
+1. locks/verifies active Business;
+2. locks workflow;
+3. verifies expected state/version;
+4. re-authorizes event/actor;
+5. evaluates precondition using the same transaction;
+6. updates workflow;
+7. writes history;
+8. commits.
+
+The precondition receives a transaction-scoped read-only database interface.
+
+### Validation
+PostgreSQL concurrency tests prove artifact deletion remains blocked while the transition precondition/commit transaction holds the relevant lock.
+
+### Verification note (18 September 2026)
+The precondition's read-only interface is a TypeScript type (`Pick<Database, "select">`); at runtime it receives the full transaction. Atomicity also depends on each precondition taking its own row lock (`FOR SHARE` / `FOR UPDATE`) on any artifact that can change. Milestone 4 preconditions must do both: read only, and lock what they check.
+
+---
+
+## R-08 — Evidence Coherence repository reads were not module-scoped
+
+**Origin:** Codex MEDIUM.  
+**Status:** **RESOLVED**
+
+### Resolution
+Evidence Coherence reads now include `module = evidence_coherence`, preventing future diagnosis/secondary analysis modules from contaminating Evidence Quality reads or reconciliation.
+
+---
+
+## R-09 — Snapshot construction was duplicated and not explicitly deterministic
+
+**Origin:** Claude MEDIUM; Antigravity snapshot-path concern.  
+**Status:** **RESOLVED**
+
+### Resolution
+Snapshot construction is consolidated in:
+
+`src/repositories/canonical-snapshot.ts`
+
+It is used by:
+
+- Foundation snapshot creation;
+- Evidence Review completion.
+
+Canonical collections are deterministically ordered.
+
+Historical snapshots remain immutable.
+
+---
+
+## R-10 — Antigravity “Critical” snapshot consistency/version race
+
+**Origin:** Antigravity CRITICAL.  
+**Status:** **SUPERSEDED**
+
+### Reconciliation
+The original severity overstated the currently reachable failure mode.
+
+The actual production path already operated under a Business-row lock and transaction, and Milestone 3D has since consolidated the snapshot builder and made the caller-lock precondition clearer.
+
+### Current position
+No evidence supports a remaining Critical snapshot-consistency defect.
+
+---
+
+## R-11 — Antigravity “Critical” Evidence Coherence `23505` recovery finding
+
+**Origin:** Antigravity CRITICAL.  
+**Status:** **SUPERSEDED**
+
+### Reconciliation
+The important underlying problem was abandoned `RUNNING` work, not the existence of the partial unique index/deduplication model itself.
+
+The stale-run lifecycle is now explicitly recoverable.
+
+### Residual improvement
+Constraint-specific exception handling may still be tightened later if useful, but it is not a current Critical issue.
+
+---
+
+## R-12 — Review completion could leave snapshot/session complete while workflow lagged
+
+**Origin:** Codex MEDIUM.  
+**Status:** **RESOLVED**
+
+### Resolution
+Completed-session retry is idempotent. Repeating completion creates no duplicate snapshot and reconciles the workflow to `EVIDENCE_READY` where the relevant run remains current.
+
+---
+
+## R-13 — Human could accept relationship `strengthScore` without seeing its meaning
+
+**Origin:** Codex MEDIUM; Claude MEDIUM.  
+**Status:** **RESOLVED**
+
+### Resolution
+Evidence Review now shows `strengthScore` and explicitly defines it as:
+
+> Confidence that the selected semantic relationship type is appropriate.
+
+It is explicitly **not**:
+
+- Claim truth probability;
+- Evidence credibility;
+- proof weight;
+- reliability;
+- corroboration;
+- materiality;
+- diagnostic confidence.
+
+Evidence Coherence v2 carries the same semantic contract.
+
+### Scope note (18 September 2026)
+This resolves relationship strength only. Other AI-assigned qualifiers are still committed on Accept without being shown on the review card; see M4-11.
+
+---
+
+## R-14 — Evidence Coherence prompt left `strengthScore` semantically undefined
+
+**Origin:** Claude MEDIUM.  
+**Status:** **RESOLVED**
+
+### Resolution
+`evidence_coherence_v2` explicitly defines the meaning and prohibited interpretations of `strengthScore`.
+
+Historical v1 runs remain independently versioned and immutable.
+
+---
+
+## R-15 — Existing coherence prompt/version could not coexist with revised semantics
+
+**Origin:** Related AI-versioning concern across reviews.  
+**Status:** **RESOLVED**
+
+### Resolution
+Prompt identity remains persisted per analysis run, and v1/v2 can coexist because active-run identity includes prompt version.
+
+---
+
+# B. DEFERRED — MILESTONE 4
+
+## M4-01 — `GAP_RESOLUTION_REQUIRED` can become a dead end when no question is surfaced
+
+**Origin:** Claude MEDIUM.  
+**Status:** **PARTIALLY RESOLVED — MILESTONE 4**
+
+### Verification (18 September 2026)
+Milestone 3D already allows ordinary (unprompted) Add Information from `GAP_RESOLUTION_REQUIRED`:
+
+- `AddInformationRepository.prepare` accepts `EVIDENCE_READY` or `GAP_RESOLUTION_REQUIRED` when no question is supplied;
+- `/businesses/[businessId]/information` renders the form in both states;
+- covered by the test "accepts ordinary Add Information from GAP_RESOLUTION_REQUIRED without creating a question link".
+
+Navigation and documentation — **resolved 18 September 2026:**
+
+- the workspace and Evidence State pages show Add Information in both `EVIDENCE_READY` and `GAP_RESOLUTION_REQUIRED` (shared `acceptsAddInformation` in `src/domain/workflow.ts`);
+- Evidence Quality shows "Add other information" in `GAP_RESOLUTION_REQUIRED`, including when no question was surfaced;
+- documented in `docs/milestone-3d-pre-diagnosis-hardening.md`.
+
+Remaining for Milestone 4:
+
+- whether Milestone 4 also needs an explicit continue/accept-gaps route remains a product decision.
+
+### Original risk
+If analysis produces no high/medium surfaced questions, or only low-materiality findings, the Business can enter `GAP_RESOLUTION_REQUIRED` with no obvious user action.
+
+Ordinary unprompted Add Information has historically been tied to `EVIDENCE_READY`.
+
+### Required decision
+Before implementing Phase 1 Diagnosis, explicitly define at least one valid user path from this state, for example:
+
+- allow unprompted Add Information from `GAP_RESOLUTION_REQUIRED`; or
+- implement an explicit continue/accept-gaps route with durable audit semantics.
+
+### Milestone 4 entry requirement
+Resolve as an explicit workflow/product decision before diagnosis UI depends on this state.
+
+---
+
+## M4-02 — Approximate and range values may become exact canonical numbers
+
+**Origin:** Claude MEDIUM.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Risk
+Examples such as:
+
+- `about 30 clients`
+- `roughly £4k`
+- `10–15 projects`
+
+can be normalized to exact numeric values despite source uncertainty.
+
+### Confirmed in real data (17 September 2026)
+A read-only check of the development database found that 11 of the 12 numeric Evidence records in the active Baslon Digital Business come from excerpts stating "approximately" (for example total revenue £80,000, recurring revenue £1,200 per month, ad-hoc support 10% of revenue, and eight project values of £1,000–£6,000). Each is stored as an exact number with a matching Metric. Only the project-value Metric labels include the word "approximate". This is a confirmed data condition, not only a hypothetical risk.
+
+### Why Milestone 4 matters
+Diagnosis may calculate or infer from these numbers.
+
+### Required decision
+Before diagnosis treats numeric values as exact quantitative inputs:
+
+- add precision/qualifier semantics; or
+- explicitly treat current numeric canonical values as potentially approximate and avoid unsupported precision.
+
+Potential model:
+
+`exact | approximate | estimate | range_lower | range_upper`
+
+Any schema/contract change requires forward migration and extractor versioning.
+
+---
+
+## M4-03 — Question context is not deterministically isolated from every semantic field
+
+**Origin:** Claude MEDIUM.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Current strength
+Evidence/Metric excerpts and numeric provenance are checked against the human answer, not the AI-generated question.
+
+### Remaining gap
+Claims and some descriptive semantic fields do not have equivalent deterministic grounding checks, so prompt discipline plus human review still matter.
+
+### Required work
+For the next extractor revision, evaluate:
+
+- source excerpt support for Claims;
+- deterministic checks against question-only digit/text contamination where practical;
+- clearer review indication of contextual interpretation.
+
+Do not weaken the current rule:
+
+**Interpretive context ≠ evidentiary source.**
+
+---
+
+## M4-04 — Milestone 4 artifact-specific workflow preconditions do not yet exist
+
+**Origin:** Milestone 3D known limitation.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Current state
+The transactional precondition mechanism is now safe, but no diagnosis artifacts exist yet.
+
+### Requirement
+Each Milestone 4 transition must register concrete artifact eligibility checks only after the relevant artifact schema/service exists.
+
+Examples may include:
+
+- exact current snapshot;
+- terminal successful diagnosis run;
+- completed human review/approval.
+
+Do not create placeholder diagnosis artifacts merely to satisfy the mechanism.
+
+---
+
+## M4-05 — Diagnosis must define a snapshot-bound contract
+
+**Origin:** Codex/Claude guardrails.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Requirement
+Milestone 4 must:
+
+- read one exact immutable snapshot;
+- not reconstruct historical input from live canonical state;
+- persist exact analytical input;
+- hash/version the input contract;
+- store separate non-canonical diagnosis output;
+- preserve same-Business references;
+- keep historical diagnoses immutable.
+
+---
+
+## M4-06 — Diagnosis must not treat AI-assigned qualifiers as human truth weights
+
+**Origin:** Codex/Claude review concern.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Rule
+Do not interpret:
+
+- `strengthScore`;
+- reliability;
+- directness;
+- recency;
+- materiality;
+- confidence
+
+as Claim truth probability or proof weight unless an explicitly approved later model defines such semantics.
+
+`strengthScore` is semantic-link confidence only.
+
+---
+
+## M4-07 — Diagnosis approval must be separate from canonical Evidence admission
+
+**Origin:** Cross-review architecture guardrail.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Rule
+Milestone 4 diagnosis/recommendation output must remain analytical state.
+
+AI diagnosis must not directly:
+
+- create Claims;
+- create Evidence;
+- create Metrics;
+- modify relationships;
+- mark facts;
+- create decisions.
+
+New factual information still goes through:
+
+Source Submission → Extraction → Proposal → Human Review → Canonical Snapshot.
+
+---
+
+## M4-08 — Consider extraction-run provenance lifecycle hardening before diagnosis expands
+
+**Origin:** Claude MEDIUM.  
+**Status:** **DEFERRED — MILESTONE 4 / PRODUCTION**
+
+### Finding
+Earlier provenance-bearing tables do not all have the same trigger-level immutability/lifecycle protection as Milestone 3C analytical tables.
+
+Priority subset for consideration:
+
+- extraction-run lifecycle;
+- review-session terminal state.
+
+Do not modify historical migrations; use forward migrations if approved.
+
+---
+
+## M4-09 — PostgreSQL test-database safety and CI
+
+**Origin:** Claude MEDIUM; Codex MEDIUM documentation/CI concern.  
+**Status:** **PARTIALLY RESOLVED — guard done; CI DEFERRED — MILESTONE 4**
+
+### Known review concern
+Claude reported that some PostgreSQL test files did not positively enforce `baslon_os_test`, and all reviews noted absence of CI.
+
+### Verification (18 September 2026)
+**Guard — resolved.** All 9 files in `tests/postgres/` use the shared `tests/helpers/postgres-test-guard.ts`: `requirePostgresTestDatabaseUrl()` before connecting and `verifyPostgresTestDatabase()` (checks `current_database()` and PostgreSQL 17.x) after connecting. The full suite passed: 9 files, 57 tests against `baslon_os_test`.
+
+**CI — outstanding.** No `.github/` workflow exists.
+
+### Remaining requirement
+Add CI, or explicitly document why CI remains deferred. When adding CI, fix B-29 first: the unit test for the guard fails when `TEST_DATABASE_URL` is set in the same environment.
+
+---
+
+## M4-10 — Written-number prompt and deterministic validator disagree
+
+**Origin:** Codex MEDIUM; Claude LOW.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Finding
+Prompt wording historically prohibited number-word conversion while deterministic validation allowed bounded cardinal normalization such as `three` → `3`.
+
+### Required action
+At the next approved extraction contract change:
+
+- align prompt and validator;
+- explicitly document bounded cardinal normalization;
+- bump prompt/contract version.
+
+---
+
+## M4-11 — Accept commits AI-assigned qualifiers the reviewer was not shown
+
+**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026.  
+**Status:** **DEFERRED — MILESTONE 4**
+
+### Finding
+R-13 made relationship `strengthScore` visible. The review card still does not show these AI-assigned values, which Accept commits to canonical state and the Evidence State page later labels as human-reviewed:
+
+- Claim `confidenceScore`;
+- Evidence `reliabilityLevel` and `reliabilityScore`;
+- Evidence `directnessLevel` and `recencyLevel`.
+
+They are visible only if the reviewer opens the correction form.
+
+### Why Milestone 4 matters
+Diagnosis will be tempted to treat these as human-validated weights (see M4-06).
+
+### Required action
+Before diagnosis consumes these fields, either show them read-only on the review card before Accept, or treat them explicitly as AI-assigned unless corrected.
+
+---
+
+# C. DEFERRED — PRODUCTION
+
+## P-01 — No authentication
+
+**Origin:** All three reviews.  
+**Status:** **DEFERRED — PRODUCTION (BLOCKER)**
+
+### Current reality
+The application has no authenticated principal/session model.
+
+### Requirement
+Before shared/public deployment:
+
+- implement authentication;
+- derive identity server-side;
+- remove free-text reviewer identity as authority.
+
+---
+
+## P-02 — No Business-level authorization / tenant isolation
+
+**Origin:** Codex HIGH; Claude HIGH.  
+**Status:** **DEFERRED — PRODUCTION (BLOCKER)**
+
+### Important distinction
+Composite same-Business FKs enforce relational integrity.
+
+They do **not** determine whether a user is allowed to access a Business.
+
+### Requirement
+Every user-facing read/write must verify Business access from the authenticated principal.
+
+---
+
+## P-03 — Human authority is structural, not identity security
+
+**Origin:** Antigravity Critical framing; Codex/Claude security findings.  
+**Status:** **DEFERRED — PRODUCTION**
+
+### Current position
+WeakSet-issued authority objects are useful structural/domain guards.
+
+They do not prove a real authenticated person or role.
+
+### Requirement
+Once authentication exists, human authority must derive from authenticated session identity and authorization.
+
+---
+
+## P-04 — Permanent Delete lacks authenticated privileged authorization/re-authentication
+
+**Origin:** Codex/Claude.  
+**Status:** **DEFERRED — PRODUCTION**
+
+The database deletion mechanism itself is strongly defended.
+
+Production still requires:
+
+- authenticated actor;
+- appropriate owner/admin role;
+- re-authentication/privileged confirmation policy;
+- trusted audit identity.
+
+---
+
+## P-05 — No meaningful request/rate/AI-spend controls
+
+**Origin:** Codex MEDIUM; Claude MEDIUM.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Required before external exposure:
+
+- source/body size limits;
+- request rate limits;
+- per-Business concurrency controls where needed;
+- AI usage/spend limits;
+- observable rejection reasons.
+
+---
+
+## P-06 — Stale-run recovery is request-driven only
+
+**Origin:** Milestone 3D accepted limitation.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Current behaviour is acceptable for the present local milestone.
+
+Production should consider:
+
+- scheduled/reaper recovery;
+- operator visibility for stale runs;
+- alerting.
+
+---
+
+## P-07 — Stale threshold is not constrained against provider duration
+
+**Origin:** Milestone 3D architectural review.  
+**Status:** **DEFERRED — PRODUCTION**
+
+### Risk
+A bad `AI_RUN_STALE_AFTER_MS` value could be shorter than the possible provider request duration and cause an active run to be treated as stale.
+
+### Requirement
+Validate/clamp configuration or derive it from the provider timeout/retry policy.
+
+---
+
+## P-08 — Structured logging and correlation are absent/incomplete
+
+**Origin:** Codex MEDIUM; Claude MEDIUM.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Required:
+
+- structured server logs;
+- Business/run/session/request correlation;
+- typed public error codes;
+- no secrets/raw source content unnecessarily logged.
+
+---
+
+## P-09 — Infrastructure errors can be converted to false 404s
+
+**Origin:** Codex MEDIUM; Claude MEDIUM.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Use typed not-found handling for actual absence.
+
+Infrastructure/query failures should reach an error boundary/logging path instead of being silently converted into missing-resource behaviour.
+
+---
+
+## P-10 — Raw/internal error messages in redirect URLs
+
+**Origin:** Codex/Claude.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Replace raw exception text in URLs with stable public error codes/messages.
+
+---
+
+## P-11 — PostgreSQL pool/query/transaction configuration uses weak defaults
+
+**Origin:** All three reviews.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Configure:
+
+- pool maximum;
+- connection timeout;
+- idle timeout;
+- statement timeout;
+- deployment/runtime guidance;
+- transaction timeout as appropriate.
+
+Continue keeping AI network calls outside DB transactions.
+
+---
+
+## P-12 — OpenAI client/runtime timeout/deployment strategy needs production hardening
+
+**Origin:** Antigravity/Codex/Claude.  
+**Status:** **PARTIALLY RESOLVED / DEFERRED — PRODUCTION**
+
+Milestone 3D added explicit request timeout/retry behaviour.
+
+Production still needs to assess:
+
+- request-path versus background worker execution;
+- deployment request limits;
+- connection/client reuse where beneficial;
+- retry/cost policy.
+
+---
+
+## P-13 — Backups, restore tests and migration rollback/runbook
+
+**Origin:** Codex production-readiness assessment; Claude production debt.  
+**Status:** **DEFERRED — PRODUCTION (BLOCKER)**
+
+Define and test:
+
+- backup schedule;
+- restore procedure;
+- restore drill;
+- migration deployment;
+- rollback/forward-fix procedure;
+- incident handling.
+
+---
+
+## P-14 — Privacy, retention and subject-deletion policy
+
+**Origin:** Codex/Claude production assessment.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Needs explicit product/legal/operational definition before real multi-user deployment.
+
+---
+
+## P-15 — Security headers / explicit CSRF posture / external security review
+
+**Origin:** Codex/Claude.  
+**Status:** **DEFERRED — PRODUCTION**
+
+Framework defaults are not a substitute for an explicit production review.
+
+---
+
+# D. BACKLOG / LOWER-PRIORITY TECHNICAL DEBT
+
+## B-01 — Legacy partial `createQuestionAnswer()` path remains callable internally
+
+**Origin:** Milestone 3D architectural review.  
+**Status:** **BACKLOG**
+
+No application route currently uses this partial path.
+
+Verified 18 September 2026: `SourceSubmissionService.createQuestionAnswer()` is called only by two tests in `tests/fixtures/add-information-scenarios.ts`. It locks the Business and question, but does not check workflow state or perform the `ADD_EVIDENCE` transition.
+
+Recommended later action:
+
+- remove it; or
+- mark/restrict it as internal/test-only.
+
+---
+
+## B-02 — Canonical snapshot builder assumes caller holds Business lock
+
+**Origin:** Milestone 3D architectural review.  
+**Status:** **BACKLOG**
+
+Current callers satisfy the requirement.
+
+Recommended:
+
+- keep helper repository-internal; or
+- document/type the lock/transaction precondition more explicitly.
+
+---
+
+## B-03 — Creation of a newer extraction run can invalidate an open review
+
+**Origin:** Milestone 3D architectural review; corrected by code verification 18 September 2026.  
+**Status:** **RESOLVED — 18 September 2026** (initial-intake UI path); direct repository use of `EvidenceExtractionRepository.createRun` remains unguarded but has no application caller that can conflict with an open review.
+
+### Resolution
+Initial intake now runs through `InitialIntakeService` and `InitialIntakeRepository.prepare` (`src/repositories/initial-intake-repository.ts`). One transaction locks the Business and workflow, decides availability with `initialIntakeAvailability` (`src/domain/initial-intake.ts`), applies the intake transitions, recovers a stale run and creates the `RUNNING` run. A new intake is refused while the latest initial run succeeded and awaits review, or is fresh and still running. The intake page shows the same decision instead of the form, and the action redirects to the open review or to Add Information. This also brings stale-run recovery to initial intake (see R-03).
+
+Validation: shared initial-intake scenarios (PGlite and PostgreSQL), a PostgreSQL race test proving concurrent intake submissions commit exactly one run and one set of transitions, and unit tests for the availability rule.
+
+### Correction
+The earlier statement that "normal application flow does not currently do this" is not accurate for **initial intake**.
+
+`runEvidenceExtractionAction` (`app/actions.ts`) blocks resubmission only when the latest run has a `sourceSubmissionId`. Initial-intake runs have none, and the intake page does not check workflow state. While the first review is open (`EVIDENCE_PROCESSING`), a user can submit intake again from the UI. That:
+
+1. creates a newer extraction run;
+2. makes the open review ineligible under R-04's latest-run guard;
+3. leaves any decisions already accepted in that review in live canonical tables, where they will be included in the next snapshot created by a different review.
+
+Add Information cycles are not affected, because their runs have a Source Submission.
+
+### Required action
+Block initial-intake extraction while the workflow is `EVIDENCE_PROCESSING` and the latest run is `RUNNING` or `SUCCEEDED` without a completed review, allowing it only after a `FAILED` (or stale-recovered) latest run. Preferably, move the intake orchestration out of the server action into a service, so it uses the same transactional pattern as Add Information (see also B-13).
+
+---
+
+## B-04 — One-answer-per-question uniqueness relies primarily on application locking
+
+**Origin:** Codex MEDIUM; Claude LOW.  
+**Status:** **BACKLOG**
+
+Current approved path serializes through row locks.
+
+Consider a forward migration adding `UNIQUE(question_id)` if one answer remains the durable product rule.
+
+---
+
+## B-05 — Review idempotency JSON comparison is key-order-sensitive
+
+**Origin:** Codex LOW; Claude LOW.  
+**Status:** **BACKLOG**
+
+Replace `JSON.stringify` equality with structural/canonical JSON equality.
+
+---
+
+## B-06 — Evidence Coherence/read models load broad histories then filter in memory
+
+**Origin:** All reviews.  
+**Status:** **BACKLOG**
+
+Examples:
+
+- all finding references for Business;
+- broad Business overview history.
+
+Optimize when volume warrants.
+
+---
+
+## B-07 — Business status is unconstrained text
+
+**Origin:** Codex LOW; Claude LOW.  
+**Status:** **BACKLOG**
+
+Consider a PostgreSQL CHECK/enum after verifying current data.
+
+---
+
+## B-08 — Snapshot `created_from_analysis_run_id` has unclear semantics/no integrity constraint
+
+**Origin:** Codex LOW; Claude LOW.  
+**Status:** **BACKLOG**
+
+Before use:
+
+- define exact meaning plus same-Business FK; or
+- remove through an approved forward migration.
+
+---
+
+## B-09 — Other schema vocabulary/check constraints are incomplete
+
+**Origin:** Claude LOW.  
+**Status:** **BACKLOG**
+
+Examples include free-text lifecycle/quality vocabulary.
+
+Add constraints only where the product vocabulary is stable.
+
+---
+
+## B-10 — Numeric precision/rounding edge cases
+
+**Origin:** Claude LOW/MEDIUM.  
+**Status:** **BACKLOG / overlaps M4-02**
+
+`numeric(20,4)` can round higher-precision values.
+
+Resolve alongside explicit precision semantics if Milestone 4 performs calculations.
+
+---
+
+## B-11 — Snapshot projection currently tolerates malformed JSON fields by coercion
+
+**Origin:** Claude LOW.  
+**Status:** **BACKLOG**
+
+Consider a strict Zod snapshot payload validation step before projection.
+
+---
+
+## B-12 — Reproducibility metadata could be stronger
+
+**Origin:** Claude LOW.  
+**Status:** **BACKLOG**
+
+Potential improvements:
+
+- prompt-text hash;
+- record served provider model;
+- explicitly decide whether model identifier belongs in equivalent-run identity;
+- use deterministic code-unit ordering rather than locale-sensitive sorting.
+
+---
+
+## B-13 — Initial intake provenance differs from later Source Submission provenance
+
+**Origin:** Claude MEDIUM provenance review.  
+**Status:** **BACKLOG / architecture decision**
+
+Initial-intake extraction historically stores intake text on the run rather than a Source Submission.
+
+Consider future unification, but do not rewrite historical provenance casually.
+
+---
+
+## B-14 — Some older provenance/audit tables have weaker trigger-level immutability
+
+**Origin:** Claude MEDIUM.  
+**Status:** **BACKLOG / PRODUCTION HARDENING**
+
+Candidate tables noted in review:
+
+- evidence extraction runs;
+- review sessions;
+- metrics;
+- claim/evidence relationships;
+- workflow transitions;
+- restricted Claim mutation.
+
+Any changes require forward migrations and PostgreSQL regression tests.
+
+---
+
+## B-15 — All-or-nothing extraction/coherence validation
+
+**Origin:** Codex INFORMATIONAL; Claude MEDIUM.  
+**Status:** **ACCEPTED DESIGN / BACKLOG**
+
+Current conservative behaviour protects provenance and avoids presenting a partial model output as complete.
+
+Do not weaken it casually.
+
+Consider partial/quarantined proposal handling only if retry friction becomes materially problematic.
+
+---
+
+## B-16 — `admitFactAction` currently submits a single evidence ID from the UI
+
+**Origin:** Antigravity HIGH.  
+**Status:** **BACKLOG / NOT A CURRENT INTEGRITY DEFECT**
+
+The domain supports multiple supporting Evidence IDs.
+
+The UI currently provides a narrower path.
+
+Expand only if the product requires multi-evidence fact admission from the UI.
+
+---
+
+## B-17 — WeakSet authority state is process/hot-reload/serialization fragile
+
+**Origin:** Antigravity MEDIUM/LOW.  
+**Status:** **BACKLOG**
+
+These tokens are structural command guards, not serialized security credentials.
+
+No current production defect is established.
+
+---
+
+## B-18 — OpenAI client instantiation per call
+
+**Origin:** Antigravity MEDIUM.  
+**Status:** **BACKLOG**
+
+Evaluate client reuse as part of production deployment/runtime tuning.
+
+---
+
+## B-19 — `REJECT_PHASE1` and `REQUEST_REVISION` currently share the same target state
+
+**Origin:** Antigravity MEDIUM.  
+**Status:** **ACCEPTED DESIGN / MILESTONE 4 REVIEW**
+
+Re-evaluate the semantic distinction when Phase 1 diagnosis/review is designed.
+
+Do not add a new workflow state merely for symmetry.
+
+---
+
+## B-20 — Evidence lifecycle filtering asymmetry is future-looking
+
+**Origin:** Antigravity MEDIUM.  
+**Status:** **BACKLOG**
+
+Current Evidence immutability means there is no demonstrated active/stale Evidence lifecycle defect.
+
+Revisit only if Evidence later gains explicit lifecycle status.
+
+---
+
+## B-21 — Migration lists / schema setup duplication in tests
+
+**Origin:** Antigravity MEDIUM.  
+**Status:** **BACKLOG / verify during CI work**
+
+Centralize migration setup if hardcoded lists still exist.
+
+---
+
+## B-22 — Metric correction can coerce blank string to zero
+
+**Origin:** Antigravity LOW.  
+**Status:** **BACKLOG — CONFIRMED STILL PRESENT (18 September 2026)**
+
+Original finding:
+
+`Number("") === 0`
+
+Verified: `app/actions.ts` line 190 still parses a metric correction with `Number(text(formData, "numericValue"))`, so a cleared field becomes `0`. Impact is low, because the corrected value must still appear in the original excerpt and usually fails that check. Parse blank as missing rather than zero.
+
+---
+
+## B-23 — Permanent Delete verification performs many COUNT queries
+
+**Origin:** Antigravity LOW.  
+**Status:** **BACKLOG**
+
+Safety is currently more important than micro-optimization.
+
+Optimize only if measured transaction duration becomes material.
+
+---
+
+## B-24 — Claim-type contract differences (`decision`)
+
+**Origin:** Antigravity LOW; Claude related alternate-write-path concern.  
+**Status:** **BACKLOG — CONFIRMED STILL PRESENT (18 September 2026)**
+
+Verified: Milestone 3D added archive locking to the Foundation write path but did not remove it. `FoundationRepository.addClaim` and `supersedeClaim` block `fact` but still accept `decision`, whereas Evidence Review rejects both. The path has no UI caller (tests only). Block `decision` there, or restrict the Foundation writers to test use.
+
+---
+
+## B-25 — Evidence State can show live state ahead of latest snapshot
+
+**Origin:** Claude LOW / Codex informational architecture note.  
+**Status:** **ACCEPTED DESIGN / UX BACKLOG**
+
+Per-decision canonical writes occur before review completion; snapshot catches up at completion.
+
+UI should make the distinction clear if user confusion emerges.
+
+Milestone 4 must always use snapshots, not this live view.
+
+---
+
+## B-26 — Progress labels/counts have small inconsistencies
+
+**Origin:** Claude LOW.  
+**Status:** **BACKLOG**
+
+Examples:
+
+- question stage label;
+- workspace counts;
+- superseded relationship display.
+
+No architectural impact.
+
+---
+
+## B-27 — README/setup/architecture discoverability needs improvement
+
+**Origin:** Codex MEDIUM; Claude LOW.  
+**Status:** **BACKLOG / MILESTONE 4 ENGINEERING HYGIENE**
+
+Before handing significant Milestone 4 work to new agents, ensure README/docs cover:
+
+- setup;
+- environment variable names;
+- PostgreSQL/test DB creation;
+- migration procedure;
+- tests;
+- architecture;
+- current production-readiness restrictions.
+
+---
+
+## B-28 — Concurrent Add Information retries both call the model
+
+**Origin:** Code verification, 18 September 2026 (residual of the original Claude HIGH retry finding).  
+**Status:** **BACKLOG**
+
+`AddInformationService.retry` checks eligibility (latest failed run, `EVIDENCE_PROCESSING`) without a lock, and `EvidenceExtractionRepository.createRun` locks only the Business row. Two simultaneous retries can both create runs and both incur a model call.
+
+This is now safe for integrity (R-04 makes only the newest run reviewable), but it wastes spend and leaves an extra run. Re-check "latest run is FAILED" inside the `createRun` transaction after taking the Business lock.
+
+---
+
+## B-29 — PostgreSQL guard unit test depends on the environment
+
+**Origin:** Code verification, 18 September 2026.  
+**Status:** **BACKLOG — fix before adding CI**
+
+`tests/unit/postgres-test-guard.test.ts` line 25 calls `requirePostgresTestDatabaseUrl()` with no argument and expects it to throw. When `TEST_DATABASE_URL` is set, as CI would normally do when running both suites, the test fails. Pass `undefined` explicitly or stub the environment variable.
+
+---
+
+## B-30 — Snapshot relationship ordering is not fully deterministic
+
+**Origin:** Code verification, 18 September 2026.  
+**Status:** **BACKLOG**
+
+`createCanonicalSnapshot` orders `claim_evidence` by `(claim_id, evidence_id)`, but the primary key also includes `relationship_type`. If one Claim/Evidence pair has more than one relationship type, their order is unspecified. Add `relationship_type` to the ordering.
+
+---
+
+# E. ACCEPTED DESIGN DECISIONS TO PRESERVE
+
+These were reviewed and should not be casually refactored away.
+
+## AD-01 — AI proposes; humans admit canonical truth
+
+AI extraction creates proposals only.
+
+Canonical Evidence admission requires the approved human review/application path.
+
+---
+
+## AD-02 — Evidence Coherence is analytical, not canonical
+
+Contradictions, gaps and questions do not modify Claims/Evidence/Metrics.
+
+---
+
+## AD-03 — Historical snapshots are immutable
+
+Later evidence produces a new snapshot.
+
+Never rewrite an old snapshot.
+
+---
+
+## AD-04 — Historical analytical findings remain immutable
+
+A later snapshot gets a new analysis.
+
+Do not mutate old findings to “resolved”.
+
+---
+
+## AD-05 — Analysis reads an exact snapshot
+
+Never reconstruct historical analysis input from live current state.
+
+---
+
+## AD-06 — Model calls stay outside database transactions
+
+Prepare/authorize work transactionally, then call the external model after commit.
+
+Completion is its own guarded transaction.
+
+---
+
+## AD-07 — Permanent Delete remains explicit and restrictive
+
+Do not introduce `ON DELETE CASCADE` merely to simplify Business deletion.
+
+---
+
+## AD-08 — Same-Business foreign keys are relational integrity, not authorization
+
+Keep the composite FK defence.
+
+Add real authorization separately before deployment.
+
+---
+
+## AD-09 — `strengthScore` means semantic-link confidence only
+
+Do not reinterpret it as evidence weight, truth probability or diagnostic confidence.
+
+---
+
+## AD-10 — Question context is not evidence
+
+Human answer is the evidentiary source.
+
+The question is interpretive context only.
+
+---
+
+# F. Milestone 4 Entry Checklist
+
+Before Milestone 4 diagnosis implementation begins, explicitly close or approve the following:
+
+- [ ] Decide whether an explicit continue/accept-gaps route is needed from `GAP_RESOLUTION_REQUIRED`. Ordinary Add Information from this state, with navigation and documentation, was completed 18 September 2026 (M4-01).
+- [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
+- [ ] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11).
+- [ ] Define one exact snapshot-bound diagnosis input contract.
+- [ ] Define diagnosis output as separate non-canonical analytical persistence.
+- [ ] Define human diagnosis approval as a separate immutable record.
+- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions.
+- [ ] Decide how diagnosis treats approximate/range numeric evidence.
+- [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight.
+- [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut.
+- [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests.
+- [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
+- [ ] Align written-number prompt/validator if the extractor contract changes during the milestone.
+- [ ] Do not implement production authentication/security work inside Milestone 4 unless explicitly scoped.
+
+---
+
+# G. Production Gate
+
+Baslon OS must not be described as public-production-ready until, at minimum:
+
+- [ ] Authentication exists.
+- [ ] Business/tenant authorization exists on every user-facing read/write.
+- [ ] Actor/reviewer identity is session-derived.
+- [ ] Permanent Delete is privileged and audited to a trusted identity.
+- [ ] Input/rate/AI-spend limits exist.
+- [ ] Structured logging/correlation exists.
+- [ ] Infrastructure errors are not hidden as 404s.
+- [ ] Raw errors are not placed in URLs.
+- [ ] PostgreSQL pool/query/transaction timeouts are explicitly configured.
+- [ ] AI execution/recovery strategy is appropriate to deployment runtime.
+- [ ] Backups and restore drills exist.
+- [ ] Migration/deployment rollback/forward-fix runbooks exist.
+- [ ] Privacy/retention/deletion obligations are defined.
+- [ ] Security headers/CSRF posture are explicitly reviewed.
+- [ ] CI automatically runs the required gates, including isolated PostgreSQL tests.
+
+---
+
+# H. Current Solution Architect Verdict
+
+The three code reviews did **not** reveal a need to rewrite Baslon OS.
+
+Milestone 3D successfully addressed the core command-boundary, concurrency, run-lifecycle, archive, review-currency, snapshot and relationship-semantics risks that would have been dangerous to carry into diagnosis.
+
+The remaining findings fall into three groups:
+
+1. **Milestone 4 architectural/product decisions** — especially `GAP_RESOLUTION_REQUIRED`, diagnosis snapshot boundaries and numeric/context semantics.
+2. **Production-readiness work** — authentication, authorization, observability, rate/cost controls, deployment/database operations and privacy.
+3. **Lower-priority backlog** — performance, schema tightening, UI polish and internal API cleanup.
+
+The next milestone should therefore proceed from the clean Milestone 3D checkpoint without reopening already-settled architecture unless new evidence demonstrates a defect.
+
+---
+
+# I. Code Verification Record — 18 September 2026
+
+**Scope:** Every RESOLVED entry (R-01 to R-15) plus the REVERIFY items, checked against the code at `44e2bc1` on branch `claude/milestone-4` (application code identical to `aeb00ef` on `main`).  
+**Method:** Code inspection of the changes since `3c77a48`, plus a full test run. No application code or data was modified.
+
+## Test results
+
+| Gate | Result |
+|---|---|
+| Unit + integration (`npm test`) | 21 files, 153 tests passed with `TEST_DATABASE_URL` unset. One guard unit test fails when it is set (B-29). |
+| PostgreSQL (`npm run test:postgres`) | 9 files, 57 tests passed against `baslon_os_test` (PostgreSQL 17.11) |
+| TypeScript | Passed |
+| ESLint | Passed |
+
+## Outcome by entry
+
+| Entry | Verification outcome |
+|---|---|
+| R-01 | Confirmed: one transaction in `AddInformationRepository.prepare`, Business → workflow → question lock order, model call after commit. |
+| R-02 | Confirmed: conditional stale recovery, reconciliation inside the failure boundary, 60 s timeout with 2 retries. |
+| R-03 | Confirmed for Add Information retry. Not applied to initial intake (see R-03 note and B-03). |
+| R-04 | Confirmed in the repository. One UI path remains (B-03). |
+| R-05 | Confirmed across strategic write paths; covered by the archive race suite. |
+| R-06 | Confirmed: both completion transactions lock and re-check the Business. |
+| R-07 | Confirmed. Preconditions must also take their own locks (see R-07 note). |
+| R-08 | Confirmed: coherence reads filter on `module = 'evidence_coherence'`. |
+| R-09 | Confirmed; minor ordering gap recorded as B-30. |
+| R-10, R-11 | Superseded status accepted; no contrary evidence found. |
+| R-12 | Confirmed. This behaviour predates Milestone 3D. |
+| R-13 | Confirmed for `strengthScore`; the other qualifiers are recorded as M4-11. |
+| R-14, R-15 | Confirmed: `evidence_coherence_v2` defines the semantics; v1 and v2 identities coexist. |
+| M4-01 | Found partially resolved (ordinary Add Information from `GAP_RESOLUTION_REQUIRED` works). |
+| M4-09 | Guard resolved; CI outstanding. |
+| B-01 | Confirmed still callable; tests only. |
+| B-03 | Corrected and reclassified to Milestone 4. |
+| B-22 | Confirmed still present. |
+| B-24 | Confirmed still present. |
+
+## New entries
+
+M4-11, B-28, B-29, B-30.

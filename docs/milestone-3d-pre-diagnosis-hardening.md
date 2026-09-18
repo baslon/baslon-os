@@ -33,6 +33,21 @@ transaction. Any persistence failure rolls the whole command back. Provider or
 validation failure preserves the source and terminal failed run; retry creates a
 new run against the same source and never creates a second question answer.
 
+Initial intake follows the same pattern. `InitialIntakeRepository.prepare` locks
+the Business and workflow, applies any remaining `START_INTAKE`,
+`SUBMIT_INTAKE` and `PROCESS_EVIDENCE` transitions and creates the `RUNNING`
+extraction run in one transaction. It refuses a new intake while the latest
+initial run succeeded and awaits review, or is still running and not yet stale,
+so an open review can never be silently invalidated. A failed run permits a new
+attempt, and a stale `RUNNING` run is terminally failed as `stale_run_recovered`
+first. Once evidence has been reviewed, the intake page and action direct users
+to Add Information instead.
+
+Ordinary (unprompted) Add Information is accepted from both `EVIDENCE_READY` and
+`GAP_RESOLUTION_REQUIRED`, so a Business whose analysis surfaced no answerable
+question is never left without a way forward. The workspace, Evidence State and
+Evidence Quality pages link to it in both states.
+
 ## Review and snapshots
 
 Only the latest successful extraction while the workflow is

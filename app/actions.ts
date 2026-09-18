@@ -4,14 +4,17 @@ import { redirect } from "next/navigation";
 import {
   getBusinessService,
   getAddInformationService,
-  getEvidenceExtractionService,
   getEvidenceReviewService,
   getFactAdmissionService,
-  getStrategyOrchestrator,
+  getInitialIntakeService,
   getEvidenceCoherenceService,
 } from "@/foundation";
 import { deriveHumanAuthority } from "@/domain/server-authority";
-import { evidenceExtractionFailureTarget } from "@/domain/intake-retry";
+import {
+  evidenceExtractionFailureTarget,
+  initialIntakeUnavailableTarget,
+} from "@/domain/intake-retry";
+import { InitialIntakeUnavailableError } from "@/domain/initial-intake";
 
 export async function addInformationAction(formData: FormData) {
   const businessId = text(formData, "businessId");
@@ -97,45 +100,18 @@ export async function runEvidenceExtractionAction(formData: FormData) {
   const businessId = text(formData, "businessId");
   const rawIntakeText = text(formData, "rawIntakeText");
   const sourceReference = optionalText(formData, "sourceReference");
-  const latestRun = await getEvidenceExtractionService().getLatestRun(businessId);
-  if (latestRun?.sourceSubmissionId) redirect(`/businesses/${businessId}/information`);
   let target: string;
   try {
-    const reviewService = getEvidenceReviewService();
-    const orchestrator = getStrategyOrchestrator();
-    let state = await reviewService.getWorkflowState(businessId);
-    if (state === "NEW") {
-      await orchestrator.transition({
-        businessId, event: "START_INTAKE", actorType: "human", actorId: "business-user",
-      });
-      state = "INTAKE_IN_PROGRESS";
-    }
-    if (state === "INTAKE_IN_PROGRESS") {
-      await orchestrator.transition({
-        businessId, event: "SUBMIT_INTAKE", actorType: "human", actorId: "business-user",
-      });
-      state = "INTAKE_READY";
-    }
-    if (state === "INTAKE_READY") {
-      await orchestrator.transition({
-        businessId, event: "PROCESS_EVIDENCE", actorType: "system",
-        actorId: "evidence-extraction-service",
-      });
-      state = "EVIDENCE_PROCESSING";
-    }
-    if (state !== "EVIDENCE_PROCESSING") {
-      throw new Error(`Cannot run intake extraction while workflow is ${state}`);
-    }
-    const extraction = await getEvidenceExtractionService().extract({
+    const extraction = await getInitialIntakeService().submit({
       businessId,
       rawIntakeText,
-      sourceType: "business_intake",
       sourceReference,
-      sourceMetadata: { suppliedBy: "human_ui" },
     });
     target = `/businesses/${businessId}/reviews/${extraction.run.id}`;
   } catch (error) {
-    target = evidenceExtractionFailureTarget(businessId, error);
+    target = error instanceof InitialIntakeUnavailableError
+      ? initialIntakeUnavailableTarget(businessId, error.availability)
+      : evidenceExtractionFailureTarget(businessId, error);
   }
   redirect(target);
 }
