@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, awaiting architectural review) resolves M4-02 and M4-10.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -398,7 +398,7 @@ Resolve as an explicit workflow/product decision before diagnosis UI depends on 
 ## M4-02 — Approximate and range values may become exact canonical numbers
 
 **Origin:** Claude MEDIUM.  
-**Status:** **RESOLVED — M4-02A (19 September 2026, awaiting architectural review)**
+**Status:** **RESOLVED — M4-02A (19 September 2026; merged in PR #3, migration `0006` applied to `baslon_os`)**
 
 ### Resolution — M4-02A
 Explicit precision model (`exact | approximate | estimate | range | unspecified`) for new canonical Evidence and Metrics, per the approved decision `docs/baslon-os-m4-02-numeric-precision-architecture-decision.md` (D1–D8):

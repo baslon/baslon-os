@@ -14,12 +14,16 @@ question) or explicitly continue with known gaps to `PHASE1_READY`. From
 diagnosis persistence or new database migration has been introduced. See
 `docs/milestone-4a-gap-resolution-phase1-entry.md`.
 
-M4-02A — Numeric Precision Foundation is implemented in the working tree on
-`claude/milestone-4` and awaiting architectural review. New canonical Evidence and
+M4-02A — Numeric Precision Foundation is merged (PR #3, `bba1d08`; implementation
+commit `4260071`). New canonical Evidence and
 Metrics carry explicit precision (`exact`, `approximate`, `estimate`, `range`,
 `unspecified`), ranges keep both bounds, and records that predate it read as
-`unspecified`. Migration `0006_numeric_precision` has been applied to
-`baslon_os_test` only; applying it to `baslon_os` needs explicit approval. See
+`unspecified`. Migration `0006_numeric_precision` is applied to both `baslon_os_test`
+and, with Product Owner approval on 19 September 2026, `baslon_os`. On `baslon_os`,
+all 45 Evidence and 18 Metric rows and all 6 snapshots were unchanged by the
+migration, and every row reads `unspecified`. Before rebuilding the Baslon Digital
+Business, run `evidence_extractor_v6`/`v7` against the live model on a synthetic
+Business (architectural review item H4). See
 `docs/milestone-4-m4-02a-numeric-precision.md`.
 
 ## Active Baslon Digital Business
