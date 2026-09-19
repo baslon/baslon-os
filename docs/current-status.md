@@ -21,17 +21,27 @@ Metrics carry explicit precision (`exact`, `approximate`, `estimate`, `range`,
 `unspecified`. Migration `0006_numeric_precision` is applied to both `baslon_os_test`
 and, with Product Owner approval on 19 September 2026, `baslon_os`. On `baslon_os`,
 all 45 Evidence and 18 Metric rows and all 6 snapshots were unchanged by the
-migration, and every row reads `unspecified`. Before rebuilding the Baslon Digital
-Business, run `evidence_extractor_v6`/`v7` against the live model on a synthetic
-Business (architectural review item H4). See
+migration, and every row reads `unspecified`. M4-02A remains complete. See
 `docs/milestone-4-m4-02a-numeric-precision.md`.
+
+H4 live-model validation is **COMPLETED — PASSED** (19 September 2026). The
+pre-rebuild live-model validation requirement is satisfied. `evidence_extractor_v6`/`v7`
+were run 7 times against `gpt-5.6-luna` using fictional input only, with no database
+rows created. Precision classification was correct in every run, and question
+context stayed non-evidentiary. One run was rejected, as designed, when the model
+turned "five-day" into 5 (backlog B-31). No prompt, model or code change followed.
+See `docs/m4-02a-h4-live-model-validation.md`.
+
+Not started: the Baslon Digital rebuild, archiving the current Baslon Digital
+Business, M4-02B, and Phase 1 Diagnosis.
 
 ## Active Baslon Digital Business
 
 - Business ID: `74230122-26a9-4268-92c0-0fe963d1ee8f`
 - Status: active
 - Current workflow state: `GAP_RESOLUTION_REQUIRED` (observed read-only on
-  17 September 2026)
+  19 September 2026)
+- Not archived and not rebuilt; the rebuild has not started.
 - Initial clean Snapshot 1: `b9f55eae-66f1-46d4-817a-c9b74f665873`
 - Current cumulative Snapshot 2: `2041745c-71c0-48ed-9c95-685f9f993b6a`
 - Snapshot 2 contains the approved clean rebuild source plus David's reviewed

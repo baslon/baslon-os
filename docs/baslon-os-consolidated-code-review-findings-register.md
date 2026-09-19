@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). The Baslon Digital rebuild, M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -414,6 +414,8 @@ Explicit precision model (`exact | approximate | estimate | range | unspecified`
 - **Tests:** unit (`tests/unit/numeric-precision.test.tsx`), integration (`tests/integration/evidence-review.test.ts`, including linked-precision review), Foundation scenarios (`tests/fixtures/foundation-precision-scenarios.ts`, PGlite and PostgreSQL), and PostgreSQL 17 (`tests/postgres/numeric-precision.postgres.test.ts`: defaults, CHECKs, enum, same-Business integrity, snapshot immutability, Permanent Delete).
 
 The active Baslon Digital Business values described below now read as `unspecified`. They are not retrofitted, and correcting them needs new human-authorised evidence. See `docs/milestone-4-m4-02a-numeric-precision.md`.
+
+**H4 pre-rebuild live-model validation: COMPLETED — PASSED (19 September 2026).** Seven synthetic-only calls to `gpt-5.6-luna` created no database rows. Precision was classified correctly in every run, question context stayed non-evidentiary, and linked Metric/Evidence precision matched. One run was rejected by the validator for a written-number violation (B-31). The pre-rebuild requirement is satisfied, and M4-02 remains resolved. The current Baslon Digital Business has not been archived or rebuilt. See `docs/m4-02a-h4-live-model-validation.md`.
 
 ### Risk
 Examples such as:
@@ -1220,6 +1222,16 @@ The test now stubs `TEST_DATABASE_URL` to empty for the no-argument check and re
 **Status:** **BACKLOG**
 
 `createCanonicalSnapshot` orders `claim_evidence` by `(claim_id, evidence_id)`, but the primary key also includes `relationship_type`. If one Claim/Evidence pair has more than one relationship type, their order is unspecified. Add `relationship_type` to the ordering.
+
+---
+
+## B-31 — Live model occasionally converts compound number words ("five-day" → 5)
+
+**Origin:** H4 live-model validation, 19 September 2026.\n**Status:** **BACKLOG — non-blocking observation**
+
+In one of three `evidence_extractor_v6` runs, `gpt-5.6-luna` proposed the value 5 from "a five-day week", although the prompt says compound number words stay qualitative. The deterministic validator rejected the run as designed, so no invalid value could reach review. Because validation is all-or-nothing (B-15), the run's correct items were discarded too, and a retry is needed.
+
+This does not reopen M4-02 or M4-10: the rule is aligned and enforced. The sample (7 calls) is too small to estimate a rate. If rejections become frequent in real use, consider adding "five-day" to the prompt's compound examples (a new prompt version) or revisiting B-15. See `docs/m4-02a-h4-live-model-validation.md`.
 
 ---
 
