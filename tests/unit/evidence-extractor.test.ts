@@ -22,6 +22,15 @@ function outputWith(mutator: (output: Record<string, unknown>) => void): unknown
   return output;
 }
 
+/** The fixture is approximate ("about £80k"); plain-number cases are exact. */
+function exactOutputWith(mutator: (output: Record<string, unknown>) => void): unknown {
+  return outputWith((output) => {
+    (output.evidence as Array<Record<string, unknown>>)[0].valuePrecision = "exact";
+    (output.metrics as Array<Record<string, unknown>>)[0].numericPrecision = "exact";
+    mutator(output);
+  });
+}
+
 describe("Evidence Extractor contracts and business rules", () => {
   it("accepts valid internally consistent proposals", () => {
     const output = validateEvidenceExtractionOutput(
@@ -109,6 +118,8 @@ describe("Evidence Extractor contracts and business rules", () => {
     const output = outputWith((value) => {
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       metric.numericValue = 12;
+      metric.numericPrecision = "exact";
+      metric.sourceEvidenceRef = null;
       metric.sourceExcerpt = "12 serious opportunities";
     });
     expect(() => validateEvidenceExtractionOutput(output, baslonMessyIntake))
@@ -117,7 +128,7 @@ describe("Evidence Extractor contracts and business rules", () => {
 
   it("normalizes currency symbols and thousands separators", () => {
     const rawIntakeText = "Revenue was explicitly recorded as £80,000.";
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = "£80,000";
@@ -129,7 +140,7 @@ describe("Evidence Extractor contracts and business rules", () => {
   });
 
   it("normalizes unambiguous k and currency-qualified m shorthand", () => {
-    const kOutput = outputWith((value) => {
+    const kOutput = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = "80k";
@@ -140,7 +151,7 @@ describe("Evidence Extractor contracts and business rules", () => {
     expect(() => validateEvidenceExtractionOutput(kOutput, "Revenue was 80k."))
       .not.toThrow();
 
-    const mOutput = outputWith((value) => {
+    const mOutput = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = "£1.8m";
@@ -153,7 +164,7 @@ describe("Evidence Extractor contracts and business rules", () => {
   });
 
   it("does not normalize ambiguous unqualified m shorthand", () => {
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = "1.8m";
@@ -166,7 +177,7 @@ describe("Evidence Extractor contracts and business rules", () => {
   });
 
   it("matches percentage values as explicitly written", () => {
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = "12.5%";
@@ -180,7 +191,7 @@ describe("Evidence Extractor contracts and business rules", () => {
 
   it("matches an unambiguous written number to its numeric form", () => {
     const source = "A referral partnership generated three enquiries.";
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = source;
@@ -196,7 +207,7 @@ describe("Evidence Extractor contracts and business rules", () => {
     "matches the multi-word written number %s to 25",
     (writtenNumber) => {
       const source = `The partnership generated ${writtenNumber} enquiries.`;
-      const output = outputWith((value) => {
+      const output = exactOutputWith((value) => {
         const item = (value.evidence as Array<Record<string, unknown>>)[0];
         const metric = (value.metrics as Array<Record<string, unknown>>)[0];
         item.sourceExcerpt = source;
@@ -211,7 +222,7 @@ describe("Evidence Extractor contracts and business rules", () => {
 
   it("rejects a numeric value not represented by the written number", () => {
     const source = "A referral partnership generated three enquiries.";
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = source;
@@ -226,7 +237,7 @@ describe("Evidence Extractor contracts and business rules", () => {
 
   it("does not convert an approximate written number into an exact value", () => {
     const source = "The partnership generated roughly three enquiries.";
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = source;
@@ -242,7 +253,7 @@ describe("Evidence Extractor contracts and business rules", () => {
   it("restricts written-number provenance to the cited source excerpt", () => {
     const rawIntake = "Three enquiries arrived. The referral partnership is new.";
     const citedExcerpt = "The referral partnership is new.";
-    const output = outputWith((value) => {
+    const output = exactOutputWith((value) => {
       const item = (value.evidence as Array<Record<string, unknown>>)[0];
       const metric = (value.metrics as Array<Record<string, unknown>>)[0];
       item.sourceExcerpt = citedExcerpt;
@@ -334,6 +345,7 @@ describe("Evidence Extractor contracts and business rules", () => {
       proposalRef: `evidence_gap_${index + 1}`,
       statement: `Reliable figures for ${gap} are unavailable.`,
       valueNumeric: null,
+      valuePrecision: null,
       valueText: null,
       unit: null,
       materiality: "medium",
@@ -380,11 +392,13 @@ describe("Evidence Extractor contracts and business rules", () => {
       ...output.evidence[0],
       statement: "The founder prefers a 30-hour working week.",
       valueNumeric: 30,
+      valuePrecision: "exact",
       valueText: "30-hour working week",
       unit: "hours per week",
       materiality: "medium",
       sourceExcerpt: "30-hour working week",
     };
+    output.metrics[0] = { ...output.metrics[0], numericValue: 30, numericPrecision: "exact", unit: "hours per week", sourceExcerpt: "30-hour working week" };
     expect(() => validateEvidenceExtractionOutput(output, `${baslonMessyIntake}\n${source}`))
       .not.toThrow();
   });
@@ -396,6 +410,7 @@ describe("Evidence Extractor contracts and business rules", () => {
       ...output.evidence[0],
       statement: "The founder would like roughly a three-day working week.",
       valueNumeric: null,
+      valuePrecision: null,
       valueText: "roughly a three-day working week",
       unit: null,
       materiality: "low",
@@ -428,7 +443,7 @@ describe("Evidence Extractor contracts and business rules", () => {
     })).toThrow();
   });
 
-  it("accepts only a strict, validated question context and selects v5 without changing v4", () => {
+  it("accepts only a strict, validated question context and selects v7 for question context", () => {
     const base = {
       businessId: "7daebfd8-e321-4a45-8e2c-532c05667f8f",
       rawIntakeText: "25 active clients",
@@ -457,8 +472,8 @@ describe("Evidence Extractor contracts and business rules", () => {
     })).toThrow();
     expect(evidenceExtractorPromptVersion(false)).toBe(EVIDENCE_EXTRACTOR_PROMPT_VERSION);
     expect(evidenceExtractorPromptVersion(true)).toBe(EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION);
-    expect(EVIDENCE_EXTRACTOR_PROMPT_VERSION).toBe("evidence_extractor_v4");
-    expect(EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION).toBe("evidence_extractor_v5");
+    expect(EVIDENCE_EXTRACTOR_PROMPT_VERSION).toBe("evidence_extractor_v6");
+    expect(EVIDENCE_EXTRACTOR_CONTEXT_PROMPT_VERSION).toBe("evidence_extractor_v7");
   });
 
   it("keeps question context interpretive and restricts provenance to the human answer", () => {
@@ -481,12 +496,12 @@ describe("Evidence Extractor contracts and business rules", () => {
     answerOutput.claims = [];
     answerOutput.relationships = [];
     answerOutput.evidence = [{
-      ...answerOutput.evidence[0], valueNumeric: 10, valueText: "10", unit: "clients",
+      ...answerOutput.evidence[0], valueNumeric: 10, valuePrecision: "exact", valueText: "10", unit: "clients",
       statement: "Ten clients came through referrals.", sourceExcerpt: "10",
       rawPayload: { excerpt: "10" },
     }];
     answerOutput.metrics = [{
-      ...answerOutput.metrics[0], numericValue: 10, unit: "clients",
+      ...answerOutput.metrics[0], numericValue: 10, numericPrecision: "exact", unit: "clients",
       metricKey: "referral_clients", metricLabel: "Referral clients", sourceExcerpt: "10",
     }];
     expect(validateEvidenceExtractionOutput(answerOutput, "10").metrics[0].numericValue).toBe(10);

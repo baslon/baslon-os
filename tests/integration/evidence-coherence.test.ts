@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { drizzle } from "drizzle-orm/pglite";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -53,19 +53,10 @@ describe("Evidence Coherence application flow", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    for (const name of [
-      "0000_furry_wolf_cub", "0001_evidence_extraction", "0002_evidence_review",
-      "0003_business_permanent_delete", "0004_spotty_harpoon", "0005_cloudy_calypso",
-    ]) {
-      const migration = await readFile(new URL(`../../drizzle/${name}.sql`, import.meta.url), "utf8");
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await client.exec(statement);
-      }
-    }
+    await applyMigrations(client);
     database = drizzle(client) as unknown as Database;
     foundation = new FoundationRepository(database);
-  });
+  }, 30_000);
 
   afterAll(async () => client.close());
 

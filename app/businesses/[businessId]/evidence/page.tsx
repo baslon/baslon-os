@@ -8,6 +8,7 @@ import { FactAdmissionAction } from "../../../fact-admission-action";
 import { EvidenceValue } from "../../../evidence-value";
 import { formatWorkspaceMetric } from "@/domain/workspace-metrics";
 import { acceptsAddInformation } from "@/domain/workflow";
+import { numericPrecisionLabel } from "@/domain/numeric-precision";
 
 export const dynamic = "force-dynamic";
 
@@ -113,13 +114,13 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
     </section> : null}
 
     {view === "evidence" ? <section><h2>Evidence</h2>{state.evidence.length > 0 ? <div className="record-list">{state.evidence.map((item) => <article className="record-card" key={item.id}>
-      <p className="eyebrow">Evidence</p><EvidenceValue statement={item.statement} valueNumeric={item.valueNumeric} valueText={item.valueText} unit={item.unit} />
+      <p className="eyebrow">Evidence</p><EvidenceValue statement={item.statement} valueNumeric={item.valueNumeric} valueText={item.valueText} unit={item.unit} valuePrecision={item.valuePrecision} valueLower={item.valueLower} valueUpper={item.valueUpper} />
       <p className="record-attributes"><span>{item.reliabilityLevel} reliability</span><span>{item.directnessLevel} directness</span><span>{item.materiality} materiality</span></p>
       <p className="muted">Source: {item.sourceReference ?? sourceLabel(item.sourceType)}{item.lineage ? ` · Human ${item.lineage.review.decision.toLowerCase()}` : ""}</p>
       <details><summary>Source provenance</summary><pre>{JSON.stringify(item.sourceMetadata, null, 2)}</pre></details>
     </article>)}</div> : <p className="empty-state">No Evidence has been recorded yet.</p>}</section> : null}
 
-    {view === "metrics" ? <section><h2>Metrics</h2>{state.metrics.length > 0 ? <div className="metric-grid">{state.metrics.map((item) => <article className="metric-card" key={item.id}><p>{item.metricLabel}</p><strong>{formatWorkspaceMetric(item)}</strong><span className="muted">{item.sourceEvidenceId ? "Source evidence available" : "No source evidence linked"}</span></article>)}</div> : <p className="empty-state">No metrics have been recorded yet.</p>}</section> : null}
+    {view === "metrics" ? <section><h2>Metrics</h2>{state.metrics.length > 0 ? <div className="metric-grid">{state.metrics.map((item) => <article className="metric-card" key={item.id}><p>{item.metricLabel}</p><strong>{formatWorkspaceMetric(item)}</strong><span className="muted">Precision: {numericPrecisionLabel(item.numericPrecision)}</span><span className="muted">{item.sourceEvidenceId ? "Source evidence available" : "No source evidence linked"}</span></article>)}</div> : <p className="empty-state">No metrics have been recorded yet.</p>}</section> : null}
 
     {view === "relationships" ? <section><h2>Relationships</h2>{state.relationships.length > 0 ? <div className="record-list">{state.relationships.map((item) => <article className="record-card relationship-card" key={`${item.claimId}-${item.evidenceId}-${item.relationshipType}`}>
       <div><p className="eyebrow">Claim</p><h3>{claimById.get(item.claimId)?.statement ?? "Claim unavailable"}</h3></div>

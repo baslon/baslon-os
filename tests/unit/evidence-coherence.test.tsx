@@ -63,7 +63,7 @@ describe("Evidence Coherence domain", () => {
     const projection = buildEvidenceCoherenceProjection(snapshot());
     expect(hashEvidenceCoherenceProjection(projection)).toBe(hashEvidenceCoherenceProjection(structuredClone(projection)));
     expect(hashEvidenceCoherenceProjection({ ...projection, snapshotVersion: 3 })).not.toBe(hashEvidenceCoherenceProjection(projection));
-    expect(EVIDENCE_COHERENCE_INPUT_VERSION).toBe("evidence_coherence_input_v1");
+    expect(EVIDENCE_COHERENCE_INPUT_VERSION).toBe("evidence_coherence_input_v2");
   });
 
   it("strictly validates the analytical contract and rejects diagnostic additions", () => {
@@ -101,7 +101,7 @@ describe("Evidence Coherence domain", () => {
   });
 
   it("keeps the v1 prompt constrained to evidence readiness", () => {
-    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v2");
+    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v3");
     expect(evidenceCoherencePrompt).toContain("not Claim truth probability");
     expect(evidenceCoherencePrompt).toContain("Analyse only the supplied snapshot projection");
     expect(evidenceCoherencePrompt).toContain("Do not diagnose");

@@ -15,7 +15,7 @@ describe("OpenAI Evidence Extractor configuration", () => {
     expect(model.getConfiguration()).toMatchObject({
       provider: "openai",
       model: "not_configured",
-      promptVersion: "evidence_extractor_v4",
+      promptVersion: "evidence_extractor_v6",
     });
     expect(model.getConfiguration({
       rawIntakeText: "25 active clients",
@@ -25,7 +25,7 @@ describe("OpenAI Evidence Extractor configuration", () => {
         questionId: "11111111-1111-4111-8111-111111111111",
         questionText: "How many active clients are there?",
       },
-    })).toMatchObject({ promptVersion: "evidence_extractor_v5" });
+    })).toMatchObject({ promptVersion: "evidence_extractor_v7" });
     await expect(model.extract({
       rawIntakeText: baslonMessyIntake,
       sourceMetadata: {},

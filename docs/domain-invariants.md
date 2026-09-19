@@ -35,3 +35,27 @@ or converted into strategic confidence without a separately approved, versioned
 rule. Historical values retain this definition permanently. Existing immutable
 snapshots must not be rewritten, and current scores must not be reinterpreted as
 evidence credibility. Any future change in meaning requires explicit versioning.
+
+## Numeric precision
+
+Every canonical Evidence value and Metric has an explicit precision: `exact`,
+`approximate`, `estimate`, `range` or `unspecified`. Storing a number never
+makes it exact. A value is `exact` only when its source and human review support
+it.
+
+- A range keeps both bounds and has no single value. It is never collapsed to a
+  bound, midpoint or average.
+- `unspecified` means precision was never established. Records that predate
+  M4-02A and qualitative Evidence are `unspecified`. It must never be treated as
+  `exact`.
+- Historical records are not retrofitted and historical snapshots are not
+  rewritten. Establishing better precision for an old value needs new
+  human-authorised evidence.
+- A Metric taken from numeric Evidence has the same precision as that Evidence,
+  at extraction and after human review. Their values may differ.
+- Precision is separate from reliability, directness, recency, materiality and
+  `strengthScore`.
+- A calculation cannot be more precise than its least-precise material input
+  (for example, approximate × exact = approximate). Ranges propagate bounds.
+- The database enforces the shape: range bounds are ordered and exclusive of a
+  single value, and other precisions have no bounds.

@@ -3,6 +3,7 @@ import {
   EVIDENCE_COHERENCE_INPUT_VERSION,
   type EvidenceCoherenceProjection,
 } from "@/domain/evidence-coherence";
+import { readNumericPrecision } from "@/domain/numeric-precision";
 
 type SnapshotRecord = Record<string, unknown>;
 
@@ -49,6 +50,10 @@ export function buildEvidenceCoherenceProjection(snapshot: {
       id: text(item.id),
       statement: text(item.statement),
       valueNumeric: nullableText(item.valueNumeric),
+      // Snapshots written before M4-02A carry no precision and read as unspecified.
+      valuePrecision: readNumericPrecision(item.valuePrecision),
+      valueLower: nullableText(item.valueLower),
+      valueUpper: nullableText(item.valueUpper),
       valueText: nullableText(item.valueText),
       unit: nullableText(item.unit),
       periodStart: nullableText(item.periodStart),
@@ -64,7 +69,10 @@ export function buildEvidenceCoherenceProjection(snapshot: {
       id: text(item.id),
       metricKey: text(item.metricKey),
       metricLabel: text(item.metricLabel),
-      numericValue: text(item.numericValue),
+      numericValue: nullableText(item.numericValue),
+      numericPrecision: readNumericPrecision(item.numericPrecision),
+      numericLower: nullableText(item.numericLower),
+      numericUpper: nullableText(item.numericUpper),
       unit: text(item.unit),
       periodStart: nullableText(item.periodStart),
       periodEnd: nullableText(item.periodEnd),

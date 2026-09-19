@@ -22,7 +22,13 @@ describe("PostgreSQL test database guard", () => {
   it("accepts only the exact test database name", () => {
     const value = "postgresql://test-user:test-password@localhost:5432/baslon_os_test";
     expect(requirePostgresTestDatabaseUrl(value)).toBe(value);
-    expect(() => requirePostgresTestDatabaseUrl()).toThrow("TEST_DATABASE_URL");
+    // Independent of the caller's environment, which sets TEST_DATABASE_URL for the PostgreSQL suite.
+    vi.stubEnv("TEST_DATABASE_URL", "");
+    try {
+      expect(() => requirePostgresTestDatabaseUrl()).toThrow("TEST_DATABASE_URL");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("rejects a connection that resolves to another database", async () => {

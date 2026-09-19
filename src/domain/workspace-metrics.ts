@@ -1,8 +1,13 @@
+import type { NumericPrecision } from "@/domain/numeric-precision";
+
 export type WorkspaceMetricPresentation = {
   id: string;
   metricKey: string;
   metricLabel: string;
-  numericValue: string;
+  numericValue: string | null;
+  numericPrecision?: NumericPrecision;
+  numericLower?: string | null;
+  numericUpper?: string | null;
   unit: string;
   periodStart: string | null;
   periodEnd: string | null;
@@ -30,20 +35,52 @@ export function selectWorkspaceKeyMetrics<T extends WorkspaceMetricPresentation>
     .map(({ metric }) => metric);
 }
 
-export function formatWorkspaceMetric(metric: Pick<WorkspaceMetricPresentation, "numericValue" | "unit">) {
-  const value = Number(metric.numericValue);
-  const currencyUnit = metric.unit.match(/^\s*(?:GBP|£|pounds?)(?:\s*(?:per|\/)\s*(month|year|week|day))?\s*$/i);
+const currencyUnitPattern = /^\s*(?:GBP|£|pounds?)(?:\s*(?:per|\/)\s*(month|year|week|day))?\s*$/i;
+const percentUnitPattern = /percent|percentage|%/i;
+const gbp = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+function formatAmount(value: number, unit: string) {
+  const currencyUnit = unit.match(currencyUnitPattern);
   if (currencyUnit) {
-    const amount = new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(value);
-    return currencyUnit[1] ? `${amount} / ${currencyUnit[1].toLowerCase()}` : amount;
+    return currencyUnit[1] ? `${gbp.format(value)} / ${currencyUnit[1].toLowerCase()}` : gbp.format(value);
   }
-  if (/percent|percentage|%/i.test(metric.unit)) return `${value.toLocaleString("en-GB")}%`;
-  return `${value.toLocaleString("en-GB")} ${metric.unit}`.trim();
+  if (percentUnitPattern.test(unit)) return `${value.toLocaleString("en-GB")}%`;
+  return `${value.toLocaleString("en-GB")} ${unit}`.trim();
+}
+
+function formatRange(lower: number, upper: number, unit: string) {
+  const currencyUnit = unit.match(currencyUnitPattern);
+  if (currencyUnit) {
+    const range = `${gbp.format(lower)}–${gbp.format(upper)}`;
+    return currencyUnit[1] ? `${range} / ${currencyUnit[1].toLowerCase()}` : range;
+  }
+  const bounds = `${lower.toLocaleString("en-GB")}–${upper.toLocaleString("en-GB")}`;
+  if (percentUnitPattern.test(unit)) return `${bounds}%`;
+  return `${bounds} ${unit}`.trim();
+}
+
+/**
+ * Formats a numeric value without implying more precision than it carries:
+ * ranges keep both bounds, approximate values read "about …" and estimates are
+ * labelled. Exact and unspecified values show the stored number; unspecified
+ * precision is labelled separately wherever precision matters.
+ */
+export function formatWorkspaceMetric(metric: Pick<WorkspaceMetricPresentation, "numericValue" | "unit">
+  & Partial<Pick<WorkspaceMetricPresentation, "numericPrecision" | "numericLower" | "numericUpper">>) {
+  const precision = metric.numericPrecision ?? "unspecified";
+  if (precision === "range" && metric.numericLower != null && metric.numericUpper != null) {
+    return formatRange(Number(metric.numericLower), Number(metric.numericUpper), metric.unit);
+  }
+  if (metric.numericValue === null) return "Value not recorded";
+  const amount = formatAmount(Number(metric.numericValue), metric.unit);
+  if (precision === "approximate") return `about ${amount}`;
+  if (precision === "estimate") return `${amount} (estimate)`;
+  return amount;
 }
 
 function formatDate(value: string) {

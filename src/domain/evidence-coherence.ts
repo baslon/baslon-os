@@ -1,3 +1,5 @@
+import type { NumericPrecision } from "@/domain/numeric-precision";
+
 export const analysisRunStatuses = ["RUNNING", "SUCCEEDED", "FAILED"] as const;
 
 export const evidenceQualityAreas = [
@@ -26,7 +28,7 @@ export type AnalysisFindingReferenceRole =
 
 export const EVIDENCE_COHERENCE_MODULE = "evidence_coherence";
 export const EVIDENCE_COHERENCE_RUN_TYPE = "snapshot_analysis";
-export const EVIDENCE_COHERENCE_INPUT_VERSION = "evidence_coherence_input_v1";
+export const EVIDENCE_COHERENCE_INPUT_VERSION = "evidence_coherence_input_v2";
 export const MAX_SURFACED_QUESTIONS = 3;
 
 export type EvidenceCoherenceProjection = {
@@ -44,6 +46,10 @@ export type EvidenceCoherenceProjection = {
     id: string;
     statement: string;
     valueNumeric: string | null;
+    /** How precisely the number is known; `unspecified` for records that predate precision. */
+    valuePrecision: NumericPrecision;
+    valueLower: string | null;
+    valueUpper: string | null;
     valueText: string | null;
     unit: string | null;
     periodStart: string | null;
@@ -59,7 +65,10 @@ export type EvidenceCoherenceProjection = {
     id: string;
     metricKey: string;
     metricLabel: string;
-    numericValue: string;
+    numericValue: string | null;
+    numericPrecision: NumericPrecision;
+    numericLower: string | null;
+    numericUpper: string | null;
     unit: string;
     periodStart: string | null;
     periodEnd: string | null;
