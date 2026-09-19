@@ -174,6 +174,25 @@ Do not manually alter production database structure outside the migration system
 
 ---
 
+
+## 9A. PostgreSQL test database safety
+
+Automated PostgreSQL tests, schema experiments and destructive test operations must use the dedicated test database:
+
+`baslon_os_test`
+
+Do not run test migrations, destructive test setup, schema-reset logic or integration-test fixtures against the main `baslon_os` database.
+
+Any PostgreSQL test helper or integration-test bootstrap must preserve both safeguards:
+
+1. the repository's shared test-database guard; and
+2. an explicit runtime verification using `current_database()` before destructive or migration-related test setup proceeds.
+
+If `current_database()` does not resolve to `baslon_os_test`, the test/setup operation must fail safely.
+
+Do not migrate, reset, truncate, drop, recreate or otherwise structurally modify the main `baslon_os` database unless the Product Owner has explicitly instructed or approved that operation.
+
+
 ## 10. Testing
 
 Critical domain behaviour must have automated tests.
@@ -275,6 +294,27 @@ Before completing work:
 Do not rewrite Git history unless explicitly instructed.
 
 ---
+
+
+## 14A. Commit and push authority
+
+Do not create a Git commit unless explicitly instructed to do so by the Product Owner.
+
+Do not push commits, branches, tags or other Git references to a remote unless explicitly instructed to do so by the Product Owner.
+
+When the Product Owner supplies an exact commit message, use that message exactly unless instructed otherwise.
+
+Do not add:
+
+- `Co-Authored-By` trailers;
+- Claude attribution;
+- AI attribution;
+- assistant attribution;
+- generated-by trailers;
+- other unrequested commit-message metadata.
+
+Implementation completion does not imply permission to commit or push.
+
 
 ## 15. Baslon Digital
 
