@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { drizzle } from "drizzle-orm/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db/client";
@@ -24,6 +24,7 @@ import {
   baslonEvidence,
   baslonMetric,
 } from "../fixtures/baslon-business";
+import { foundationPrecisionScenarios } from "../fixtures/foundation-precision-scenarios";
 
 describe("Milestone 1 PostgreSQL foundation", () => {
   let client: PGlite;
@@ -32,14 +33,7 @@ describe("Milestone 1 PostgreSQL foundation", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    const migration = await readFile(
-      new URL("../../drizzle/0000_furry_wolf_cub.sql", import.meta.url),
-      "utf8",
-    );
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
-    }
+    await applyMigrations(client);
     database = drizzle(client, { schema }) as unknown as Database;
     repository = new FoundationRepository(database);
   }, 30_000);
@@ -47,6 +41,8 @@ describe("Milestone 1 PostgreSQL foundation", () => {
   afterAll(async () => {
     await client.close();
   });
+
+  foundationPrecisionScenarios(() => repository);
 
   it("persists Baslon #001, provenance, relations, metrics, and immutable snapshots", async () => {
     const business = await repository.createBusiness(baslonBusiness);

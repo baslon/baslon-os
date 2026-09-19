@@ -1,8 +1,10 @@
 import {
   claimEvidenceProposalSchema,
   claimProposalSchema,
-  evidenceProposalSchema,
-  metricProposalSchema,
+  readStoredEvidenceProposal,
+  readStoredMetricProposal,
+  reviewableEvidenceProposalSchema,
+  reviewableMetricProposalSchema,
 } from "@/ai/evidence-extractor/contracts";
 import {
   EvidenceExtractionBusinessRuleError,
@@ -56,6 +58,34 @@ function acceptedReviewForRef(
     throw new Error(`${expectedType} dependency ${proposalRef} must be accepted first`);
   }
   return review;
+}
+
+/**
+ * Human-reviewed values and range bounds must still be stated in the original
+ * source excerpt. The precision classification itself is the reviewer's
+ * judgement and is not wording-checked.
+ */
+/**
+ * The precision the linked source Evidence ended human review with: its
+ * correction if corrected, otherwise its stored proposal. Qualitative Evidence
+ * (no value and no range) carries no numeric precision to match.
+ */
+function reviewedSourceEvidencePrecision(details: ReviewDetails, evidenceRef: string) {
+  const review = acceptedReviewForRef(details, evidenceRef, "evidence");
+  const proposal = details.proposals.find((item) => item.id === review.proposalId)!;
+  const evidence = readStoredEvidenceProposal(review.reviewedPayload ?? proposal.structuredPayload);
+  const numeric = evidence.valueNumeric !== null || evidence.valueLower !== null;
+  return numeric ? evidence.valuePrecision ?? "unspecified" : null;
+}
+
+function requireGroundedNumbers(proposalRef: string, numbers: Array<number | null>, sourceExcerpt: string) {
+  for (const value of numbers) {
+    if (value !== null && !numericValueIsExplicit(value, sourceExcerpt)) {
+      throw new EvidenceExtractionBusinessRuleError([
+        `${proposalRef} reviewed numeric value ${value} is not explicitly present in its source excerpt`,
+      ]);
+    }
+  }
 }
 
 function requireMaterialCorrection(original: unknown, reviewed: unknown): void {
@@ -139,22 +169,19 @@ export class EvidenceReviewService {
         },
       };
     } else if (proposal.proposalType === "evidence" && applies) {
-      const original = evidenceProposalSchema.parse(proposal.structuredPayload);
+      const original = readStoredEvidenceProposal(proposal.structuredPayload);
       const reviewed = parsed.decision === "CORRECTED"
-        ? evidenceProposalSchema.parse({
+        ? reviewableEvidenceProposalSchema.parse({
           ...original,
           ...evidenceCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
       if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
-      if (
-        reviewed.valueNumeric !== null
-        && !numericValueIsExplicit(reviewed.valueNumeric, original.sourceExcerpt)
-      ) {
-        throw new EvidenceExtractionBusinessRuleError([
-          `${proposal.proposalRef} corrected numeric value is not explicitly present in its source excerpt`,
-        ]);
-      }
+      requireGroundedNumbers(
+        proposal.proposalRef,
+        [reviewed.valueNumeric, reviewed.valueLower, reviewed.valueUpper],
+        original.sourceExcerpt,
+      );
       reviewedPayload = parsed.decision === "CORRECTED" ? reviewed : null;
       canonical = {
         type: "evidence",
@@ -163,6 +190,9 @@ export class EvidenceReviewService {
           evidenceType: reviewed.evidenceType,
           statement: reviewed.statement,
           valueNumeric: reviewed.valueNumeric?.toString(),
+          valuePrecision: reviewed.valuePrecision ?? "unspecified",
+          valueLower: reviewed.valueLower?.toString(),
+          valueUpper: reviewed.valueUpper?.toString(),
           valueText: reviewed.valueText,
           unit: reviewed.unit,
           periodStart: reviewed.periodStart,
@@ -188,22 +218,32 @@ export class EvidenceReviewService {
         },
       };
     } else if (proposal.proposalType === "metric" && applies) {
-      const original = metricProposalSchema.parse(proposal.structuredPayload);
+      const original = readStoredMetricProposal(proposal.structuredPayload);
       const reviewed = parsed.decision === "CORRECTED"
-        ? metricProposalSchema.parse({
+        ? reviewableMetricProposalSchema.parse({
           ...original,
           ...metricCorrectionSchema.parse(parsed.correctedPayload),
         })
         : original;
       if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
-      if (!numericValueIsExplicit(reviewed.numericValue, original.sourceExcerpt)) {
-        throw new EvidenceExtractionBusinessRuleError([
-          `${proposal.proposalRef} corrected numeric value is not explicitly present in its source excerpt`,
-        ]);
-      }
+      requireGroundedNumbers(
+        proposal.proposalRef,
+        [reviewed.numericValue, reviewed.numericLower, reviewed.numericUpper],
+        original.sourceExcerpt,
+      );
       const sourceEvidenceId = reviewed.sourceEvidenceRef
         ? acceptedReviewForRef(details, reviewed.sourceEvidenceRef, "evidence").canonicalEntityId!
         : undefined;
+      // A Metric taken from numeric Evidence must not persist a different
+      // precision from that Evidence; values may still differ.
+      const sourcePrecision = reviewed.sourceEvidenceRef
+        ? reviewedSourceEvidencePrecision(details, reviewed.sourceEvidenceRef)
+        : null;
+      if (sourcePrecision !== null && sourcePrecision !== reviewed.numericPrecision) {
+        throw new EvidenceExtractionBusinessRuleError([
+          `${proposal.proposalRef} precision ${reviewed.numericPrecision} must match its source Evidence ${reviewed.sourceEvidenceRef} precision ${sourcePrecision}`,
+        ]);
+      }
       reviewedPayload = parsed.decision === "CORRECTED" ? reviewed : null;
       canonical = {
         type: "metric",
@@ -211,7 +251,10 @@ export class EvidenceReviewService {
           businessId: parsed.businessId,
           metricKey: reviewed.metricKey,
           metricLabel: reviewed.metricLabel,
-          numericValue: reviewed.numericValue.toString(),
+          numericValue: reviewed.numericValue?.toString(),
+          numericPrecision: reviewed.numericPrecision,
+          numericLower: reviewed.numericLower?.toString(),
+          numericUpper: reviewed.numericUpper?.toString(),
           unit: reviewed.unit,
           periodStart: reviewed.periodStart,
           periodEnd: reviewed.periodEnd,

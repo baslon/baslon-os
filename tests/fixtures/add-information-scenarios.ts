@@ -384,6 +384,7 @@ export function addInformationScenarios(getDatabase: () => Database) {
       evidence: [{
         proposalRef: "evidence_1", evidenceType: "management_record",
         statement: "The business currently serves 25 active clients.", valueNumeric: 25,
+        valuePrecision: "exact", valueLower: null, valueUpper: null,
         valueText: "25 active clients", unit: "clients", periodStart: null, periodEnd: null,
         sourceType: "additional_text", sourceReference: null,
         sourceMetadata: { suppliedBy: "business-user", notes: null },
@@ -397,7 +398,7 @@ export function addInformationScenarios(getDatabase: () => Database) {
     const result = await c.service.submit({
       businessId: c.business.id, questionId: question.id, rawText: "25 active clients",
     });
-    expect(result.run.promptVersion).toBe("evidence_extractor_v5");
+    expect(result.run.promptVersion).toBe("evidence_extractor_v7");
     expect(result.run.sourceMetadata).toEqual({
       suppliedBy: "human_ui",
       interpretiveContext: {
@@ -467,12 +468,12 @@ export function addInformationScenarios(getDatabase: () => Database) {
     const failed = (await c.runs.getLatestRun(c.business.id))!;
     const sourcesBefore = await c.sources.listForBusiness(c.business.id);
     const commandBeforeRetry = await commandState(c);
-    expect(failed.promptVersion).toBe("evidence_extractor_v5");
+    expect(failed.promptVersion).toBe("evidence_extractor_v7");
     c.fail(false);
     c.output({ claims: [], evidence: [], metrics: [], relationships: [] });
     const retried = await c.service.retry({ businessId: c.business.id, runId: failed.id });
     expect(retried.run.sourceSubmissionId).toBe(failed.sourceSubmissionId);
-    expect(retried.run.promptVersion).toBe("evidence_extractor_v5");
+    expect(retried.run.promptVersion).toBe("evidence_extractor_v7");
     expect(await c.sources.listForBusiness(c.business.id)).toEqual(sourcesBefore);
     const commandAfterRetry = await commandState(c);
     expect(commandAfterRetry.questionLinks).toEqual(commandBeforeRetry.questionLinks);

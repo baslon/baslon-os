@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -35,6 +35,8 @@ import {
   baslonBusiness,
   baslonExtractionOutput,
   baslonMessyIntake,
+  legacyEvidenceProposal,
+  legacyMetricProposal,
 } from "../fixtures/baslon-business";
 
 class FakeModel implements EvidenceExtractionModel {
@@ -58,19 +60,7 @@ describe("Milestone 2B Evidence Review", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    for (const migrationPath of [
-      "../../drizzle/0000_furry_wolf_cub.sql",
-      "../../drizzle/0001_evidence_extraction.sql",
-      "../../drizzle/0002_evidence_review.sql",
-      "../../drizzle/0003_business_permanent_delete.sql",
-      "../../drizzle/0004_spotty_harpoon.sql",
-    ]) {
-      const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await client.exec(statement);
-      }
-    }
+    await applyMigrations(client);
     database = drizzle(client, { schema: await import("@/db/schema") }) as unknown as Database;
     foundationRepository = new FoundationRepository(database);
     extractionRepository = new EvidenceExtractionRepository(database);
@@ -81,7 +71,10 @@ describe("Milestone 2B Evidence Review", () => {
     await client.close();
   });
 
-  async function extractedBusiness(output: EvidenceExtractionOutput = baslonExtractionOutput) {
+  async function extractedBusiness(
+    output: EvidenceExtractionOutput = baslonExtractionOutput,
+    rawIntakeText = baslonMessyIntake,
+  ) {
     const business = await new BusinessService(foundationRepository).create({
       ...baslonBusiness,
       name: `${baslonBusiness.name} ${crypto.randomUUID()}`,
@@ -95,7 +88,7 @@ describe("Milestone 2B Evidence Review", () => {
       new FakeModel({ output, rawOutput: output }),
     ).extract({
       businessId: business.id,
-      rawIntakeText: baslonMessyIntake,
+      rawIntakeText,
       sourceType: "business_intake",
       sourceReference: "Baslon #001 review fixture",
     });
@@ -556,6 +549,225 @@ describe("Milestone 2B Evidence Review", () => {
     expect(reviews).toHaveLength(7);
     expect(reviews.find((review) => review.decision === "UNRESOLVED")?.canonicalEntityId)
       .toBeNull();
+  });
+
+  it("reviews, corrects and persists numeric precision and range bounds into the snapshot", async () => {
+    const rawIntakeText = "Revenue was about £80k over the last year. We run 10–15 projects a year, sometimes 20.";
+    const output = structuredClone(baslonExtractionOutput);
+    output.claims = [];
+    output.relationships = [];
+    output.evidence.push({
+      ...output.evidence[0], proposalRef: "evidence_2",
+      statement: "The business runs 10–15 projects a year.", valueText: "10–15 projects a year", unit: "projects",
+      valueNumeric: null, valuePrecision: "range", valueLower: 10, valueUpper: 15,
+      sourceExcerpt: "10–15 projects a year, sometimes 20", rawPayload: { excerpt: "10–15 projects a year" },
+    });
+    output.metrics.push({
+      ...output.metrics[0], proposalRef: "metric_2", metricKey: "annual_projects", metricLabel: "Projects per year",
+      unit: "projects", numericValue: null, numericPrecision: "range", numericLower: 10, numericUpper: 15,
+      sourceEvidenceRef: "evidence_2", sourceExcerpt: "10–15 projects a year, sometimes 20",
+    });
+    const setup = await extractedBusiness(output, rawIntakeText);
+    const { session, proposals } = await startReview(setup);
+    const review = (proposalRef: string, decision: "ACCEPTED" | "CORRECTED", correctedPayload?: Record<string, unknown>) =>
+      setup.reviewService.reviewProposal({
+        businessId: setup.business.id, reviewSessionId: session.id,
+        proposalId: proposals.get(proposalRef)!.id, reviewerId: "David", decision, correctedPayload,
+      });
+
+    // The reviewer sees the proposed precision on the stored proposal.
+    expect(proposals.get("evidence_1")!.structuredPayload).toMatchObject({ valuePrecision: "approximate" });
+    expect(proposals.get("evidence_2")!.structuredPayload).toMatchObject({ valuePrecision: "range", valueLower: 10, valueUpper: 15 });
+
+    // Corrected numbers must still be grounded, and ranges must stay well-formed.
+    await expect(review("evidence_2", "CORRECTED", { valueUpper: 25 })).rejects.toThrow("not explicitly present");
+    await expect(review("evidence_2", "CORRECTED", { valueLower: 20, valueUpper: 15 })).rejects.toThrow();
+    await expect(review("evidence_2", "CORRECTED", { valuePrecision: "exact" })).rejects.toThrow();
+
+    // A human may change precision without a wording check, and correct range bounds.
+    const estimated = await review("evidence_1", "CORRECTED", { valuePrecision: "estimate" });
+    const corrected = await review("evidence_2", "CORRECTED", { valueUpper: 20 });
+    const metric1 = await review("metric_1", "CORRECTED", { numericPrecision: "estimate" });
+    const metric2 = await review("metric_2", "CORRECTED", { numericUpper: 20 });
+
+    const [estimate] = await database.select().from(evidence).where(eq(evidence.id, estimated.canonicalEntityId!));
+    const [range] = await database.select().from(evidence).where(eq(evidence.id, corrected.canonicalEntityId!));
+    expect(estimate).toMatchObject({ valueNumeric: "80000.0000", valuePrecision: "estimate", valueLower: null, valueUpper: null });
+    expect(range).toMatchObject({ valueNumeric: null, valuePrecision: "range", valueLower: "10.0000", valueUpper: "20.0000" });
+    const [estimateMetric] = await database.select().from(metrics).where(eq(metrics.id, metric1.canonicalEntityId!));
+    const [rangeMetric] = await database.select().from(metrics).where(eq(metrics.id, metric2.canonicalEntityId!));
+    expect(estimateMetric).toMatchObject({ numericValue: "80000.0000", numericPrecision: "estimate" });
+    expect(rangeMetric).toMatchObject({
+      numericValue: null, numericPrecision: "range", numericLower: "10.0000", numericUpper: "20.0000",
+      sourceEvidenceId: range.id,
+    });
+
+    const { snapshot } = await setup.reviewService.completeReview({
+      businessId: setup.business.id, reviewSessionId: session.id, reviewerId: "David",
+    });
+    const data = snapshot.snapshotData as { evidence: Array<Record<string, unknown>>; metrics: Array<Record<string, unknown>> };
+    expect(data.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: estimate.id, valuePrecision: "estimate" }),
+      expect.objectContaining({ id: range.id, valueNumeric: null, valuePrecision: "range", valueLower: "10.0000", valueUpper: "20.0000" }),
+    ]));
+    expect(data.metrics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: rangeMetric.id, numericValue: null, numericPrecision: "range", numericUpper: "20.0000" }),
+    ]));
+  });
+
+  describe("linked Evidence and Metric precision at human review (H1)", () => {
+    const rawIntakeText = [
+      "Revenue was about £80k over the last year.",
+      "We run 10–15 projects a year, sometimes 20.",
+      "We have 12 staff.",
+      "We do not track churn.",
+    ].join(" ");
+
+    /** Linked pairs: approximate (1), range (2), exact (3); an unlinked Metric (4); a Metric on qualitative Evidence (5). */
+    function linkedOutput(): EvidenceExtractionOutput {
+      const output = structuredClone(baslonExtractionOutput);
+      const [baseEvidence] = output.evidence;
+      const [baseMetric] = output.metrics;
+      output.claims = [];
+      output.relationships = [];
+      output.evidence.push(
+        {
+          ...baseEvidence, proposalRef: "evidence_2", statement: "The business runs 10–15 projects a year.",
+          valueText: "10–15 projects", unit: "projects", valueNumeric: null, valuePrecision: "range",
+          valueLower: 10, valueUpper: 15, sourceExcerpt: "10–15 projects a year, sometimes 20",
+        },
+        {
+          ...baseEvidence, proposalRef: "evidence_3", statement: "The business has 12 staff.",
+          valueText: "12 staff", unit: "staff", valueNumeric: 12, valuePrecision: "exact",
+          valueLower: null, valueUpper: null, sourceExcerpt: "We have 12 staff.",
+        },
+        {
+          ...baseEvidence, proposalRef: "evidence_5", statement: "Churn is not tracked.",
+          valueText: null, unit: null, valueNumeric: null, valuePrecision: null,
+          valueLower: null, valueUpper: null, sourceExcerpt: "We do not track churn.",
+        },
+      );
+      output.metrics.push(
+        {
+          ...baseMetric, proposalRef: "metric_2", metricKey: "annual_projects", metricLabel: "Projects per year",
+          unit: "projects", numericValue: null, numericPrecision: "range", numericLower: 10, numericUpper: 15,
+          sourceEvidenceRef: "evidence_2", sourceExcerpt: "10–15 projects a year, sometimes 20",
+        },
+        {
+          ...baseMetric, proposalRef: "metric_3", metricKey: "staff", metricLabel: "Staff",
+          unit: "staff", numericValue: 12, numericPrecision: "exact", numericLower: null, numericUpper: null,
+          sourceEvidenceRef: "evidence_3", sourceExcerpt: "We have 12 staff.",
+        },
+        {
+          ...baseMetric, proposalRef: "metric_4", metricKey: "headcount", metricLabel: "Headcount",
+          unit: "staff", numericValue: 12, numericPrecision: "exact", numericLower: null, numericUpper: null,
+          sourceEvidenceRef: null, sourceExcerpt: "We have 12 staff.",
+        },
+        {
+          ...baseMetric, proposalRef: "metric_5", metricKey: "staff_on_churn", metricLabel: "Staff (churn context)",
+          unit: "staff", numericValue: 12, numericPrecision: "exact", numericLower: null, numericUpper: null,
+          sourceEvidenceRef: "evidence_5", sourceExcerpt: "We have 12 staff.",
+        },
+      );
+      return output;
+    }
+
+    async function linkedReview() {
+      const setup = await extractedBusiness(linkedOutput(), rawIntakeText);
+      const { session, proposals } = await startReview(setup);
+      const review = (proposalRef: string, decision: "ACCEPTED" | "CORRECTED", correctedPayload?: Record<string, unknown>) =>
+        setup.reviewService.reviewProposal({
+          businessId: setup.business.id, reviewSessionId: session.id,
+          proposalId: proposals.get(proposalRef)!.id, reviewerId: "David", decision, correctedPayload,
+        });
+      const canonicalMetric = async (canonicalEntityId: string | null) =>
+        (await database.select().from(metrics).where(eq(metrics.id, canonicalEntityId!)))[0];
+      const canonicalEvidence = async (canonicalEntityId: string | null) =>
+        (await database.select().from(evidence).where(eq(evidence.id, canonicalEntityId!)))[0];
+      return { review, canonicalMetric, canonicalEvidence };
+    }
+
+    it("accepts a linked Metric whose precision matches its Evidence", async () => {
+      const { review, canonicalMetric, canonicalEvidence } = await linkedReview();
+      const item = await review("evidence_1", "ACCEPTED");
+      const metric = await review("metric_1", "ACCEPTED");
+      expect((await canonicalEvidence(item.canonicalEntityId)).valuePrecision).toBe("approximate");
+      expect((await canonicalMetric(metric.canonicalEntityId)).numericPrecision).toBe("approximate");
+    });
+
+    it("rejects a linked Metric whose precision conflicts with its reviewed Evidence", async () => {
+      const { review } = await linkedReview();
+      await review("evidence_1", "ACCEPTED");
+      await expect(review("metric_1", "CORRECTED", { numericPrecision: "exact" }))
+        .rejects.toThrow("metric_1 precision exact must match its source Evidence evidence_1 precision approximate");
+      await review("evidence_3", "CORRECTED", { valuePrecision: "estimate" });
+      // Accepting the Metric unchanged would persist exact against estimate Evidence.
+      await expect(review("metric_3", "ACCEPTED"))
+        .rejects.toThrow("metric_3 precision exact must match its source Evidence evidence_3 precision estimate");
+    });
+
+    it("accepts correcting a linked pair to estimate", async () => {
+      const { review, canonicalMetric, canonicalEvidence } = await linkedReview();
+      const item = await review("evidence_1", "CORRECTED", { valuePrecision: "estimate" });
+      const metric = await review("metric_1", "CORRECTED", { numericPrecision: "estimate" });
+      expect((await canonicalEvidence(item.canonicalEntityId)).valuePrecision).toBe("estimate");
+      expect(await canonicalMetric(metric.canonicalEntityId)).toMatchObject({ numericValue: "80000.0000", numericPrecision: "estimate" });
+    });
+
+    it("accepts correcting a linked pair to approximate", async () => {
+      const { review, canonicalMetric, canonicalEvidence } = await linkedReview();
+      const item = await review("evidence_3", "CORRECTED", { valuePrecision: "approximate" });
+      const metric = await review("metric_3", "CORRECTED", { numericPrecision: "approximate" });
+      expect((await canonicalEvidence(item.canonicalEntityId)).valuePrecision).toBe("approximate");
+      expect(await canonicalMetric(metric.canonicalEntityId)).toMatchObject({ numericValue: "12.0000", numericPrecision: "approximate" });
+    });
+
+    it("keeps a linked range consistent without requiring equal bounds", async () => {
+      const { review, canonicalMetric, canonicalEvidence } = await linkedReview();
+      const item = await review("evidence_2", "CORRECTED", { valueUpper: 20 });
+      await expect(review("metric_2", "CORRECTED", { numericPrecision: "exact", numericValue: 15, numericLower: null, numericUpper: null }))
+        .rejects.toThrow("metric_2 precision exact must match its source Evidence evidence_2 precision range");
+      // Precision must match; the bounds may differ (10–20 Evidence, 10–15 Metric).
+      const metric = await review("metric_2", "ACCEPTED");
+      expect(await canonicalEvidence(item.canonicalEntityId)).toMatchObject({ valuePrecision: "range", valueUpper: "20.0000" });
+      expect(await canonicalMetric(metric.canonicalEntityId)).toMatchObject({
+        numericValue: null, numericPrecision: "range", numericLower: "10.0000", numericUpper: "15.0000",
+      });
+    });
+
+    it("leaves unlinked Metrics and Metrics on qualitative Evidence unaffected", async () => {
+      const { review, canonicalMetric } = await linkedReview();
+      await review("evidence_3", "CORRECTED", { valuePrecision: "estimate" });
+      const unlinked = await review("metric_4", "CORRECTED", { numericPrecision: "approximate" });
+      expect((await canonicalMetric(unlinked.canonicalEntityId)).numericPrecision).toBe("approximate");
+      await review("evidence_5", "ACCEPTED");
+      const onQualitative = await review("metric_5", "CORRECTED", { numericPrecision: "estimate" });
+      expect((await canonicalMetric(onQualitative.canonicalEntityId)).numericPrecision).toBe("estimate");
+    });
+  });
+
+  it("accepts a pre-precision stored proposal as unspecified without inferring from its wording", async () => {
+    const setup = await extractedBusiness({ claims: [], evidence: [], metrics: [], relationships: [] });
+    await database.insert(evidenceProposals).values([
+      { extractionRunId: setup.extraction.run.id, businessId: setup.business.id, proposalRef: "evidence_1", proposalType: "evidence", structuredPayload: legacyEvidenceProposal },
+      { extractionRunId: setup.extraction.run.id, businessId: setup.business.id, proposalRef: "metric_1", proposalType: "metric", structuredPayload: legacyMetricProposal },
+    ]);
+    const { session, proposals } = await startReview(setup);
+    const accepted = await setup.reviewService.reviewProposal({
+      businessId: setup.business.id, reviewSessionId: session.id,
+      proposalId: proposals.get("evidence_1")!.id, reviewerId: "David", decision: "ACCEPTED",
+    });
+    const metric = await setup.reviewService.reviewProposal({
+      businessId: setup.business.id, reviewSessionId: session.id,
+      proposalId: proposals.get("metric_1")!.id, reviewerId: "David", decision: "ACCEPTED",
+    });
+    // The legacy excerpt says "about £80k", yet nothing is inferred: it stays unspecified.
+    const [canonical] = await database.select().from(evidence).where(eq(evidence.id, accepted.canonicalEntityId!));
+    const [canonicalMetric] = await database.select().from(metrics).where(eq(metrics.id, metric.canonicalEntityId!));
+    expect(canonical).toMatchObject({ valueNumeric: "80000.0000", valuePrecision: "unspecified", valueLower: null, valueUpper: null });
+    expect(canonicalMetric).toMatchObject({ numericValue: "80000.0000", numericPrecision: "unspecified" });
+    const stored = await database.select().from(evidenceProposals).where(eq(evidenceProposals.id, proposals.get("evidence_1")!.id));
+    expect(stored[0].structuredPayload).not.toHaveProperty("valuePrecision");
   });
 
   it("persists no canonical state for REJECTED or UNRESOLVED proposals", async () => {

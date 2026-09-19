@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { numericPrecisions } from "@/domain/numeric-precision";
 
 export const reviewDecisions = [
   "ACCEPTED", "CORRECTED", "REJECTED", "UNRESOLVED",
@@ -47,6 +48,9 @@ export const claimCorrectionSchema = z.object({
 export const evidenceCorrectionSchema = z.object({
   statement: z.string().trim().min(1).optional(),
   valueNumeric: z.number().finite().nullable().optional(),
+  valuePrecision: z.enum(numericPrecisions).nullable().optional(),
+  valueLower: z.number().finite().nullable().optional(),
+  valueUpper: z.number().finite().nullable().optional(),
   valueText: z.string().nullable().optional(),
   unit: z.string().nullable().optional(),
   periodStart: z.iso.date().nullable().optional(),
@@ -61,7 +65,10 @@ export const evidenceCorrectionSchema = z.object({
 export const metricCorrectionSchema = z.object({
   metricKey: z.string().trim().min(1).optional(),
   metricLabel: z.string().trim().min(1).optional(),
-  numericValue: z.number().finite().optional(),
+  numericValue: z.number().finite().nullable().optional(),
+  numericPrecision: z.enum(numericPrecisions).optional(),
+  numericLower: z.number().finite().nullable().optional(),
+  numericUpper: z.number().finite().nullable().optional(),
   unit: z.string().trim().min(1).optional(),
   periodStart: z.iso.date().nullable().optional(),
   periodEnd: z.iso.date().nullable().optional(),

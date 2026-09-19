@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -58,22 +58,11 @@ describe("Milestone 2A Evidence Extraction safety boundary", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    for (const migrationPath of [
-      "../../drizzle/0000_furry_wolf_cub.sql",
-      "../../drizzle/0001_evidence_extraction.sql",
-      "../../drizzle/0003_business_permanent_delete.sql",
-      "../../drizzle/0004_spotty_harpoon.sql",
-    ]) {
-      const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await client.exec(statement);
-      }
-    }
+    await applyMigrations(client);
     database = drizzle(client, { schema }) as unknown as Database;
     foundationRepository = new FoundationRepository(database);
     extractionRepository = new EvidenceExtractionRepository(database);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await client.close();

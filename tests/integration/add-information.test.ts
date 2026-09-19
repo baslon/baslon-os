@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { drizzle } from "drizzle-orm/pglite";
 import { beforeAll, afterAll, describe } from "vitest";
 import type { Database } from "@/db/client";
@@ -10,12 +10,9 @@ describe("Add Information", () => {
   let database: Database;
   beforeAll(async () => {
     client = new PGlite();
-    for (const name of ["0000_furry_wolf_cub", "0001_evidence_extraction", "0002_evidence_review", "0003_business_permanent_delete", "0004_spotty_harpoon", "0005_cloudy_calypso"]) {
-      const migration = await readFile(new URL(`../../drizzle/${name}.sql`, import.meta.url), "utf8");
-      for (const statement of migration.split("--> statement-breakpoint")) if (statement.trim()) await client.exec(statement);
-    }
+    await applyMigrations(client);
     database = drizzle(client) as unknown as Database;
-  });
+  }, 30_000);
   afterAll(async () => client.close());
   addInformationScenarios(() => database);
 });

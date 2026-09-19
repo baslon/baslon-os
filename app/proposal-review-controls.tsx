@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { numericPrecisionLabel, numericPrecisions } from "@/domain/numeric-precision";
+
+function PrecisionOptions() {
+  return numericPrecisions.map((item) => <option key={item} value={item}>{numericPrecisionLabel(item)}</option>);
+}
 
 export type ReviewableProposal = {
   id: string;
@@ -47,6 +52,12 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
       <div className="correction-grid">
         <label>Statement<input name="statement" defaultValue={display(payload.statement)} /></label>
         <label>Numeric value<input name="valueNumeric" type="number" step="any" defaultValue={display(payload.valueNumeric)} /></label>
+        <label>Precision<select name="valuePrecision" defaultValue={display(payload.valuePrecision ?? (payload.valueNumeric === null || payload.valueNumeric === undefined ? "" : "unspecified"))}>
+          <option value="">No numeric value</option>
+          <PrecisionOptions />
+        </select></label>
+        <label>Range lower bound<input name="valueLower" type="number" step="any" defaultValue={display(payload.valueLower)} /></label>
+        <label>Range upper bound<input name="valueUpper" type="number" step="any" defaultValue={display(payload.valueUpper)} /></label>
         <label>Text value<input name="valueText" defaultValue={display(payload.valueText)} /></label>
         <label>Unit<input name="unit" defaultValue={display(payload.unit)} /></label>
         <label>Period start<input name="periodStart" type="date" defaultValue={display(payload.periodStart)} /></label>
@@ -57,7 +68,7 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
         <label>Recency<input name="recencyLevel" defaultValue={display(payload.recencyLevel)} /></label>
         <label>Materiality<input name="materiality" defaultValue={display(payload.materiality)} /></label>
       </div>
-      <p className="note">Reliability describes how trustworthy the Evidence is. Materiality describes its strategic importance; these are separate judgments.</p>
+      <p className="note">Reliability describes how trustworthy the Evidence is. Materiality describes its strategic importance. Precision describes how precisely the source states the number; a range uses the two bounds and no single value. These are separate judgments.</p>
     </>;
   }
   if (proposal.proposalType === "metric") {
@@ -65,9 +76,15 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
       <label>Metric key<input name="metricKey" defaultValue={display(payload.metricKey)} /></label>
       <label>Label<input name="metricLabel" defaultValue={display(payload.metricLabel)} /></label>
       <label>Numeric value<input name="numericValue" type="number" step="any" defaultValue={display(payload.numericValue)} /></label>
+      <label>Precision<select name="numericPrecision" defaultValue={display(payload.numericPrecision ?? "unspecified")}>
+        <PrecisionOptions />
+      </select></label>
+      <label>Range lower bound<input name="numericLower" type="number" step="any" defaultValue={display(payload.numericLower)} /></label>
+      <label>Range upper bound<input name="numericUpper" type="number" step="any" defaultValue={display(payload.numericUpper)} /></label>
       <label>Unit<input name="unit" defaultValue={display(payload.unit)} /></label>
       <label>Period start<input name="periodStart" type="date" defaultValue={display(payload.periodStart)} /></label>
       <label>Period end<input name="periodEnd" type="date" defaultValue={display(payload.periodEnd)} /></label>
+      <p className="note">A Metric taken from numeric Evidence must have the same precision as that Evidence. If you changed the Evidence precision, choose the same precision here.</p>
     </div>;
   }
   return <div className="correction-grid">

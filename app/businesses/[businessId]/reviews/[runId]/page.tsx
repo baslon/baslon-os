@@ -8,6 +8,7 @@ import {
 import { getBusinessService, getEvidenceReviewService, getSourceSubmissionService } from "@/foundation";
 import { ProposalReviewControls } from "../../../../proposal-review-controls";
 import { RelationshipEndpoints } from "../../../../relationship-endpoints";
+import { ProposalNumericValue } from "../../../../proposal-numeric-value";
 import { buildReviewQueue } from "@/domain/review-queue";
 
 export const dynamic = "force-dynamic";
@@ -123,7 +124,7 @@ export default async function EvidenceReviewPage({
         </div>
         {payload.sourceExcerpt ? <div className="source-block"><p className="eyebrow">Source</p><blockquote>{display(payload.sourceExcerpt)}</blockquote></div> : null}
         {current.proposalType === "claim_evidence" ? <RelationshipEndpoints relationship={payload} proposals={details.proposals} /> : null}
-        {current.proposalType === "metric" && payload.numericValue !== undefined ? <p className="metric-value">{display(payload.numericValue)} {display(payload.unit)}</p> : null}
+        <ProposalNumericValue proposalType={current.proposalType} payload={payload} />
         <ProposalReviewControls proposal={current} context={{
           businessId,
           extractionRunId: runId,

@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db/client";
@@ -24,21 +24,14 @@ describe("Milestone 1 application acceptance path", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    const migration = await readFile(
-      new URL("../../drizzle/0000_furry_wolf_cub.sql", import.meta.url),
-      "utf8",
-    );
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
-    }
+    await applyMigrations(client);
 
     const database = drizzle(client, { schema }) as unknown as Database;
     repository = new FoundationRepository(database);
     businessService = new BusinessService(repository);
     businessStateService = new BusinessStateService(repository);
     orchestrator = createStrategyOrchestrator(database);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await client.close();

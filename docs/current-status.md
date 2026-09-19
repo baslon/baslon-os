@@ -1,19 +1,26 @@
 # Baslon OS — Current Development Status
 
-Updated: 18 September 2026
+Updated: 19 September 2026
 
 ## Current engineering milestone
 
 Milestone 3D pre-diagnosis hardening is merged (`8602b98`), followed by the
 initial-intake review guard (PR #1, `93e03e3`).
 
-Milestone 4A — Gap Resolution & Phase 1 Entry is implemented in the working tree
-on `claude/milestone-4` and awaiting review. `GAP_RESOLUTION_REQUIRED` is a human
+Milestone 4A — Gap Resolution & Phase 1 Entry is merged (PR #2, `57bddec`). `GAP_RESOLUTION_REQUIRED` is a human
 resolution checkpoint: a human can add information (with or without a surfaced
 question) or explicitly continue with known gaps to `PHASE1_READY`. From
 `PHASE1_READY` a human can still add information. No Phase 1 diagnosis engine,
 diagnosis persistence or new database migration has been introduced. See
 `docs/milestone-4a-gap-resolution-phase1-entry.md`.
+
+M4-02A — Numeric Precision Foundation is implemented in the working tree on
+`claude/milestone-4` and awaiting architectural review. New canonical Evidence and
+Metrics carry explicit precision (`exact`, `approximate`, `estimate`, `range`,
+`unspecified`), ranges keep both bounds, and records that predate it read as
+`unspecified`. Migration `0006_numeric_precision` has been applied to
+`baslon_os_test` only; applying it to `baslon_os` needs explicit approval. See
+`docs/milestone-4-m4-02a-numeric-precision.md`.
 
 ## Active Baslon Digital Business
 
@@ -29,7 +36,9 @@ diagnosis persistence or new database migration has been introduced. See
 - Snapshot 2 Evidence Coherence run: `98ce12e0-953d-4f3a-88a6-4427355bd95e`
   (succeeded; six non-low-materiality questions, none answered at observation).
 - 11 of its 12 numeric Evidence records come from "approximately" excerpts but
-  are stored as exact values (findings register M4-02).
+  were stored as plain numbers before precision existed. After M4-02A they read
+  as `unspecified`, never `exact`. They are not retrofitted. Correcting them
+  needs new human-authorised evidence, which is a separate decision.
 
 Continuing this Business with known gaps (`CONTINUE_WITH_GAPS`) is a product
 decision for David. Milestone 4A makes the action available in the UI; it must not
@@ -59,7 +68,8 @@ It must not be restored or permanently deleted without separate explicit approva
 - Clean Snapshot 1 Evidence Coherence run:
   `4d3c3221-cec2-458a-8baa-cb4a63efe64b`
 - Input Snapshot: `b9f55eae-66f1-46d4-817a-c9b74f665873`
-- Current Evidence Coherence prompt: `evidence_coherence_v2` (`v1` remains historical).
+- Current Evidence Coherence prompt: `evidence_coherence_v3` with input
+  `evidence_coherence_input_v2`, adding numeric precision (M4-02A); `v1`/`v2` remain historical.
 - Result: succeeded with no material contradictions, five evidence gaps and five
   questions.
 - The first question received a genuine answer through the implemented Question →

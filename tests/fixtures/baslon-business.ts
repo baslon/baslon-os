@@ -126,6 +126,9 @@ export const baslonExtractionOutput: EvidenceExtractionOutput = {
       evidenceType: "management_record",
       statement: "Founder notes indicate approximately £80k annual revenue.",
       valueNumeric: 80000,
+      valuePrecision: "approximate",
+      valueLower: null,
+      valueUpper: null,
       valueText: "about £80k",
       unit: "GBP",
       periodStart: null,
@@ -148,6 +151,9 @@ export const baslonExtractionOutput: EvidenceExtractionOutput = {
       metricKey: "annual_revenue",
       metricLabel: "Approximate annual revenue",
       numericValue: 80000,
+      numericPrecision: "approximate",
+      numericLower: null,
+      numericUpper: null,
       unit: "GBP",
       periodStart: null,
       periodEnd: null,
@@ -166,3 +172,19 @@ export const baslonExtractionOutput: EvidenceExtractionOutput = {
     },
   ],
 };
+
+function without(record: object, keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
+}
+
+/** The Evidence proposal as stored before M4-02A: no precision fields. */
+export const legacyEvidenceProposal = without(
+  baslonExtractionOutput.evidence[0],
+  ["valuePrecision", "valueLower", "valueUpper"],
+);
+
+/** The Metric proposal as stored before M4-02A: no precision fields. */
+export const legacyMetricProposal = without(
+  baslonExtractionOutput.metrics[0],
+  ["numericPrecision", "numericLower", "numericUpper"],
+);

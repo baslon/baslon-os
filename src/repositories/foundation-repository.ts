@@ -182,6 +182,8 @@ export class FoundationRepository {
       const [item] = await tx.insert(evidence).values({
         ...parsed,
         valueNumeric: parsed.valueNumeric?.toString(),
+        valueLower: parsed.valueLower?.toString(),
+        valueUpper: parsed.valueUpper?.toString(),
         reliabilityScore: parsed.reliabilityScore?.toString(),
       }).returning();
       return item;
@@ -230,7 +232,9 @@ export class FoundationRepository {
       }
       const [metric] = await tx.insert(metrics).values({
         ...parsed,
-        numericValue: parsed.numericValue.toString(),
+        numericValue: parsed.numericValue?.toString(),
+        numericLower: parsed.numericLower?.toString(),
+        numericUpper: parsed.numericUpper?.toString(),
       }).returning();
       return metric;
     });

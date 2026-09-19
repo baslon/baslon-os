@@ -23,6 +23,7 @@ import {
   evidenceQualityAreas,
   findingMaterialities,
 } from "@/domain/evidence-coherence";
+import { numericPrecisions } from "@/domain/numeric-precision";
 
 export const claimType = pgEnum("claim_type", [
   "fact", "observation", "management_belief", "hypothesis",
@@ -62,6 +63,7 @@ export const reviewCanonicalEntityType = pgEnum("review_canonical_entity_type", 
 export const analysisRunStatus = pgEnum("analysis_run_status", analysisRunStatuses);
 export const evidenceQualityArea = pgEnum("evidence_quality_area", evidenceQualityAreas);
 export const findingMateriality = pgEnum("finding_materiality", findingMaterialities);
+export const numericPrecision = pgEnum("numeric_precision", numericPrecisions);
 export const analysisFindingReferenceRole = pgEnum(
   "analysis_finding_reference_role",
   analysisFindingReferenceRoles,
@@ -210,6 +212,9 @@ export const evidence = pgTable("evidence", {
   evidenceType: text("evidence_type").notNull(),
   statement: text("statement").notNull(),
   valueNumeric: numeric("value_numeric", { precision: 20, scale: 4 }),
+  valuePrecision: numericPrecision("value_precision").default("unspecified").notNull(),
+  valueLower: numeric("value_lower", { precision: 20, scale: 4 }),
+  valueUpper: numeric("value_upper", { precision: 20, scale: 4 }),
   valueText: text("value_text"),
   unit: text("unit"),
   periodStart: date("period_start"),
@@ -229,6 +234,15 @@ export const evidence = pgTable("evidence", {
   unique("evidence_id_business_unique").on(table.id, table.businessId),
   check("evidence_period_check", sql`${table.periodEnd} is null or ${table.periodStart} is null or ${table.periodEnd} >= ${table.periodStart}`),
   check("evidence_reliability_score_check", sql`${table.reliabilityScore} is null or (${table.reliabilityScore} >= 0 and ${table.reliabilityScore} <= 1)`),
+  check("evidence_value_precision_check", sql`
+    (${table.valuePrecision} = 'range'
+      and ${table.valueLower} is not null and ${table.valueUpper} is not null
+      and ${table.valueLower} <= ${table.valueUpper} and ${table.valueNumeric} is null)
+    or (${table.valuePrecision} in ('exact', 'approximate', 'estimate')
+      and ${table.valueNumeric} is not null and ${table.valueLower} is null and ${table.valueUpper} is null)
+    or (${table.valuePrecision} = 'unspecified'
+      and ${table.valueLower} is null and ${table.valueUpper} is null)
+  `),
 ]);
 
 export const claimEvidence = pgTable("claim_evidence", {
@@ -258,7 +272,10 @@ export const metrics = pgTable("metrics", {
   businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
   metricKey: text("metric_key").notNull(),
   metricLabel: text("metric_label").notNull(),
-  numericValue: numeric("numeric_value", { precision: 20, scale: 4 }).notNull(),
+  numericValue: numeric("numeric_value", { precision: 20, scale: 4 }),
+  numericPrecision: numericPrecision("numeric_precision").default("unspecified").notNull(),
+  numericLower: numeric("numeric_lower", { precision: 20, scale: 4 }),
+  numericUpper: numeric("numeric_upper", { precision: 20, scale: 4 }),
   unit: text("unit").notNull(),
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
@@ -274,6 +291,13 @@ export const metrics = pgTable("metrics", {
     name: "metrics_source_evidence_same_business_fk",
   }).onDelete("restrict"),
   check("metrics_period_check", sql`${table.periodEnd} is null or ${table.periodStart} is null or ${table.periodEnd} >= ${table.periodStart}`),
+  check("metrics_numeric_precision_check", sql`
+    (${table.numericPrecision} = 'range'
+      and ${table.numericLower} is not null and ${table.numericUpper} is not null
+      and ${table.numericLower} <= ${table.numericUpper} and ${table.numericValue} is null)
+    or (${table.numericPrecision} in ('exact', 'approximate', 'estimate', 'unspecified')
+      and ${table.numericValue} is not null and ${table.numericLower} is null and ${table.numericUpper} is null)
+  `),
 ]);
 
 export const businessStateSnapshots = pgTable("business_state_snapshots", {

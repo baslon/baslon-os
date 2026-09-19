@@ -1,6 +1,6 @@
 # Baslon OS — Consolidated Code Review Findings Register
 
-**Status date:** 18 September 2026  
+**Status date:** 19 September 2026
 **Current accepted baseline:** Milestone 3D — Pre-Diagnosis Hardening  
 **Current implementation commit:** `8602b98 Complete Milestone 3D pre-diagnosis hardening`  
 **Architectural review handoff commit:** `aeb00ef Add Milestone 3D architectural review handoff`  
@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved).\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, awaiting architectural review) resolves M4-02 and M4-10.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -398,7 +398,22 @@ Resolve as an explicit workflow/product decision before diagnosis UI depends on 
 ## M4-02 — Approximate and range values may become exact canonical numbers
 
 **Origin:** Claude MEDIUM.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **RESOLVED — M4-02A (19 September 2026, awaiting architectural review)**
+
+### Resolution — M4-02A
+Explicit precision model (`exact | approximate | estimate | range | unspecified`) for new canonical Evidence and Metrics, per the approved decision `docs/baslon-os-m4-02-numeric-precision-architecture-decision.md` (D1–D8):
+
+- **Schema:** additive migration `0006_numeric_precision`. Evidence `value_precision`/`value_lower`/`value_upper`, and Metric `numeric_precision`/`numeric_lower`/`numeric_upper`, with `numeric_value` nullable for ranges. Precision is NOT NULL, default `unspecified`. CHECK constraints enforce range shape (both bounds, lower ≤ upper, no single value) and forbid bounds on other precisions.
+- **No retrofit:** existing rows read as `unspecified` through the column default. No row is updated, and nothing is inferred from wording. Legacy stored proposals read as `unspecified`.
+- **Historical `unspecified`:** never treated as exact by the UI, the Evidence Coherence prompt or the documented calculation rule.
+- **Range preservation:** both bounds are stored and shown ("10–15 projects"), and never collapsed to a bound or midpoint.
+- **Extraction:** `evidence_extractor_v6`/`v7` propose precision, and deterministic validation grounds it in the wording next to the number in the cited excerpt.
+- **Human review:** precision and range are shown before a decision. A reviewer can correct precision (any value) and bounds; corrected numbers must still be in the excerpt. A Metric taken from numeric Evidence must end review with that Evidence's precision (architectural review H1, option b).
+- **Snapshots:** new snapshots include precision and bounds. Evidence Coherence input `evidence_coherence_input_v2` and prompt `evidence_coherence_v3` carry them. Historical snapshots are unchanged and project missing precision as `unspecified`.
+- **Foundation writes:** `FoundationRepository.addEvidence`/`addMetric` persist supplied precision and bounds, and default to `unspecified` only when none is supplied.
+- **Tests:** unit (`tests/unit/numeric-precision.test.tsx`), integration (`tests/integration/evidence-review.test.ts`, including linked-precision review), Foundation scenarios (`tests/fixtures/foundation-precision-scenarios.ts`, PGlite and PostgreSQL), and PostgreSQL 17 (`tests/postgres/numeric-precision.postgres.test.ts`: defaults, CHECKs, enum, same-Business integrity, snapshot immutability, Permanent Delete).
+
+The active Baslon Digital Business values described below now read as `unspecified`. They are not retrofitted, and correcting them needs new human-authorised evidence. See `docs/milestone-4-m4-02a-numeric-precision.md`.
 
 ### Risk
 Examples such as:
@@ -450,6 +465,9 @@ For the next extractor revision, evaluate:
 Do not weaken the current rule:
 
 **Interpretive context ≠ evidentiary source.**
+
+### Progress note (M4-02A, 19 September 2026)
+Not resolved. M4-02A extends the existing numeric isolation to precision: range bounds and precision wording must be grounded in the human answer, and `evidence_extractor_v7` says the question cannot make an answer approximate or exact. Claims and other descriptive fields still lack deterministic grounding.
 
 ---
 
@@ -577,7 +595,10 @@ Add CI, or explicitly document why CI remains deferred. When adding CI, fix B-29
 ## M4-10 — Written-number prompt and deterministic validator disagree
 
 **Origin:** Codex MEDIUM; Claude LOW.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **RESOLVED — M4-02A (19 September 2026)**
+
+### Resolution
+`evidence_extractor_v6`/`v7` and the validator now state one rule. A number may be written in digits (optionally with £, $, € or %, a k suffix, or an m suffix after a currency symbol), or as a whole-number word from zero to ninety-nine ("twelve", "twenty-five"). A number word is not converted when it is part of a compound description ("three-day"), follows approximation language ("about ten" stays qualitative), or is larger than ninety-nine ("a hundred"). Covered by `tests/unit/numeric-precision.test.tsx` and `tests/unit/evidence-extractor.test.ts`.
 
 ### Finding
 Prompt wording historically prohibited number-word conversion while deterministic validation allowed bounded cardinal normalization such as `three` → `3`.
@@ -956,6 +977,8 @@ Add constraints only where the product vocabulary is stable.
 
 Resolve alongside explicit precision semantics if Milestone 4 performs calculations.
 
+M4-02A note (19 September 2026): semantic precision is now explicit (M4-02). Storage scale (`numeric(20,4)`) is unchanged and remains a separate concern.
+
 ---
 
 ## B-11 — Snapshot projection currently tolerates malformed JSON fields by coercion
@@ -1081,7 +1104,9 @@ Revisit only if Evidence later gains explicit lifecycle status.
 ## B-21 — Migration lists / schema setup duplication in tests
 
 **Origin:** Antigravity MEDIUM.  
-**Status:** **BACKLOG / verify during CI work**
+**Status:** **RESOLVED — M4-02A (19 September 2026)**
+
+`tests/helpers/pglite-migrations.ts` applies every migration in `drizzle/meta/_journal.json`, in order. All nine PGlite integration files use it, replacing hardcoded lists, some of which had missed later migrations. PostgreSQL suites still rely on the test database being migrated with `drizzle-kit migrate`.
 
 Centralize migration setup if hardcoded lists still exist.
 
@@ -1090,7 +1115,9 @@ Centralize migration setup if hardcoded lists still exist.
 ## B-22 — Metric correction can coerce blank string to zero
 
 **Origin:** Antigravity LOW.  
-**Status:** **BACKLOG — CONFIRMED STILL PRESENT (18 September 2026)**
+**Status:** **RESOLVED — M4-02A (19 September 2026)**
+
+The Metric correction in `app/actions.ts` now parses `numericValue` and the range bounds with `nullableNumber`, so a cleared field is missing, not `0`. It is required again unless the precision is `range`.
 
 Original finding:
 
@@ -1179,7 +1206,9 @@ This is now safe for integrity (R-04 makes only the newest run reviewable), but 
 ## B-29 — PostgreSQL guard unit test depends on the environment
 
 **Origin:** Code verification, 18 September 2026.  
-**Status:** **BACKLOG — fix before adding CI**
+**Status:** **RESOLVED — M4-02A (19 September 2026)**
+
+The test now stubs `TEST_DATABASE_URL` to empty for the no-argument check and restores it afterwards. It passes with and without the variable set.
 
 `tests/unit/postgres-test-guard.test.ts` line 25 calls `requirePostgresTestDatabaseUrl()` with no argument and expects it to throw. When `TEST_DATABASE_URL` is set, as CI would normally do when running both suites, the test fails. Pass `undefined` explicitly or stub the environment variable.
 
@@ -1281,12 +1310,12 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [ ] Define diagnosis output as separate non-canonical analytical persistence.
 - [ ] Define human diagnosis approval as a separate immutable record.
 - [ ] Define transaction-scoped artifact preconditions for diagnosis transitions.
-- [ ] Decide how diagnosis treats approximate/range numeric evidence.
+- [ ] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. The diagnosis input contract must still carry them.
 - [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight.
 - [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut.
 - [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests.
 - [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
-- [ ] Align written-number prompt/validator if the extractor contract changes during the milestone.
+- [x] Align written-number prompt/validator if the extractor contract changes during the milestone. Resolved by M4-02A (M4-10).
 - [ ] Do not implement production authentication/security work inside Milestone 4 unless explicitly scoped.
 
 ---

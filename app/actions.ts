@@ -149,6 +149,9 @@ function correctedPayload(formData: FormData, proposalType: string) {
     return {
       statement: text(formData, "statement"),
       valueNumeric: nullableNumber(formData, "valueNumeric"),
+      valuePrecision: nullableText(formData, "valuePrecision"),
+      valueLower: nullableNumber(formData, "valueLower"),
+      valueUpper: nullableNumber(formData, "valueUpper"),
       valueText: nullableText(formData, "valueText"),
       unit: nullableText(formData, "unit"),
       periodStart: nullableText(formData, "periodStart"),
@@ -164,7 +167,10 @@ function correctedPayload(formData: FormData, proposalType: string) {
     return {
       metricKey: text(formData, "metricKey"),
       metricLabel: text(formData, "metricLabel"),
-      numericValue: Number(text(formData, "numericValue")),
+      numericValue: nullableNumber(formData, "numericValue"),
+      numericPrecision: text(formData, "numericPrecision"),
+      numericLower: nullableNumber(formData, "numericLower"),
+      numericUpper: nullableNumber(formData, "numericUpper"),
       unit: text(formData, "unit"),
       periodStart: nullableText(formData, "periodStart"),
       periodEnd: nullableText(formData, "periodEnd"),

@@ -1,7 +1,7 @@
 # Baslon OS — M4-02 Numeric Precision Architecture Decision
 ## Approximate, Estimated and Range-Based Numeric Evidence
 
-**Status:** Proposed architectural decision for Product Owner approval\
+**Status:** Approved architectural decision\
 **Milestone:** 4 — Phase 1 Diagnosis\
 **Finding:** M4-02 — Approximate and range values may become exact canonical numbers\
 **Implementation:** Not authorised by this document
@@ -633,11 +633,23 @@ Define the exact snapshot-bound diagnosis projection using the newly explicit pr
 
 ---
 
-## 21. Product Owner Decision Required
+## 21. Approved Product Owner Decision
 
-Approve or reject the following statement:
+**Status: APPROVED**
+
+The Product Owner has approved the following decision:
 
 > **Baslon OS will model numeric precision explicitly. Existing numeric records without precision metadata will be treated as `unspecified`, not exact. New numeric extraction will distinguish exact, approximate, estimated and range-based values and expose that classification to human review. Ranges will preserve their bounds. Phase 1 Diagnosis and deterministic calculations must preserve input uncertainty and may never imply greater precision than the evidence supports. Historical snapshots will not be rewritten.**
+
+The following additional Product Owner decisions are also approved and govern M4-02A:
+
+- existing numeric records without precision metadata remain `unspecified`;
+- M4-02A adds no retrofit mechanism;
+- the active Baslon Digital Business will be rebuilt from approved genuine sources after M4-02A, with precision confirmed through the normal human review flow;
+- the current Baslon Digital Business will be archived only after that rebuild;
+- Evidence supersession for changing or corrected figures is deferred to a separate architecture/build brief.
+
+These decisions are settled for M4-02A and are not implementation options for the Engineer to reopen.
 
 ---
 

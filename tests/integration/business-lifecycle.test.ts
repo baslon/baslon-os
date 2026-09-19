@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { applyMigrations } from "../helpers/pglite-migrations";
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -64,19 +64,7 @@ describe("Business Archive and Restore lifecycle", () => {
 
   beforeAll(async () => {
     client = new PGlite();
-    await client.waitReady;
-    for (const migrationPath of [
-      "../../drizzle/0000_furry_wolf_cub.sql",
-      "../../drizzle/0001_evidence_extraction.sql",
-      "../../drizzle/0002_evidence_review.sql",
-      "../../drizzle/0003_business_permanent_delete.sql",
-      "../../drizzle/0004_spotty_harpoon.sql",
-    ]) {
-      const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await client.exec(statement);
-      }
-    }
+    await applyMigrations(client);
     database = drizzle(client, { schema }) as unknown as Database;
     foundation = new FoundationRepository(database);
     businesses = new BusinessService(foundation);

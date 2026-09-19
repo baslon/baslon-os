@@ -20,3 +20,18 @@ as the probability that a Claim is objectively true, source reliability, evidenc
 credibility, proof weight, independent corroboration, materiality or diagnostic
 importance. It may be used only as semantic-link confidence unless a future
 approved, versioned design introduces a separate evidence-quality concept.
+
+## Numeric precision
+
+The extractor (`evidence_extractor_v6`/`v7`) may propose only `exact`,
+`approximate`, `estimate` or `range`, and never `unspecified`. Every proposed
+precision must be grounded in the wording next to the number in the cited excerpt
+from the human-supplied source text. Precision wording in an interpretive question
+does not count. Deterministic validation rejects any precision it cannot ground,
+rather than silently changing it. A human reviewer decides the final precision.
+
+AI must not infer or backfill precision for historical records. Evidence Coherence
+(`evidence_coherence_v3`) must not treat `unspecified` values as exact or report
+contradictions that depend on more precision than the values carry. Any future
+diagnosis input must carry precision and bounds, and must not produce exact-looking
+results from approximate, estimated, range or `unspecified` inputs.
