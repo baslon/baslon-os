@@ -99,6 +99,17 @@ export function numericValueIsExplicit(value: number, sourceExcerpt: string): bo
 
 // Language that makes the adjacent number approximate rather than exact.
 const approximationBefore = /(?:\b(?:about|approximately|approx\.?|roughly|around|circa|ca\.|c\.|nearly|almost|some|just\s+(?:over|under))|~)\s*$/iu;
+/**
+ * M4-10 refinement: one approximation cue governs every measurement of a single
+ * coordinated phrase, as in "roughly a three-day, 30-hour working week".
+ *
+ * The cue only reaches a later number when everything between them is an article
+ * followed by compound measurement terms ("three-day") and their separators (a
+ * comma, "and", or both). Any other word, punctuation, sentence boundary or
+ * contrasting conjunction breaks the match, so approximation cannot leak onto an
+ * unrelated number. Compound terms themselves remain non-normalised.
+ */
+const approximationCoordinated = /(?:\b(?:about|approximately|approx\.?|roughly|around|circa|ca\.|c\.|nearly|almost|some|just\s+(?:over|under))|~)\s+(?:an?|the)\s+(?:(?:\d+|[\p{L}]+)-[\p{L}]+(?:\s*,\s*|\s+and\s+|\s*,\s+and\s+)){1,2}$/iu;
 const approximationAfter = /^\s*(?:-?\s*ish\b|or\s+so\b|-?\s*odd\b)/iu;
 // Language that makes the adjacent number only a limit, which has no valid precision.
 const limitBefore = /(?:\b(?:more|less|fewer)\s+than|\b(?:over|under|above|below|up\s+to|upwards\s+of|at\s+(?:least|most)|in\s+excess\s+of|no\s+(?:more|fewer|less)\s+than)|[<>≤≥])\s*$/iu;
@@ -127,7 +138,10 @@ function classifyOccurrence(sourceExcerpt: string, match: NumberMatch, ranges: R
   if (ranges.some((range) => range.lower === match || range.upper === match)) return "range";
   const before = sourceExcerpt.slice(Math.max(0, match.index - 30), match.index);
   const after = sourceExcerpt.slice(match.end, match.end + 14);
-  if (approximationBefore.test(before) || approximationAfter.test(after)) return "approximate";
+  // The coordinated rule reads from the start of the excerpt, but its pattern only
+  // matches when the cue, the article and the compound terms run straight into the number.
+  const coordinated = approximationCoordinated.test(sourceExcerpt.slice(0, match.index));
+  if (approximationBefore.test(before) || approximationAfter.test(after) || coordinated) return "approximate";
   if (limitBefore.test(before) || limitAfter.test(after)) return "limit";
   return "plain";
 }

@@ -55,6 +55,22 @@ to re-run S1 in a **fresh** rebuild Business under the new review card, before S
 Rebuild Business `9aec14e1-…` is kept as history; archiving it is a separate
 Product Owner decision.
 
+**Rebuild S1 (v2) is blocked, and an M4-10 validator refinement is awaiting review.**
+Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
+2026 v2") was created on 20 September 2026, but three extractions of the approved
+S1 source were rejected: the model proposed `approximate` for the 30 in "roughly a
+three-day, 30-hour working week", and the validator required the cue to sit beside
+the number. The Business holds three immutable failed runs and no canonical data.
+
+The approved fix refines the deterministic validator only: one approximation cue
+now governs a later measurement of the same coordinated phrase, reaching it only
+across an article and compound measurement terms. It cannot cross a sentence
+boundary, a contrasting clause or any other wording. `evidence_extractor_v6`/`v7`,
+prompt versions, the precision vocabulary, B-15 and the schema are unchanged, and
+compound terms such as "three-day" still never become numeric Evidence. The
+refinement is implemented in the working tree and awaiting architectural review;
+S1 has not been retried.
+
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding) and B-31 (compound number words).
 
