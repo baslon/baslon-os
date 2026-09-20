@@ -47,6 +47,7 @@ export const claimCorrectionSchema = z.object({
 
 export const evidenceCorrectionSchema = z.object({
   statement: z.string().trim().min(1).optional(),
+  evidenceType: z.string().trim().min(1).optional(),
   valueNumeric: z.number().finite().nullable().optional(),
   valuePrecision: z.enum(numericPrecisions).nullable().optional(),
   valueLower: z.number().finite().nullable().optional(),
@@ -60,6 +61,8 @@ export const evidenceCorrectionSchema = z.object({
   directnessLevel: z.string().trim().min(1).optional(),
   recencyLevel: z.string().trim().min(1).optional(),
   materiality: z.string().trim().min(1).optional(),
+  // AI-proposed note stored in sourceMetadata.notes; provenance stays read-only.
+  sourceNotes: z.string().nullable().optional(),
 }).strict();
 
 export const metricCorrectionSchema = z.object({

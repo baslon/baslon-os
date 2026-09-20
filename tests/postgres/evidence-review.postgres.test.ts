@@ -12,6 +12,7 @@ import type { Database } from "@/db/client";
 import {
   businessStateSnapshots,
   claims,
+  evidence,
   evidenceProposals,
   evidenceReviewSessions,
   proposalReviews,
@@ -161,6 +162,29 @@ describe("real PostgreSQL 17 Evidence Review verification", () => {
     await expect(database.update(evidenceProposals)
       .set({ structuredPayload: { tampered: true } })
       .where(eq(evidenceProposals.id, originalClaim.id))).rejects.toThrow();
+  });
+
+  it("persists run provenance and the review-card version on PostgreSQL 17 (M4-11, N-1)", async () => {
+    const context = await setup("PostgreSQL review provenance");
+    const accept = (proposalRef: string) => context.service.reviewProposal({
+      businessId: context.business.id,
+      reviewSessionId: context.session.id,
+      proposalId: context.proposals.get(proposalRef)!.id,
+      reviewerId: "David",
+      decision: "ACCEPTED",
+    });
+    const acceptedEvidence = await accept("evidence_1");
+    const acceptedClaim = await accept("claim_1");
+    const [item] = await database.select().from(evidence).where(eq(evidence.id, acceptedEvidence.canonicalEntityId!));
+    const [claim] = await database.select().from(claims).where(eq(claims.id, acceptedClaim.canonicalEntityId!));
+    // This run recorded no channel or reference: the application label is used, never model text.
+    expect(item).toMatchObject({ sourceType: "unrecorded", sourceReference: null, businessId: context.business.id });
+    expect(item.sourceMetadata).toMatchObject({
+      suppliedBy: null,
+      evidenceReview: { extractionRunId: context.extraction.run.id, reviewCardVersion: "m4_11_v1" },
+    });
+    expect(claim.sourceType).toBe("unrecorded");
+    expect(claim.confidenceBasis).toMatchObject({ evidenceReview: { reviewCardVersion: "m4_11_v1" } });
   });
 
   it("rolls back canonical state when its review audit cannot be inserted", async () => {

@@ -1,3 +1,4 @@
+import { applicationProvenance, REVIEW_CARD_VERSION } from "@/domain/review-card";
 import {
   claimEvidenceProposalSchema,
   claimProposalSchema,
@@ -35,8 +36,18 @@ function reviewLineage(details: ReviewDetails, proposalId: string) {
       extractionRunId: details.session.extractionRunId,
       proposalId,
       reviewerId: details.session.reviewerId,
+      // Records that the complete canonical object was shown before the decision (M4-11).
+      reviewCardVersion: REVIEW_CARD_VERSION,
     },
   };
+}
+
+/** Provenance of the reviewed run, owned by the application rather than the model (N-1). */
+function runProvenance(details: ReviewDetails) {
+  if (!details.run || details.run.businessId !== details.session.businessId) {
+    throw new Error("The reviewed extraction run must belong to the same Business");
+  }
+  return applicationProvenance(details.run);
 }
 
 function acceptedReviewForRef(
@@ -165,17 +176,25 @@ export class EvidenceReviewService {
             ...reviewed.confidenceBasis,
             ...reviewLineage(details, proposal.id),
           },
-          sourceType: reviewed.sourceType,
+          sourceType: runProvenance(details).sourceType,
         },
       };
     } else if (proposal.proposalType === "evidence" && applies) {
       const original = readStoredEvidenceProposal(proposal.structuredPayload);
-      const reviewed = parsed.decision === "CORRECTED"
+      const correction = parsed.decision === "CORRECTED"
+        ? evidenceCorrectionSchema.parse(parsed.correctedPayload)
+        : undefined;
+      const { sourceNotes, ...evidenceCorrection } = correction ?? {};
+      const reviewed = correction
         ? reviewableEvidenceProposalSchema.parse({
           ...original,
-          ...evidenceCorrectionSchema.parse(parsed.correctedPayload),
+          ...evidenceCorrection,
+          sourceMetadata: sourceNotes === undefined
+            ? original.sourceMetadata
+            : { ...original.sourceMetadata, notes: sourceNotes },
         })
         : original;
+      const provenance = runProvenance(details);
       if (parsed.decision === "CORRECTED") requireMaterialCorrection(original, reviewed);
       requireGroundedNumbers(
         proposal.proposalRef,
@@ -197,10 +216,12 @@ export class EvidenceReviewService {
           unit: reviewed.unit,
           periodStart: reviewed.periodStart,
           periodEnd: reviewed.periodEnd,
-          sourceType: reviewed.sourceType,
-          sourceReference: reviewed.sourceReference,
+          // Provenance comes from the run; only the AI-proposed notes come from the proposal.
+          sourceType: provenance.sourceType,
+          sourceReference: provenance.sourceReference,
           sourceMetadata: {
-            ...reviewed.sourceMetadata,
+            suppliedBy: provenance.suppliedBy,
+            notes: reviewed.sourceMetadata.notes,
             sourceExcerpt: original.sourceExcerpt,
             ...reviewLineage(details, proposal.id),
           },
@@ -209,7 +230,7 @@ export class EvidenceReviewService {
           directnessLevel: reviewed.directnessLevel,
           recencyLevel: reviewed.recencyLevel,
           rawPayload: {
-            ...reviewed.rawPayload,
+            excerpt: original.sourceExcerpt,
             sourceExcerpt: original.sourceExcerpt,
             extractionRunId: details.session.extractionRunId,
             proposalId: proposal.id,

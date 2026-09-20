@@ -148,6 +148,7 @@ function correctedPayload(formData: FormData, proposalType: string) {
   if (proposalType === "evidence") {
     return {
       statement: text(formData, "statement"),
+      evidenceType: text(formData, "evidenceType"),
       valueNumeric: nullableNumber(formData, "valueNumeric"),
       valuePrecision: nullableText(formData, "valuePrecision"),
       valueLower: nullableNumber(formData, "valueLower"),
@@ -161,6 +162,7 @@ function correctedPayload(formData: FormData, proposalType: string) {
       directnessLevel: text(formData, "directnessLevel"),
       recencyLevel: text(formData, "recencyLevel"),
       materiality: text(formData, "materiality"),
+      sourceNotes: nullableText(formData, "sourceNotes"),
     };
   }
   if (proposalType === "metric") {
@@ -174,6 +176,10 @@ function correctedPayload(formData: FormData, proposalType: string) {
       unit: text(formData, "unit"),
       periodStart: nullableText(formData, "periodStart"),
       periodEnd: nullableText(formData, "periodEnd"),
+      dimensionData: {
+        dimension: nullableText(formData, "dimension"),
+        value: nullableText(formData, "dimensionValue"),
+      },
     };
   }
   return {

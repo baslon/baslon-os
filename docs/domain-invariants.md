@@ -18,6 +18,35 @@ records the accepted `snapshotId`, `snapshotVersion`, `analysisRunId` and
 Adding information remains possible from `PHASE1_READY` through the normal Add
 Information command and evidence review loop.
 
+## Human review completeness
+
+Every material field that human Accept persists to canonical state must be visible
+to the reviewer on the pending review card before the decision. One Accept
+authorises the whole visible card; per-field confirmation is not required.
+
+- AI-proposed semantic fields are shown as AI-proposed and are correctable where
+  disagreement is legitimate.
+- The field manifest in `src/domain/review-card.ts` must account for every
+  proposal field, and tests enforce this.
+- Newly admitted Claims, Evidence and Metrics record
+  `evidenceReview.reviewCardVersion`.
+- Records without the marker are older and are labelled at read time; they are
+  never rewritten.
+
+## Canonical provenance
+
+True provenance is assigned by the application from the extraction run, never
+authored by a model:
+
+- source type (channel);
+- source reference;
+- supplied-by;
+- extraction run, proposal and review lineage.
+
+Provenance is visible to the reviewer, read-only and tied to the same Business.
+AI interpretation of a source, such as `evidenceType` or source notes, is labelled
+as AI-proposed and must not masquerade as provenance.
+
 ## Claim–Evidence relationship strength
 
 `claim_evidence.strength_score` is a nullable 0–1 semantic-link-confidence value.

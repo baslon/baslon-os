@@ -32,8 +32,24 @@ context stayed non-evidentiary. One run was rejected, as designed, when the mode
 turned "five-day" into 5 (backlog B-31). No prompt, model or code change followed.
 See `docs/m4-02a-h4-live-model-validation.md`.
 
-Not started: the Baslon Digital rebuild, archiving the current Baslon Digital
-Business, M4-02B, and Phase 1 Diagnosis.
+**Baslon Digital controlled rebuild: PAUSED after S1.**
+
+- Rebuild Business `9aec14e1-4eae-47cd-9ddd-d43d8d26d8de` ("Baslon Digital — Rebuild 2026") holds S1 only (Snapshot 1 `6056c37f-…`).
+- S2 has not been processed. Nothing has been archived.
+- The rebuild was paused because M4-11 was material: Accept had committed qualifiers the reviewer was not shown.
+
+**M4-11 + N-1 (human review completeness and application-owned provenance)** are implemented in the working tree and awaiting architectural review.
+
+- The review card now shows the complete canonical object Accept will persist.
+- Evidence type, source notes and Metric dimensions are correctable.
+- Provenance comes from the extraction run, not the model.
+- New records carry `reviewCardVersion = "m4_11_v1"`.
+- Older reviewed records, including the rebuild's S1, show a read-time warning; no data changed.
+- See `docs/milestone-4-m4-11-review-completeness-provenance.md`.
+
+After this fix is merged, S1 is to be re-run in a fresh rebuild Business before S2.
+
+Not started: M4-02B and Phase 1 Diagnosis. The current Baslon Digital Business has not been archived.
 
 ## Active Baslon Digital Business
 
