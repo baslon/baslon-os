@@ -605,6 +605,13 @@ Add CI, or explicitly document why CI remains deferred. When adding CI, fix B-29
 ### Resolution
 `evidence_extractor_v6`/`v7` and the validator now state one rule. A number may be written in digits (optionally with £, $, € or %, a k suffix, or an m suffix after a currency symbol), or as a whole-number word from zero to ninety-nine ("twelve", "twenty-five"). A number word is not converted when it is part of a compound description ("three-day"), follows approximation language ("about ten" stays qualitative), or is larger than ninety-nine ("a hundred"). Covered by `tests/unit/numeric-precision.test.tsx` and `tests/unit/evidence-extractor.test.ts`.
 
+### Refinement — approximation scope in coordinated measurement phrases (20 September 2026, awaiting architectural review)
+The validator originally required an approximation cue to sit directly beside its number, so "roughly a three-day, 30-hour working week" could not be recorded: the model proposed `approximate` for 30, and validation rejected it because "roughly" was separated by the compound term. This blocked the Baslon Digital S1 rebuild three times.
+
+One approximation cue now governs a later measurement of the **same coordinated phrase**. The cue reaches the number only when everything between them is an article followed by compound measurement terms ("three-day") and their separators (a comma, "and", or both). Anything else — another word, punctuation, a sentence boundary or a contrasting clause such as "but" — breaks the match, so approximation cannot reach an unrelated number.
+
+Unchanged: `evidence_extractor_v6`/`v7`, prompt versions, the precision vocabulary, B-15 all-or-nothing validation, and the rule that compound terms such as "three-day" never become numeric Evidence. B-31 (the model converting a compound number word) is a separate behaviour and **remains open**.
+
 ### Finding
 Prompt wording historically prohibited number-word conversion while deterministic validation allowed bounded cardinal normalization such as `three` → `3`.
 

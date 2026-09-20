@@ -170,6 +170,52 @@ describe("M4-02A numeric precision: extraction grounding", () => {
     }
   });
 
+  // M4-10 refinement: an approximation cue governs a later measurement of the same
+  // coordinated phrase, without leaking onto unrelated numbers.
+  const approximate = (value: number, sourceExcerpt: string) =>
+    numericPrecisionIssue({ precision: "approximate", value, lower: null, upper: null, sourceExcerpt });
+
+  it("lets one approximation cue govern a coordinated measurement phrase", () => {
+    const excerpt = "roughly a three-day, 30-hour working week";
+    expect(approximate(30, excerpt)).toBeUndefined();
+    // The compound term itself is still not a number.
+    expect(() => validate(numericOutput({ excerpt, precision: "exact", value: 3, unit: "days per week" }), `The founder wants ${excerpt}.`))
+      .toThrow("not explicitly present");
+    // The whole proposal validates end to end, which is what blocked the rebuild.
+    const source = "The founder's goal is to build a business that can be run in roughly a three-day, 30-hour working week.";
+    expect(validate(numericOutput({ excerpt, precision: "approximate", value: 30, unit: "hours per week" }), source)
+      .evidence[0]).toMatchObject({ valueNumeric: 30, valuePrecision: "approximate" });
+  });
+
+  it("requires a cue: the same phrase without one is not approximate", () => {
+    expect(approximate(30, "a three-day, 30-hour working week")).toContain("no adjacent approximation language");
+  });
+
+  it("keeps the plain adjacent case working", () => {
+    expect(approximate(30, "roughly 30 hours per week")).toBeUndefined();
+  });
+
+  it("does not let approximation cross a sentence boundary", () => {
+    expect(approximate(30, "We work roughly a three-day week. We have 30 clients."))
+      .toContain("no adjacent approximation language");
+  });
+
+  it("does not let approximation cross a contrasting clause", () => {
+    for (const excerpt of [
+      "We aim for roughly a three-day week but bill 30 hours.",
+      "Roughly a two-day week, however we still invoice 30 hours.",
+    ]) {
+      expect(approximate(30, excerpt), excerpt).toContain("no adjacent approximation language");
+    }
+  });
+
+  it("does not reach an unrelated later number in the same sentence", () => {
+    // 30 is governed; the following 45 is a separate measurement.
+    const excerpt = "roughly a three-day, 30-hour week and 45 admin hours";
+    expect(approximate(30, excerpt)).toBeUndefined();
+    expect(approximate(45, excerpt)).toContain("no adjacent approximation language");
+  });
+
   it("applies the aligned M4-10 written-number rule", () => {
     expect(() => validate(numericOutput({ excerpt: "twelve projects", precision: "exact", value: 12 }), "We ran twelve projects."))
       .not.toThrow();
