@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 19 September 2026
+Updated: 20 September 2026
 
 ## Current engineering milestone
 
@@ -38,7 +38,7 @@ See `docs/m4-02a-h4-live-model-validation.md`.
 - S2 has not been processed. Nothing has been archived.
 - The rebuild was paused because M4-11 was material: Accept had committed qualifiers the reviewer was not shown.
 
-**M4-11 + N-1 (human review completeness and application-owned provenance)** are implemented in the working tree and awaiting architectural review.
+**M4-11 + N-1 (human review completeness and application-owned provenance)** are merged (PR #6, `13f5df1`; implementation commit `c7e0b6d`). No schema migration was required.
 
 - The review card now shows the complete canonical object Accept will persist.
 - Evidence type, source notes and Metric dimensions are correctable.
@@ -47,7 +47,16 @@ See `docs/m4-02a-h4-live-model-validation.md`.
 - Older reviewed records, including the rebuild's S1, show a read-time warning; no data changed.
 - See `docs/milestone-4-m4-11-review-completeness-provenance.md`.
 
-After this fix is merged, S1 is to be re-run in a fresh rebuild Business before S2.
+Architectural review and a manual browser smoke test both passed (15 of 15 checks, on `baslon_os_test`; see `docs/milestone-4-m4-11-review-completeness-provenance.md` and `docs/m4-11-architectural-analysis.md`).
+
+The rebuild's S1 records predate the complete review card and therefore show the
+read-time warning. Per the approved architecture decision, the next rebuild step is
+to re-run S1 in a **fresh** rebuild Business under the new review card, before S2.
+Rebuild Business `9aec14e1-…` is kept as history; archiving it is a separate
+Product Owner decision.
+
+Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
+grounding) and B-31 (compound number words).
 
 Not started: M4-02B and Phase 1 Diagnosis. The current Baslon Digital Business has not been archived.
 

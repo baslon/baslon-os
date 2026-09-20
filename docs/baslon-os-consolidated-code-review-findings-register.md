@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are implemented and awaiting architectural review. The Baslon Digital controlled rebuild is paused after S1; M4-02B and Phase 1 Diagnosis have not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. The Baslon Digital controlled rebuild is paused after S1; M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -619,7 +619,8 @@ At the next approved extraction contract change:
 
 ## M4-11 — Accept commits AI-assigned qualifiers the reviewer was not shown
 
-**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026; scope broadened 19 September 2026 (`docs/m4-11-architectural-analysis.md`).**Status:** **RESOLVED — M4-11 (19 September 2026, awaiting architectural review)**
+**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026; scope broadened 19 September 2026 (`docs/m4-11-architectural-analysis.md`).\
+**Status:** **RESOLVED — M4-11 (merged 20 September 2026, PR #6 `13f5df1`)**
 
 ### Broadened finding
 Accept persisted the **whole** proposal while the review card showed only part of it:
@@ -650,7 +651,8 @@ Governed by the approved architecture decision *M4-11 Human Review Completeness 
 
 ## N-1 — Canonical provenance was authored by the model
 
-**Origin:** M4-11 architectural analysis, 19 September 2026.**Status:** **RESOLVED — M4-11 (19 September 2026, awaiting architectural review)**
+**Origin:** M4-11 architectural analysis, 19 September 2026.\
+**Status:** **RESOLVED — M4-11 (merged 20 September 2026, PR #6 `13f5df1`)**
 
 ### Finding
 Evidence `sourceType`, `sourceReference` and `sourceMetadata.suppliedBy`, and Claim `sourceType`, were persisted from the extraction model's output. The model echoed the application's input, but nothing validated it, so a model could write arbitrary provenance into canonical Evidence.
@@ -1258,7 +1260,8 @@ The test now stubs `TEST_DATABASE_URL` to empty for the no-argument check and re
 
 ## B-31 — Live model occasionally converts compound number words ("five-day" → 5)
 
-**Origin:** H4 live-model validation, 19 September 2026.\n**Status:** **BACKLOG — non-blocking observation**
+**Origin:** H4 live-model validation, 19 September 2026.\
+**Status:** **BACKLOG — non-blocking observation**
 
 In one of three `evidence_extractor_v6` runs, `gpt-5.6-luna` proposed the value 5 from "a five-day week", although the prompt says compound number words stay qualitative. The deterministic validator rejected the run as designed, so no invalid value could reach review. Because validation is all-or-nothing (B-15), the run's correct items were discarded too, and a retry is needed.
 
