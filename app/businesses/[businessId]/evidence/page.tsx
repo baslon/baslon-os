@@ -9,6 +9,13 @@ import { EvidenceValue } from "../../../evidence-value";
 import { formatWorkspaceMetric } from "@/domain/workspace-metrics";
 import { acceptsAddInformation } from "@/domain/workflow";
 import { numericPrecisionLabel } from "@/domain/numeric-precision";
+import { legacyReviewCardWarning } from "@/domain/review-card";
+
+/** Read-time label for reviewed records admitted before the complete review card (M4-11). */
+function LegacyReviewWarning({ reviewed, lineageJson }: { reviewed: boolean; lineageJson: unknown }) {
+  const warning = reviewed ? legacyReviewCardWarning(lineageJson) : null;
+  return warning ? <p className="muted review-legacy-warning">{warning}</p> : null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +48,7 @@ function ClaimCard({ claim, businessId, evidenceItems, readOnly }: { claim: Clai
     <h3>{claim.statement}</h3>
     <p className="record-attributes"><span>{claim.confidenceLevel} confidence</span><span>{claim.subjectArea}</span></p>
     {claim.lineage ? <p className="muted">Human reviewed · {claim.lineage.review.decision.toLowerCase()}</p> : <p className="muted">Entered outside Evidence Review.</p>}
+    <LegacyReviewWarning reviewed={Boolean(claim.lineage)} lineageJson={claim.confidenceBasis} />
     <details className="audit-details"><summary>Audit details</summary>
       <pre>{JSON.stringify(claim.confidenceBasis, null, 2)}</pre>
       {!readOnly && claim.claimType !== "fact" && evidenceItems.length > 0 ? <FactAdmissionAction>
@@ -117,10 +125,11 @@ export default async function EvidenceStatePage({ params, searchParams }: PagePr
       <p className="eyebrow">Evidence</p><EvidenceValue statement={item.statement} valueNumeric={item.valueNumeric} valueText={item.valueText} unit={item.unit} valuePrecision={item.valuePrecision} valueLower={item.valueLower} valueUpper={item.valueUpper} />
       <p className="record-attributes"><span>{item.reliabilityLevel} reliability</span><span>{item.directnessLevel} directness</span><span>{item.materiality} materiality</span></p>
       <p className="muted">Source: {item.sourceReference ?? sourceLabel(item.sourceType)}{item.lineage ? ` · Human ${item.lineage.review.decision.toLowerCase()}` : ""}</p>
+      <LegacyReviewWarning reviewed={Boolean(item.lineage)} lineageJson={item.sourceMetadata} />
       <details><summary>Source provenance</summary><pre>{JSON.stringify(item.sourceMetadata, null, 2)}</pre></details>
     </article>)}</div> : <p className="empty-state">No Evidence has been recorded yet.</p>}</section> : null}
 
-    {view === "metrics" ? <section><h2>Metrics</h2>{state.metrics.length > 0 ? <div className="metric-grid">{state.metrics.map((item) => <article className="metric-card" key={item.id}><p>{item.metricLabel}</p><strong>{formatWorkspaceMetric(item)}</strong><span className="muted">Precision: {numericPrecisionLabel(item.numericPrecision)}</span><span className="muted">{item.sourceEvidenceId ? "Source evidence available" : "No source evidence linked"}</span></article>)}</div> : <p className="empty-state">No metrics have been recorded yet.</p>}</section> : null}
+    {view === "metrics" ? <section><h2>Metrics</h2>{state.metrics.length > 0 ? <div className="metric-grid">{state.metrics.map((item) => <article className="metric-card" key={item.id}><p>{item.metricLabel}</p><strong>{formatWorkspaceMetric(item)}</strong><span className="muted">Precision: {numericPrecisionLabel(item.numericPrecision)}</span><span className="muted">{item.sourceEvidenceId ? "Source evidence available" : "No source evidence linked"}</span><LegacyReviewWarning reviewed={Boolean(item.lineage)} lineageJson={item.dimensionData} /></article>)}</div> : <p className="empty-state">No metrics have been recorded yet.</p>}</section> : null}
 
     {view === "relationships" ? <section><h2>Relationships</h2>{state.relationships.length > 0 ? <div className="record-list">{state.relationships.map((item) => <article className="record-card relationship-card" key={`${item.claimId}-${item.evidenceId}-${item.relationshipType}`}>
       <div><p className="eyebrow">Claim</p><h3>{claimById.get(item.claimId)?.statement ?? "Claim unavailable"}</h3></div>

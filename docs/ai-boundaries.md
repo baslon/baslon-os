@@ -1,5 +1,23 @@
 # Baslon OS — AI Boundaries
 
+## Review completeness and provenance
+
+AI-proposed values reach canonical state only after a human has seen them on the
+review card:
+
+- Claim subject area, confidence score and confidence basis;
+- Evidence type, value text, unit, period, reliability, directness, recency and
+  source notes;
+- Metric key, unit, period, dimension and source-Evidence link.
+
+A model must not author canonical provenance. The source type, source reference
+and supplied-by it echoes stay in the immutable proposal only; canonical records
+take them from the extraction run.
+
+Showing a qualifier to the reviewer does not change its meaning. Reliability,
+directness, recency, confidence and `strengthScore` remain non-truth-weights
+(M4-06), and their vocabulary is still uncontrolled (B-09).
+
 ## Relationship-strength interpretation
 
 An AI model may emit Claim ↔ Evidence relationship strength only as confidence in

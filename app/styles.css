@@ -169,6 +169,13 @@ summary { cursor: pointer; font-weight: 600; }
 .fact-admission-content { padding-top: 0.75rem; }
 .fact-admission-content h4 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 600; }
 .relationship-endpoints strong { font-weight: 600; }
+.review-record-details, .review-provenance { margin: 1.5rem 0; padding: 1rem 1.2rem; border-radius: 0.6rem; background: #f4f1e9; }
+.review-record-details h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+.review-record-details dl, .review-provenance dl { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 0.35rem 1rem; margin: 0.8rem 0 0; }
+.review-record-details dt, .review-provenance dt { color: var(--muted); }
+.review-record-details dd, .review-provenance dd { margin: 0; overflow-wrap: anywhere; }
+.review-record-details dl > div, .review-provenance dl > div { display: contents; }
+.review-provenance summary { cursor: pointer; font-weight: 600; }
 pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0.4rem; background: #f1efe9; font-size: 0.82rem; }
 
 @media (max-width: 720px) {

@@ -313,7 +313,8 @@ describe("Milestone 2B Evidence Review", () => {
       .where(eq(evidence.id, reviewed.canonicalEntityId!));
     expect(canonical).toMatchObject({
       valueNumeric: "80000.0000",
-      sourceReference: "Baslon Business #001 messy intake",
+      // Provenance comes from the extraction run, not the model's echoed reference (N-1).
+      sourceReference: "Baslon #001 review fixture",
       sourceMetadata: expect.objectContaining({
         sourceExcerpt: "about £80k over the last year",
         evidenceReview: expect.objectContaining({ reviewerId: "David" }),
@@ -743,6 +744,103 @@ describe("Milestone 2B Evidence Review", () => {
       await review("evidence_5", "ACCEPTED");
       const onQualitative = await review("metric_5", "CORRECTED", { numericPrecision: "estimate" });
       expect((await canonicalMetric(onQualitative.canonicalEntityId)).numericPrecision).toBe("estimate");
+    });
+  });
+
+  describe("M4-11 review completeness and N-1 application provenance", () => {
+    /** The model writes its own provenance here; none of it may reach canonical state. */
+    function modelProvenanceOutput(): EvidenceExtractionOutput {
+      const output = structuredClone(baslonExtractionOutput);
+      output.claims = output.claims.map((claim) => ({ ...claim, sourceType: "model_invented_channel" }));
+      output.evidence = output.evidence.map((item) => ({
+        ...item,
+        sourceType: "model_invented_channel",
+        sourceReference: "Model-written reference",
+        sourceMetadata: { suppliedBy: "model_claims_founder", notes: "Accounts not yet checked" },
+        rawPayload: { excerpt: "model free text" },
+      }));
+      return output;
+    }
+
+    async function reviewSetup() {
+      const setup = await extractedBusiness(modelProvenanceOutput());
+      const { session, proposals } = await startReview(setup);
+      const review = (proposalRef: string, decision: "ACCEPTED" | "CORRECTED", correctedPayload?: Record<string, unknown>) =>
+        setup.reviewService.reviewProposal({
+          businessId: setup.business.id, reviewSessionId: session.id,
+          proposalId: proposals.get(proposalRef)!.id, reviewerId: "David", decision, correctedPayload,
+        });
+      return { setup, session, proposals, review };
+    }
+
+    it("persists provenance from the extraction run and stamps the review-card version", async () => {
+      const { setup, session, proposals, review } = await reviewSetup();
+      const acceptedEvidence = await review("evidence_1", "ACCEPTED");
+      const acceptedClaim = await review("claim_1", "ACCEPTED");
+      const acceptedMetric = await review("metric_1", "ACCEPTED");
+      const [item] = await database.select().from(evidence).where(eq(evidence.id, acceptedEvidence.canonicalEntityId!));
+      const [claim] = await database.select().from(claims).where(eq(claims.id, acceptedClaim.canonicalEntityId!));
+      const [metric] = await database.select().from(metrics).where(eq(metrics.id, acceptedMetric.canonicalEntityId!));
+      const lineage = {
+        reviewSessionId: session.id,
+        extractionRunId: setup.extraction.run.id,
+        reviewerId: "David",
+        reviewCardVersion: "m4_11_v1",
+      };
+
+      // Application-owned provenance: run channel/reference; the model's claims are discarded.
+      expect(item).toMatchObject({ sourceType: "business_intake", sourceReference: "Baslon #001 review fixture" });
+      expect(item.sourceMetadata).toMatchObject({
+        suppliedBy: null,
+        notes: "Accounts not yet checked",
+        evidenceReview: { ...lineage, proposalId: proposals.get("evidence_1")!.id },
+      });
+      expect(item.rawPayload).toMatchObject({
+        excerpt: "about £80k over the last year",
+        extractionRunId: setup.extraction.run.id,
+        proposalId: proposals.get("evidence_1")!.id,
+      });
+      expect(JSON.stringify(item)).not.toMatch(/model_invented_channel|Model-written reference|model_claims_founder|model free text/);
+      expect(claim.sourceType).toBe("business_intake");
+      expect(claim.confidenceBasis).toMatchObject({ evidenceReview: { ...lineage, proposalId: proposals.get("claim_1")!.id } });
+      expect(metric.dimensionData).toMatchObject({ evidenceReview: { ...lineage, proposalId: proposals.get("metric_1")!.id } });
+
+      // Relationships are unaffected: same canonical values as before M4-11.
+      const relationship = await review("relationship_1", "ACCEPTED");
+      expect(relationship.canonicalReference).toMatchObject({
+        claimId: acceptedClaim.canonicalEntityId,
+        evidenceId: acceptedEvidence.canonicalEntityId,
+        relationshipType: "supports",
+      });
+    });
+
+    it("persists corrected Evidence type, source notes and Metric dimensions", async () => {
+      const { review } = await reviewSetup();
+      const correctedEvidence = await review("evidence_1", "CORRECTED", {
+        evidenceType: "founder_estimate", sourceNotes: "Founder notes; accounts not reconciled",
+      });
+      const correctedMetric = await review("metric_1", "CORRECTED", {
+        dimensionData: { dimension: "business", value: "Baslon Digital" },
+      });
+      const [item] = await database.select().from(evidence).where(eq(evidence.id, correctedEvidence.canonicalEntityId!));
+      const [metric] = await database.select().from(metrics).where(eq(metrics.id, correctedMetric.canonicalEntityId!));
+      expect(item.evidenceType).toBe("founder_estimate");
+      expect(item.sourceMetadata).toMatchObject({ notes: "Founder notes; accounts not reconciled", suppliedBy: null });
+      expect(correctedEvidence.reviewedPayload).toMatchObject({
+        evidenceType: "founder_estimate",
+        sourceMetadata: { notes: "Founder notes; accounts not reconciled" },
+      });
+      expect(metric.dimensionData).toMatchObject({
+        dimension: "business", value: "Baslon Digital",
+        evidenceReview: { reviewCardVersion: "m4_11_v1" },
+      });
+    });
+
+    it("rejects correcting provenance, which is not reviewer-editable", async () => {
+      const { review } = await reviewSetup();
+      await expect(review("evidence_1", "CORRECTED", { sourceReference: "Reviewer-typed reference" })).rejects.toThrow();
+      await expect(review("evidence_1", "CORRECTED", { sourceType: "reviewer_channel" })).rejects.toThrow();
+      await expect(review("evidence_1", "CORRECTED", { sourceMetadata: { suppliedBy: "reviewer" } })).rejects.toThrow();
     });
   });
 

@@ -51,6 +51,7 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
     return <>
       <div className="correction-grid">
         <label>Statement<input name="statement" defaultValue={display(payload.statement)} /></label>
+        <label>Evidence type<input name="evidenceType" defaultValue={display(payload.evidenceType)} /></label>
         <label>Numeric value<input name="valueNumeric" type="number" step="any" defaultValue={display(payload.valueNumeric)} /></label>
         <label>Precision<select name="valuePrecision" defaultValue={display(payload.valuePrecision ?? (payload.valueNumeric === null || payload.valueNumeric === undefined ? "" : "unspecified"))}>
           <option value="">No numeric value</option>
@@ -67,6 +68,7 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
         <label>Directness<input name="directnessLevel" defaultValue={display(payload.directnessLevel)} /></label>
         <label>Recency<input name="recencyLevel" defaultValue={display(payload.recencyLevel)} /></label>
         <label>Materiality<input name="materiality" defaultValue={display(payload.materiality)} /></label>
+        <label>Source notes<input name="sourceNotes" defaultValue={display((payload.sourceMetadata as Record<string, unknown> | undefined)?.notes)} /></label>
       </div>
       <p className="note">Reliability describes how trustworthy the Evidence is. Materiality describes its strategic importance. Precision describes how precisely the source states the number; a range uses the two bounds and no single value. These are separate judgments.</p>
     </>;
@@ -84,6 +86,8 @@ export function ProposalCorrectionFields({ proposal }: { proposal: ReviewablePro
       <label>Unit<input name="unit" defaultValue={display(payload.unit)} /></label>
       <label>Period start<input name="periodStart" type="date" defaultValue={display(payload.periodStart)} /></label>
       <label>Period end<input name="periodEnd" type="date" defaultValue={display(payload.periodEnd)} /></label>
+      <label>Dimension<input name="dimension" defaultValue={display((payload.dimensionData as Record<string, unknown> | undefined)?.dimension)} /></label>
+      <label>Dimension value<input name="dimensionValue" defaultValue={display((payload.dimensionData as Record<string, unknown> | undefined)?.value)} /></label>
       <p className="note">A Metric taken from numeric Evidence must have the same precision as that Evidence. If you changed the Evidence precision, choose the same precision here.</p>
     </div>;
   }

@@ -7,23 +7,11 @@ import {
 } from "../../../../actions";
 import { getBusinessService, getEvidenceReviewService, getSourceSubmissionService } from "@/foundation";
 import { ProposalReviewControls } from "../../../../proposal-review-controls";
-import { RelationshipEndpoints } from "../../../../relationship-endpoints";
-import { ProposalNumericValue } from "../../../../proposal-numeric-value";
+import { ProposalReviewSummary } from "../../../../proposal-review-summary";
 import { buildReviewQueue } from "@/domain/review-queue";
+import { applicationProvenance } from "@/domain/review-card";
 
 export const dynamic = "force-dynamic";
-
-function display(value: unknown) {
-  if (value === null || value === undefined) return "";
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-const proposalLabels = {
-  claim: "Claim",
-  evidence: "Evidence",
-  metric: "Metric",
-  claim_evidence: "Relationship",
-} as const;
 
 export default async function EvidenceReviewPage({
   params,
@@ -115,16 +103,13 @@ export default async function EvidenceReviewPage({
       <div className="button-row centered"><Link className="button-link" href={`/businesses/${businessId}/evidence`}>View Evidence State →</Link><Link href={`/businesses/${businessId}`}>Return to {business.name}</Link></div>
     </section> : current && payload ? <section aria-label="Current proposal">
       <article className="proposal-card current-proposal">
-        <p className="eyebrow">{proposalLabels[current.proposalType]}</p>
-        <h2>{display(payload.statement ?? payload.metricLabel ?? payload.relationshipType)}</h2>
-        <div className="proposal-attributes">
-          {payload.claimType ? <span>{display(payload.claimType).replaceAll("_", " ")}</span> : null}
-          {payload.confidenceLevel ? <span>{display(payload.confidenceLevel)} confidence</span> : null}
-          {payload.materiality ? <span>{display(payload.materiality)} materiality</span> : null}
-        </div>
-        {payload.sourceExcerpt ? <div className="source-block"><p className="eyebrow">Source</p><blockquote>{display(payload.sourceExcerpt)}</blockquote></div> : null}
-        {current.proposalType === "claim_evidence" ? <RelationshipEndpoints relationship={payload} proposals={details.proposals} /> : null}
-        <ProposalNumericValue proposalType={current.proposalType} payload={payload} />
+        <ProposalReviewSummary
+          proposal={current}
+          proposals={details.proposals}
+          provenance={applicationProvenance(extraction.run)}
+          extractionRunId={runId}
+          reviewerId={details.session.reviewerId}
+        />
         <ProposalReviewControls proposal={current} context={{
           businessId,
           extractionRunId: runId,

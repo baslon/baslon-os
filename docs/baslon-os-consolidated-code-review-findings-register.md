@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). The Baslon Digital rebuild, M4-02B and Phase 1 Diagnosis have not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are implemented and awaiting architectural review. The Baslon Digital controlled rebuild is paused after S1; M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -471,6 +471,9 @@ Do not weaken the current rule:
 ### Progress note (M4-02A, 19 September 2026)
 Not resolved. M4-02A extends the existing numeric isolation to precision: range bounds and precision wording must be grounded in the human answer, and `evidence_extractor_v7` says the question cannot make an answer approximate or exact. Claims and other descriptive fields still lack deterministic grounding.
 
+### Note (M4-11, 19 September 2026)
+Not resolved. M4-11 makes every persisted descriptive field visible and correctable at review, which helps the human catch question-context contamination. It adds no deterministic grounding, so this finding remains open.
+
 ---
 
 ## M4-04 — Milestone 4 artifact-specific workflow preconditions do not yet exist
@@ -616,23 +619,49 @@ At the next approved extraction contract change:
 
 ## M4-11 — Accept commits AI-assigned qualifiers the reviewer was not shown
 
-**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Origin:** Claude MEDIUM (original finding broader than R-13); confirmed 18 September 2026; scope broadened 19 September 2026 (`docs/m4-11-architectural-analysis.md`).**Status:** **RESOLVED — M4-11 (19 September 2026, awaiting architectural review)**
+
+### Broadened finding
+Accept persisted the **whole** proposal while the review card showed only part of it:
+
+- **Claims:** subject area, confidence score, confidence basis, source type.
+- **Evidence:** evidence type, value text, unit, period, reliability level and score, directness, recency, source notes, provenance.
+- **Metrics:** metric key, unit, period, dimension, source-Evidence link.
+
+Relationships were already complete (R-13). Evidence State later labelled these values "Human reviewed". The originally recorded four fields (Claim `confidenceScore`; Evidence reliability, directness and recency) were a subset.
+
+### Resolution
+Governed by the approved architecture decision *M4-11 Human Review Completeness & N-1 Provenance*. See `docs/milestone-4-m4-11-review-completeness-provenance.md`.
+
+- **Complete card:** the pending card renders the complete canonical object Accept will persist.
+  - AI-proposed values appear under "Recorded if you accept".
+  - Application provenance appears read-only.
+  - There is no per-field confirmation.
+- **Newly correctable:** Evidence `evidenceType`, Evidence `sourceMetadata.notes` and Metric `dimensionData`.
+- **Review-card stamp:** new Claims, Evidence and Metrics carry `evidenceReview.reviewCardVersion = "m4_11_v1"`.
+- **Older records:** reviewed records without the stamp show "Qualifiers were AI-assigned and were not all displayed at the original review." at read time. No record is rewritten.
+- **Regression invariant:** a field manifest must equal the proposal schemas, and every shown field must render with its exact value (`tests/unit/review-card.test.tsx`).
+
+### Remaining boundaries
+- **M4-06 still applies:** the qualifiers are still not truth weights.
+- **B-09 remains open:** a controlled vocabulary for the qualifiers.
+- **Rebuild S1 records:** the rebuild Business `9aec14e1-…` S1 records predate the fix and show the legacy warning. S1 is to be re-run in a fresh rebuild Business.
+---
+
+## N-1 — Canonical provenance was authored by the model
+
+**Origin:** M4-11 architectural analysis, 19 September 2026.**Status:** **RESOLVED — M4-11 (19 September 2026, awaiting architectural review)**
 
 ### Finding
-R-13 made relationship `strengthScore` visible. The review card still does not show these AI-assigned values, which Accept commits to canonical state and the Evidence State page later labels as human-reviewed:
+Evidence `sourceType`, `sourceReference` and `sourceMetadata.suppliedBy`, and Claim `sourceType`, were persisted from the extraction model's output. The model echoed the application's input, but nothing validated it, so a model could write arbitrary provenance into canonical Evidence.
 
-- Claim `confidenceScore`;
-- Evidence `reliabilityLevel` and `reliabilityScore`;
-- Evidence `directnessLevel` and `recencyLevel`.
-
-They are visible only if the reviewer opens the correction form.
-
-### Why Milestone 4 matters
-Diagnosis will be tempted to treat these as human-validated weights (see M4-06).
-
-### Required action
-Before diagnosis consumes these fields, either show them read-only on the review card before Accept, or treat them explicitly as AI-assigned unless corrected.
+### Resolution
+- **Provenance from the run:** `applicationProvenance(run)` derives provenance from the reviewed extraction run (`source_type`, `source_reference`, `source_metadata.suppliedBy`). An application label, `unrecorded`, is used when a run recorded no channel.
+- **Validated excerpt:** Evidence `raw_payload` carries the validated source excerpt plus the run and proposal IDs, not model text.
+- **Same-Business check:** the review service refuses a run from another Business.
+- **Visible and read-only:** provenance is shown on the card and cannot be corrected; the strict correction schemas reject it.
+- **No separation needed:** `sourceType` is a channel, not overloaded. The AI's interpretive classification is `evidenceType`, which stays AI-proposed, visible and correctable. No schema change.
+- **Immutable proposals:** proposals keep the model's echoed values and are never rewritten.
 
 ---
 
@@ -967,6 +996,8 @@ Before use:
 Examples include free-text lifecycle/quality vocabulary.
 
 Add constraints only where the product vocabulary is stable.
+
+M4-11 note (19 September 2026): the reliability, directness and recency qualifiers are now visible and correctable before Accept. Their vocabulary is still uncontrolled free text (for example, recency "relevant"). This finding remains open as the follow-up.
 
 ---
 
@@ -1317,7 +1348,7 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 
 - [x] Decide the `GAP_RESOLUTION_REQUIRED` path. Resolved by Milestone 4A: Add Information (with or without a question) or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`, with Add Information also available from `PHASE1_READY` (M4-01).
 - [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
-- [ ] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11).
+- [x] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11). Resolved: the complete canonical object is shown before Accept; older records are labelled at read time.
 - [ ] Define one exact snapshot-bound diagnosis input contract.
 - [ ] Define diagnosis output as separate non-canonical analytical persistence.
 - [ ] Define human diagnosis approval as a separate immutable record.
