@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is an open Milestone 4 blocker: the Baslon Digital controlled rebuild v2 is held at `GAP_ANALYSIS` on Snapshot 4 until it is resolved and merged. M4-02B and Phase 1 Diagnosis have not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) remains an open Milestone 4 blocker. It is merged (PR #9) and post-merge verified; it resolves when a Product Owner-approved Evidence Coherence run on Snapshot 4 succeeds. The Baslon Digital controlled rebuild v2 is held at `GAP_ANALYSIS` on Snapshot 4 until then. M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -678,7 +678,7 @@ Evidence `sourceType`, `sourceReference` and `sourceMetadata.suppliedBy`, and Cl
 
 **Origin:** Baslon Digital controlled rebuild v2, live Evidence Coherence runs, 21 September 2026.\
 **Classification:** Milestone 4 blocker.\
-**Status:** **OPEN — implemented on `claude/milestone-4`, awaiting Solution Architect review.** Stays open until implementation, automated tests, live regression validation and merge are complete.\
+**Status:** **OPEN — merged (PR #9, merge `d370d7d`, implementation `449cbe4`) and post-merge verified 21 September 2026; awaiting the Snapshot 4 live regression.** Implementation, automated tests and merge are complete. It resolves only when one Product Owner-approved Evidence Coherence run on Snapshot 4 succeeds under `evidence_coherence_input_v3` / `evidence_coherence_v4`.\
 **Governing decision:** `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-decision.md`
 
 ### Finding
@@ -698,12 +698,28 @@ The all-or-nothing validator rejected both corrupted outputs, and nothing was pe
 ### Risk
 As snapshots grow, model-authored UUID reproduction creates avoidable failures and can stop workflow progression even when the analytical content is valid. The rebuild is held at `GAP_ANALYSIS` on Snapshot 4 until this is resolved.
 
-### Implementation (awaiting review)
+### Implementation (merged, PR #9)
 - **New versions:** `evidence_coherence_input_v3` and `evidence_coherence_v4`. `evidence_coherence_input_v2` and `evidence_coherence_v3` are frozen verbatim; historical runs are not rewritten or revalidated.
 - **Handles:** Claims `C001…`, Evidence `E001…`, Metrics `M001…`, assigned in admission order (`createdAt`, then canonical UUID) and independent of stored array order.
 - **No UUIDs to the model:** the model input carries handles only; relationships and Metric source Evidence use handles too.
 - **Application-owned resolution:** a strict handle syntax, then an exact lookup in a map built only from the analysed snapshot. There is no fuzzy repair, text search or live-state lookup. An unknown, malformed or wrong-namespace handle, or a model-emitted UUID, rejects the whole output.
 - **Persistence unchanged:** `analysis_finding_references` still stores canonical UUIDs. Handles appear only in the input payload and raw model output. No migration.
+- **Validation at `449cbe4`:** TypeScript, ESLint, `npm test` (27 files, 252 tests), PostgreSQL (12 files, 100 tests on `baslon_os_test`) and the production build all passed.
+  - The frozen v2 code reproduces the stored input hash of all four existing rebuild runs.
+  - A bounded live-model check on synthetic data gave 3 of 3 valid runs, with all 37 references valid handles.
+
+### Post-merge verification (21 September 2026)
+- **Repository:** `main`, `origin/main`, `claude/milestone-4` and `origin/claude/milestone-4` are all at `d370d7d`; working tree clean.
+- **Versions:** `evidence_coherence_input_v3` / `evidence_coherence_v4` are active in the service path. The frozen v2 input/hash, v3 prompt and v3 output schema remain available, and their pinned fingerprints pass.
+- **Database (`baslon_os`, read-only):** rebuild Business `a658df7e-…` is unchanged.
+  - Workflow is still `GAP_ANALYSIS` (version 16), with no transition since the failed Snapshot 4 run.
+  - Snapshots 1–4 are unchanged (Snapshot 4 `da6e9a8e-…`, fingerprint `bd0e75c5…`).
+  - Canonical counts are 39 Claims / 59 Evidence / 18 Metrics / 54 relationships.
+  - The four earlier runs, including failed run `9883e5cb-…`, are unchanged. No v3/v4 run exists anywhere.
+  - No `CONTINUE_WITH_GAPS`, diagnosis, archive or delete has occurred. Both earlier Baslon Digital Businesses are unchanged.
+
+### Remaining to resolve
+One Evidence Coherence run on Snapshot 4 under v3/v4, with explicit Product Owner approval, must succeed. Mark RESOLVED only then.
 
 ---
 
