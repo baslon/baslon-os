@@ -21,7 +21,7 @@ import {
 import { BusinessArchivedError } from "@/repositories/business-lifecycle-guard";
 import {
   buildEvidenceCoherenceProjection,
-  evidenceCoherenceModelInput,
+  evidenceCoherenceV2ModelInput,
 } from "@/domain/evidence-coherence-projection";
 import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
@@ -386,7 +386,8 @@ describe("real PostgreSQL 17 archive/write serialization", () => {
         inputProjectionVersion: "evidence_coherence_input_v1",
         promptVersion: "evidence_coherence_v1",
         runType: "snapshot_analysis",
-        inputPayload: evidenceCoherenceModelInput(projection),
+        // A historical-identity run: its payload need only be a well-formed earlier input.
+        inputPayload: evidenceCoherenceV2ModelInput(projection),
         inputHash: randomUUID(),
         provider: "test",
         modelIdentifier: "deterministic",

@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 20 September 2026
+Updated: 21 September 2026
 
 ## Current engineering milestone
 
@@ -32,7 +32,7 @@ context stayed non-evidentiary. One run was rejected, as designed, when the mode
 turned "five-day" into 5 (backlog B-31). No prompt, model or code change followed.
 See `docs/m4-02a-h4-live-model-validation.md`.
 
-**Baslon Digital controlled rebuild: PAUSED after S1.**
+**First (pre-M4-11) rebuild: superseded, not continued.**
 
 - Rebuild Business `9aec14e1-4eae-47cd-9ddd-d43d8d26d8de` ("Baslon Digital — Rebuild 2026") holds S1 only (Snapshot 1 `6056c37f-…`).
 - S2 has not been processed. Nothing has been archived.
@@ -55,21 +55,26 @@ to re-run S1 in a **fresh** rebuild Business under the new review card, before S
 Rebuild Business `9aec14e1-…` is kept as history; archiving it is a separate
 Product Owner decision.
 
-**Rebuild S1 (v2) is blocked, and an M4-10 validator refinement is awaiting review.**
-Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
-2026 v2") was created on 20 September 2026, but three extractions of the approved
-S1 source were rejected: the model proposed `approximate` for the 30 in "roughly a
-three-day, 30-hour working week", and the validator required the cue to sit beside
-the number. The Business holds three immutable failed runs and no canonical data.
+The M4-10 approximation-scope refinement is merged (PR #8, `fddca0b`): one
+approximation cue governs a later measurement of the same coordinated phrase
+("roughly a three-day, 30-hour working week"), and nothing wider.
 
-The approved fix refines the deterministic validator only: one approximation cue
-now governs a later measurement of the same coordinated phrase, reaching it only
-across an article and compound measurement terms. It cannot cross a sentence
-boundary, a contrasting clause or any other wording. `evidence_extractor_v6`/`v7`,
-prompt versions, the precision vocabulary, B-15 and the schema are unchanged, and
-compound terms such as "three-day" still never become numeric Evidence. The
-refinement is implemented in the working tree and awaiting architectural review;
-S1 has not been retried.
+**Baslon Digital controlled rebuild v2: HELD at `GAP_ANALYSIS` pending M4-12.**
+Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
+2026 v2") has processed approved sources S1–S4 through human review:
+
+- Snapshot 4 `da6e9a8e-1ae0-4436-ab67-429a7d33197b` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`): 39 Claims, 59 Evidence, 18 Metrics, 54 relationships.
+- Documented deviations are accepted and left unrepaired: five S3 Evidence records carry inferred period boundaries (`2025-09-01` → `2026-08-31`); S4 has a garbled `claim_1`, a duplicate clean `claim_2`, and a non-standard `metric_1` dimension.
+- Evidence Coherence run `9883e5cb-f2d8-4798-b4ac-16647c203d53` on Snapshot 4 failed because the model corrupted a canonical UUID. It was the second failure of this kind on the same Evidence (Snapshot 3 run `8c3f1af5-…`). No Evidence Coherence retry is permitted until M4-12 is merged and the Product Owner approves it.
+
+**M4-12 (Evidence Coherence snapshot-local reference handles): implemented on
+`claude/milestone-4`, awaiting Solution Architect review.** `evidence_coherence_input_v3`
+and `evidence_coherence_v4` replace model-reproduced canonical UUIDs with handles
+(`C001`, `E001`, `M001` …). Application code resolves the handles to canonical UUIDs
+after validation. v2/v3 are frozen, persistence still stores canonical UUIDs, and no
+migration was needed. See
+`docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-decision.md`
+and Findings Register entry M4-12.
 
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding) and B-31 (compound number words).

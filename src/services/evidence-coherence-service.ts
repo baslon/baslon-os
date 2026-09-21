@@ -11,9 +11,8 @@ import {
   EVIDENCE_COHERENCE_RUN_TYPE,
 } from "@/domain/evidence-coherence";
 import {
-  buildEvidenceCoherenceProjection,
-  evidenceCoherenceModelInput,
-  hashEvidenceCoherenceProjection,
+  buildEvidenceCoherenceModelInput,
+  hashEvidenceCoherenceModelInput,
 } from "@/domain/evidence-coherence-projection";
 import type { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import type { StrategyOrchestrator } from "@/strategy/orchestrator";
@@ -55,12 +54,12 @@ export class EvidenceCoherenceService {
     await this.repository.assertBusinessActive(parsed.businessId);
     const snapshot = await this.repository.getLatestSnapshot(parsed.businessId);
     if (!snapshot) throw new Error("A canonical Evidence State snapshot is required before analysis");
-    const projection = buildEvidenceCoherenceProjection({
+    // The model sees only snapshot-local handles; `references` stays application-side (M4-12).
+    const { modelInput, references } = buildEvidenceCoherenceModelInput({
       ...snapshot,
       snapshotData: snapshot.snapshotData as Record<string, unknown>,
     });
-    const modelInput = evidenceCoherenceModelInput(projection);
-    const inputHash = hashEvidenceCoherenceProjection(projection);
+    const inputHash = hashEvidenceCoherenceModelInput(modelInput);
     const identity = {
       businessId: parsed.businessId,
       inputSnapshotId: snapshot.id,
@@ -112,7 +111,7 @@ export class EvidenceCoherenceService {
       await this.reconcileWorkflow(created.run.id, parsed.businessId, snapshot.id, created.run.status);
       const result = await this.model.analyse(modelInput);
       rawModelOutput = asJsonValue(result.rawOutput);
-      const output = validateEvidenceCoherenceOutput(result.output, projection);
+      const output = validateEvidenceCoherenceOutput(result.output, references);
       const run = await this.repository.completeRun({
         runId: created.run.id,
         businessId: parsed.businessId,

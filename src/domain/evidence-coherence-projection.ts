@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
 import {
+  EVIDENCE_COHERENCE_INPUT_V2_VERSION,
   EVIDENCE_COHERENCE_INPUT_VERSION,
+  type EvidenceCoherenceEntityType,
+  type EvidenceCoherenceModelInput,
   type EvidenceCoherenceProjection,
+  type EvidenceCoherenceV2ModelInput,
 } from "@/domain/evidence-coherence";
+import {
+  formatHandle,
+  type EvidenceCoherenceReference,
+  type EvidenceCoherenceReferenceMap,
+} from "@/domain/evidence-coherence-handles";
 import { readNumericPrecision } from "@/domain/numeric-precision";
 
 type SnapshotRecord = Record<string, unknown>;
@@ -106,15 +115,145 @@ export function stableSerializeEvidenceCoherenceProjection(
   return JSON.stringify(stableValue(projection));
 }
 
-export function hashEvidenceCoherenceProjection(projection: EvidenceCoherenceProjection): string {
-  return createHash("sha256")
-    .update(JSON.stringify(stableValue(evidenceCoherenceModelInput(projection))))
-    .digest("hex");
+function sha256(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");
 }
 
-export function evidenceCoherenceModelInput(projection: EvidenceCoherenceProjection) {
+/** Frozen `evidence_coherence_input_v2` hash, kept so historical input hashes stay reproducible. */
+export function hashEvidenceCoherenceV2Projection(projection: EvidenceCoherenceProjection): string {
+  return sha256(evidenceCoherenceV2ModelInput(projection));
+}
+
+/** Frozen `evidence_coherence_input_v2` model input: the projection with canonical UUIDs. */
+export function evidenceCoherenceV2ModelInput(
+  projection: EvidenceCoherenceProjection,
+): EvidenceCoherenceV2ModelInput {
   return {
-    projectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
+    projectionVersion: EVIDENCE_COHERENCE_INPUT_V2_VERSION,
     snapshot: projection,
+  };
+}
+
+/** Input hash under the same normalization as v2: sorted object keys, arrays in projected order. */
+export function hashEvidenceCoherenceModelInput(modelInput: EvidenceCoherenceModelInput): string {
+  return sha256(modelInput);
+}
+
+const snapshotRecordKeys = ["claims", "evidence", "metrics", "claimEvidence"] as const;
+
+/** A snapshot is Business-scoped; a record naming another Business must never enter the reference map. */
+function assertSnapshotRecordsBelongToBusiness(snapshot: { id: string; businessId: string; snapshotData: Record<string, unknown> }) {
+  for (const key of snapshotRecordKeys) {
+    for (const record of records(snapshot.snapshotData[key])) {
+      if (record.businessId !== undefined && record.businessId !== snapshot.businessId) {
+        throw new Error(`Snapshot ${snapshot.id} contains a ${key} record from another Business`);
+      }
+    }
+  }
+}
+
+function admissionTimes(value: unknown): Map<string, number> {
+  const times = new Map<string, number>();
+  for (const record of records(value)) {
+    const time = Date.parse(text(record.createdAt));
+    times.set(text(record.id), Number.isNaN(time) ? Number.POSITIVE_INFINITY : time);
+  }
+  return times;
+}
+
+/**
+ * Handle ordering rule (evidence_coherence_input_v3): within each entity type,
+ * records are ordered by canonical admission time (`createdAt`, earliest first;
+ * a record without a readable time sorts last), then by canonical UUID compared
+ * as a plain string. The order therefore depends only on snapshot content, never
+ * on the array order the snapshot happens to store.
+ */
+function inAdmissionOrder<T extends { id: string }>(items: T[], times: Map<string, number>): T[] {
+  return items.toSorted((left, right) => {
+    const leftTime = times.get(left.id) ?? Number.POSITIVE_INFINITY;
+    const rightTime = times.get(right.id) ?? Number.POSITIVE_INFINITY;
+    if (leftTime !== rightTime) return leftTime < rightTime ? -1 : 1;
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+  });
+}
+
+function assignHandles<T extends { id: string }>(
+  entityType: EvidenceCoherenceEntityType,
+  items: T[],
+  references: Map<string, EvidenceCoherenceReference>,
+): Map<string, string> {
+  const handles = new Map<string, string>();
+  items.forEach((item, index) => {
+    if (handles.has(item.id)) throw new Error(`Snapshot contains duplicate ${entityType} ${item.id}`);
+    const handle = formatHandle(entityType, index + 1);
+    handles.set(item.id, handle);
+    references.set(handle, { entityType, id: item.id });
+  });
+  return handles;
+}
+
+/**
+ * Builds the `evidence_coherence_input_v3` model input for one immutable
+ * snapshot, and the application-owned map that resolves its handles back to
+ * canonical UUIDs. No canonical UUID is sent to the model. A relationship is
+ * projected only when both of its records are projected; one pointing at a
+ * superseded Claim has no handle and cannot be cited.
+ */
+export function buildEvidenceCoherenceModelInput(snapshot: {
+  id: string;
+  businessId: string;
+  version: number;
+  snapshotData: Record<string, unknown>;
+}): {
+  projection: EvidenceCoherenceProjection;
+  modelInput: EvidenceCoherenceModelInput;
+  references: EvidenceCoherenceReferenceMap;
+} {
+  assertSnapshotRecordsBelongToBusiness(snapshot);
+  const projection = buildEvidenceCoherenceProjection(snapshot);
+  const payload = snapshot.snapshotData;
+  const references = new Map<string, EvidenceCoherenceReference>();
+
+  const claims = inAdmissionOrder(projection.claims, admissionTimes(payload.claims));
+  const evidenceItems = inAdmissionOrder(projection.evidence, admissionTimes(payload.evidence));
+  const metricItems = inAdmissionOrder(projection.metrics, admissionTimes(payload.metrics));
+  const claimHandles = assignHandles("claim", claims, references);
+  const evidenceHandles = assignHandles("evidence", evidenceItems, references);
+  const metricHandles = assignHandles("metric", metricItems, references);
+  const ordinal = (handle: string) => Number(handle.slice(1));
+
+  const relationships = projection.relationships.flatMap((item) => {
+    const claimHandle = claimHandles.get(item.claimId);
+    const evidenceHandle = evidenceHandles.get(item.evidenceId);
+    return claimHandle && evidenceHandle ? [{
+      claimHandle,
+      evidenceHandle,
+      relationshipType: item.relationshipType,
+      strengthScore: item.strengthScore,
+    }] : [];
+  }).toSorted((left, right) => (
+    ordinal(left.claimHandle) - ordinal(right.claimHandle)
+    || ordinal(left.evidenceHandle) - ordinal(right.evidenceHandle)
+    || (left.relationshipType < right.relationshipType ? -1 : left.relationshipType > right.relationshipType ? 1 : 0)
+  ));
+
+  return {
+    projection,
+    references,
+    modelInput: {
+      projectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
+      snapshot: {
+        snapshotVersion: projection.snapshotVersion,
+        profile: projection.profile,
+        claims: claims.map(({ id, ...item }) => ({ handle: claimHandles.get(id)!, ...item })),
+        evidence: evidenceItems.map(({ id, ...item }) => ({ handle: evidenceHandles.get(id)!, ...item })),
+        metrics: metricItems.map(({ id, sourceEvidenceId, ...item }) => ({
+          handle: metricHandles.get(id)!,
+          ...item,
+          sourceEvidenceHandle: sourceEvidenceId ? evidenceHandles.get(sourceEvidenceId) ?? null : null,
+        })),
+        relationships,
+      },
+    },
   };
 }

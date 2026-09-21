@@ -11,7 +11,10 @@ import {
 import { evidenceExtractorContextPrompt, evidenceExtractorPrompt } from "@/ai/evidence-extractor/prompt";
 import { numericPrecisionIssue, validateEvidenceExtractionOutput } from "@/ai/evidence-extractor/validation";
 import { EVIDENCE_COHERENCE_PROMPT_VERSION, evidenceCoherencePrompt } from "@/ai/evidence-coherence/prompt";
-import { buildEvidenceCoherenceProjection } from "@/domain/evidence-coherence-projection";
+import {
+  buildEvidenceCoherenceModelInput,
+  buildEvidenceCoherenceProjection,
+} from "@/domain/evidence-coherence-projection";
 import { evidenceCorrectionSchema, metricCorrectionSchema } from "@/domain/evidence-review";
 import { numericShapeIssue, readNumericPrecision } from "@/domain/numeric-precision";
 import { formatWorkspaceMetric } from "@/domain/workspace-metrics";
@@ -311,7 +314,14 @@ describe("M4-02A numeric precision: legacy and presentation", () => {
     } });
     expect(current.evidence[0]).toMatchObject({ valueNumeric: null, valuePrecision: "range", valueLower: "10.0000", valueUpper: "15.0000" });
     expect(current.metrics[0]).toMatchObject({ numericValue: null, numericPrecision: "range", numericLower: "10.0000" });
-    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v3");
+    // The handle-based model input (evidence_coherence_input_v3) carries the same precision fields.
+    const { modelInput } = buildEvidenceCoherenceModelInput({ ...base, snapshotData: {
+      evidence: [{ id: "e1", statement: "Projects", valueNumeric: null, valuePrecision: "range", valueLower: "10.0000", valueUpper: "15.0000" }],
+      metrics: [{ id: "m1", metricKey: "projects", metricLabel: "Projects", numericValue: null, numericPrecision: "range", numericLower: "10.0000", numericUpper: "15.0000", unit: "projects", sourceEvidenceId: "e1" }],
+    } });
+    expect(modelInput.snapshot.evidence[0]).toMatchObject({ handle: "E001", valuePrecision: "range", valueLower: "10.0000", valueUpper: "15.0000" });
+    expect(modelInput.snapshot.metrics[0]).toMatchObject({ handle: "M001", numericPrecision: "range", sourceEvidenceHandle: "E001" });
+    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v4");
     expect(evidenceCoherencePrompt).toContain("unspecified");
   });
 });
