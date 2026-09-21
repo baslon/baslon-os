@@ -160,6 +160,8 @@ export function buildApprovedDiagnosisArtifact(input: {
     });
   }
 
+  if (!items.length) throw new Error("An approved diagnosis must contain at least one accepted or corrected item");
+
   return {
     artifactVersion: PHASE1_DIAGNOSIS_ARTIFACT_VERSION,
     content: {

@@ -250,4 +250,59 @@ describe("Phase 1 Diagnosis application flow (synthetic data only)", () => {
     expect((await database.select().from(claimEvidence).where(eq(claimEvidence.businessId, fixture.business.id)))).toHaveLength(1);
     expect((await database.select().from(businessStateSnapshots).where(eq(businessStateSnapshots.businessId, fixture.business.id)))).toHaveLength(1);
   });
+
+  describe("approval requires at least one surviving item", () => {
+    /** Generates a diagnosis and records the given decision per item, in item order. */
+    async function reviewed(name: string, decisions: Array<"ACCEPTED" | "CORRECTED" | "REJECTED">) {
+      const fixture = await phase1ReadyBusiness(name);
+      const model = new FakeDiagnosisModel(validDiagnosis);
+      const diagnosis = service(model, fixture.orchestrator);
+      const { run } = await diagnosis.generate({ businessId: fixture.business.id });
+      const items = (await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, run.id)))
+        .toSorted((left, right) => left.itemRef.localeCompare(right.itemRef));
+      const session = await diagnosis.startReview({ businessId: fixture.business.id, runId: run.id, reviewerId: "Reviewer" });
+      const base = { businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer" };
+      for (const [index, decision] of decisions.entries()) {
+        await diagnosis.reviewItem({
+          ...base,
+          diagnosisItemId: items[index].id,
+          decision,
+          correctedPayload: decision === "CORRECTED"
+            ? { ...validDiagnosis(model.inputs[0]).items[0], statement: "Revenue was approximately £240,000 over the last 12 months." }
+            : undefined,
+        });
+      }
+      return { fixture, diagnosis, base, session };
+    }
+
+    it("allows approval with one ACCEPTED item and the rest REJECTED", async () => {
+      const { fixture, diagnosis, base } = await reviewed("Approve one accepted", ["ACCEPTED", "REJECTED", "REJECTED"]);
+      const approved = await diagnosis.approve(base);
+      expect((approved.approvedContent as { items: unknown[] }).items).toHaveLength(1);
+      expect(await workflowState(fixture.business.id)).toBe("PHASE1_APPROVED");
+    });
+
+    it("allows approval with one CORRECTED item and the rest REJECTED", async () => {
+      const { fixture, diagnosis, base } = await reviewed("Approve one corrected", ["CORRECTED", "REJECTED", "REJECTED"]);
+      const approved = await diagnosis.approve(base);
+      expect((approved.approvedContent as { items: Array<{ decision: string }> }).items).toEqual([expect.objectContaining({ decision: "CORRECTED" })]);
+      expect(await workflowState(fixture.business.id)).toBe("PHASE1_APPROVED");
+    });
+
+    it("refuses an all-REJECTED review: no artifact, no PHASE1_APPROVED, revision still available", async () => {
+      const { fixture, diagnosis, base, session } = await reviewed("Refuse all rejected", ["REJECTED", "REJECTED", "REJECTED"]);
+      await expect(diagnosis.approve(base)).rejects.toThrow("An all-rejected diagnosis cannot be approved");
+      expect(await database.select().from(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, fixture.business.id))).toHaveLength(0);
+      expect((await database.select().from(diagnosisReviewSessions).where(eq(diagnosisReviewSessions.id, session.id)))[0].status).toBe("OPEN");
+      expect(await workflowState(fixture.business.id)).toBe("PHASE1_AWAITING_REVIEW");
+      await expect(fixture.orchestrator.transition({
+        businessId: fixture.business.id, event: "APPROVE_PHASE1", actorType: "human", actorId: "Reviewer",
+        metadata: { approvedDiagnosisId: crypto.randomUUID() },
+      })).rejects.toThrow();
+      expect(await database.select().from(workflowTransitions).where(eq(workflowTransitions.event, "APPROVE_PHASE1"))
+        .then((rows) => rows.filter((row) => row.metadata.reviewSessionId === session.id))).toHaveLength(0);
+      await diagnosis.requestRevision({ businessId: fixture.business.id, reason: "Every item was rejected" });
+      expect(await workflowState(fixture.business.id)).toBe("REVISION_REQUIRED");
+    });
+  });
 });

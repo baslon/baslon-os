@@ -155,6 +155,7 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
     || (model.workflowState === "PHASE1_ANALYSING" && run?.status === "FAILED"));
   const reviewing = model.workflowState === "PHASE1_AWAITING_REVIEW" && run?.status === "SUCCEEDED";
   const allDecided = model.items.length > 0 && model.items.every((item) => item.decision);
+  const anySurviving = model.items.some((item) => item.decision?.decision === "ACCEPTED" || item.decision?.decision === "CORRECTED");
   return <main>
     <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${business.id}`}>{business.name}</Link> <span aria-hidden="true">/</span> Phase 1 Diagnosis</nav>
     <p className="context-name">{business.name}</p>
@@ -196,7 +197,9 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
     {reviewing && model.session?.status === "OPEN" && !archived ? <section className="panel" aria-labelledby="approve-heading">
       <h2 id="approve-heading">Approve the diagnosis</h2>
       <p>Approval accepts this diagnosis as the analytical basis for the next strategic phase. It does not make any Claim true, resolve any gap, or approve any recommendation.</p>
-      {allDecided
+      {allDecided && !anySurviving
+        ? <p className="notice" role="status">Every item was rejected, so this diagnosis cannot be approved. Request a revised diagnosis below.</p>
+        : allDecided
         ? <form action={approveDiagnosisAction}>
           <input type="hidden" name="businessId" value={business.id} />
           <input type="hidden" name="reviewSessionId" value={model.session.id} />

@@ -90,6 +90,7 @@ PHASE1_READY / REVISION_REQUIRED
   - CORRECT may change every material field, including references and grounding. The corrected item must pass the same validation.
   - REJECTED items are excluded from the artifact.
 - **Approval** requires exactly one decision on every item, enforced by the application and by trigger.
+- **Approval also requires at least one ACCEPTED or CORRECTED item** (pre-merge amendment). An all-rejected review cannot be approved: the UI hides Approve and points to Request Revision, and the repository, the `APPROVE_PHASE1` precondition and the `approved_diagnosis_guard` trigger all refuse it.
 - **The approved artifact** (`approved_diagnoses`):
   - is built server-side from immutable items, validated decisions, calculations and resolved references;
   - never accepts browser-supplied JSON;
@@ -122,7 +123,7 @@ PHASE1_READY / REVISION_REQUIRED
   - diagnosis output may only be written while its own `phase1_diagnosis` run is RUNNING;
   - output, reviews and approvals are immutable;
   - the review session lifecycle and completeness are enforced;
-  - an approval must match its run's snapshot, snapshot version, input and prompt versions and input hash, and requires a COMPLETED review.
+  - an approval must match its run's snapshot, snapshot version, input and prompt versions and input hash, and requires a COMPLETED review with at least one ACCEPTED or CORRECTED item.
 - **Permanent Delete** covers all seven tables.
 - **No existing table, column, enum or row is changed.**
 - **Rollback** is clean while the tables are empty. After diagnosis data exists, only forward fixes are appropriate.
@@ -131,4 +132,4 @@ PHASE1_READY / REVISION_REQUIRED
 
 - **`GENERATE_PHASE1`:** the latest snapshot must equal the recorded continuation snapshot, and the recorded Evidence Coherence run must be the continued-with successful run on it.
 - **`MARK_ANALYSIS_COMPLETE`** (from `PHASE1_ANALYSING` only): needs a successful diagnosis of the latest snapshot.
-- **`APPROVE_PHASE1`:** needs the approved artifact of the current diagnosis of the latest snapshot.
+- **`APPROVE_PHASE1`:** needs the approved artifact of the current diagnosis of the latest snapshot, and at least one ACCEPTED or CORRECTED item in its review.

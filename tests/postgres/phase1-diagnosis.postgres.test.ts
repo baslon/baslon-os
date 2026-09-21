@@ -172,6 +172,61 @@ describe("real PostgreSQL 17 Phase 1 Diagnosis integrity (synthetic data only)",
     } finally { client.release(); }
   });
 
+  it("refuses an approved_diagnoses row and PHASE1_APPROVED for an all-rejected review (database backstop)", async () => {
+    const { first, firstRun } = await twoDiagnosedRuns();
+    const items = await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, firstRun.id));
+    const client = await pool.connect();
+    const approvalInsert = (sessionId: string) => client.query(
+      `insert into approved_diagnoses (business_id,analysis_run_id,review_session_id,snapshot_id,snapshot_version,input_projection_version,prompt_version,input_hash,artifact_version,version,approved_by,approved_content)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,'phase1_diagnosis_artifact_v1',1,'Reviewer','{}')`,
+      [first.business.id, firstRun.id, sessionId, first.snapshot.id, first.snapshot.version, firstRun.inputProjectionVersion, firstRun.promptVersion, firstRun.inputHash],
+    );
+    try {
+      await client.query("begin");
+      const sessionId = randomUUID();
+      await client.query("insert into diagnosis_review_sessions (id,business_id,analysis_run_id,reviewer_id) values ($1,$2,$3,'Reviewer')", [sessionId, first.business.id, firstRun.id]);
+      for (const item of items) {
+        await client.query("insert into diagnosis_item_reviews (business_id,analysis_run_id,review_session_id,diagnosis_item_id,decision) values ($1,$2,$3,$4,'REJECTED')", [first.business.id, firstRun.id, sessionId, item.id]);
+      }
+      // Completing an all-rejected review is allowed (every item decided); approving it is not.
+      await client.query("update diagnosis_review_sessions set status='COMPLETED', completed_at=now() where id=$1", [sessionId]);
+      await rejectAtSavepoint(client, () => approvalInsert(sessionId), "requires at least one ACCEPTED or CORRECTED item");
+      await client.query("rollback");
+
+      // Control: the same insert succeeds once one item survives review.
+      await client.query("begin");
+      const survivingSession = randomUUID();
+      await client.query("insert into diagnosis_review_sessions (id,business_id,analysis_run_id,reviewer_id) values ($1,$2,$3,'Reviewer')", [survivingSession, first.business.id, firstRun.id]);
+      for (const [index, item] of items.entries()) {
+        await client.query("insert into diagnosis_item_reviews (business_id,analysis_run_id,review_session_id,diagnosis_item_id,decision) values ($1,$2,$3,$4,$5)", [first.business.id, firstRun.id, survivingSession, item.id, index === 0 ? "ACCEPTED" : "REJECTED"]);
+      }
+      await client.query("update diagnosis_review_sessions set status='COMPLETED', completed_at=now() where id=$1", [survivingSession]);
+      await approvalInsert(survivingSession);
+      await client.query("rollback");
+    } finally { client.release(); }
+    expect(await database.select({ value: count() }).from(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, first.business.id))).toEqual([{ value: 0 }]);
+    await expect(first.orchestrator.transition({
+      businessId: first.business.id, event: "APPROVE_PHASE1", actorType: "human", actorId: "Reviewer",
+      metadata: { approvedDiagnosisId: randomUUID() },
+    })).rejects.toThrow("Approved diagnosis not found");
+  });
+
+  it("refuses an all-rejected approval through the service and leaves the workflow in review", async () => {
+    const fixture = await phase1ReadyBusiness(database, `Diagnosis all rejected ${randomUUID()}`);
+    const service = diagnosisService(database, new FakeDiagnosisModel(validDiagnosis), fixture.orchestrator);
+    const { run } = await service.generate({ businessId: fixture.business.id });
+    const items = await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, run.id));
+    const session = await service.startReview({ businessId: fixture.business.id, runId: run.id, reviewerId: "Reviewer" });
+    for (const item of items) {
+      await service.reviewItem({ businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer", diagnosisItemId: item.id, decision: "REJECTED" });
+    }
+    await expect(service.approve({ businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer" }))
+      .rejects.toThrow("An all-rejected diagnosis cannot be approved");
+    expect(await database.select({ value: count() }).from(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, fixture.business.id))).toEqual([{ value: 0 }]);
+    const [workflow] = await pool.query("select state from strategy_workflows where business_id=$1", [fixture.business.id]).then((result) => result.rows);
+    expect(workflow.state).toBe("PHASE1_AWAITING_REVIEW");
+  });
+
   it("keeps diagnosis output and calculations immutable", async () => {
     const { firstRun } = await twoDiagnosedRuns();
     const expectImmutable = async (operation: PromiseLike<unknown>) => {
@@ -193,8 +248,8 @@ describe("real PostgreSQL 17 Phase 1 Diagnosis integrity (synthetic data only)",
     const { run } = await service.generate({ businessId: fixture.business.id });
     const items = await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, run.id));
     const session = await service.startReview({ businessId: fixture.business.id, runId: run.id, reviewerId: "Reviewer" });
-    for (const item of items) {
-      await service.reviewItem({ businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer", diagnosisItemId: item.id, decision: "REJECTED" });
+    for (const [index, item] of items.entries()) {
+      await service.reviewItem({ businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer", diagnosisItemId: item.id, decision: index === 0 ? "ACCEPTED" : "REJECTED" });
     }
     await service.approve({ businessId: fixture.business.id, reviewSessionId: session.id, reviewerId: "Reviewer" });
     const business = new BusinessService(new FoundationRepository(database), new BusinessDeletionRepository(database));

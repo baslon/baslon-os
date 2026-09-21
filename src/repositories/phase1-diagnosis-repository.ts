@@ -29,6 +29,18 @@ import {
   assertBusinessActive,
 } from "@/repositories/business-lifecycle-guard";
 
+/**
+ * Approval accepts a diagnosis as the analytical basis for the next phase, so
+ * at least one item must survive review. An all-rejected review is sent back
+ * with Request Revision instead.
+ */
+export class AllRejectedDiagnosisError extends Error {
+  constructor() {
+    super("An all-rejected diagnosis cannot be approved. Request a revised diagnosis instead.");
+    this.name = "AllRejectedDiagnosisError";
+  }
+}
+
 export type DiagnosisRunIdentity = {
   businessId: string;
   inputSnapshotId: string;
@@ -482,6 +494,9 @@ export class Phase1DiagnosisRepository {
       const decided = new Set(reviews.map((review) => review.diagnosisItemId));
       if (!items.length || items.some((item) => !decided.has(item.id)) || reviews.length !== items.length) {
         throw new Error("Every diagnosis item requires exactly one decision before approval");
+      }
+      if (!reviews.some((review) => review.decision === "ACCEPTED" || review.decision === "CORRECTED")) {
+        throw new AllRejectedDiagnosisError();
       }
       const approvedAt = new Date();
       const artifact = await input.buildArtifact({ run, session: locked, items, reviews, approvedAt });

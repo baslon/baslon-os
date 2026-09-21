@@ -106,8 +106,16 @@ describe("Diagnosis review surface completeness (M4-07)", () => {
     expect(html).toContain("Decide every item (accept, correct or reject) before approving.");
     expect(html).not.toContain("Approve diagnosis</button>");
 
-    const decided = model({ items: model().items.map((entry) => ({ ...entry, decision: { decision: "REJECTED", reason: "No", correctedPayload: null } })) });
-    expect(renderToStaticMarkup(createElement(Phase1Diagnosis, { model: decided }))).toContain("Approve diagnosis</button>");
+    const mixed = model({ items: model().items.map((entry, index) => ({ ...entry, decision: { decision: index === 0 ? "REJECTED" : "ACCEPTED", reason: null, correctedPayload: null } })) });
+    expect(renderToStaticMarkup(createElement(Phase1Diagnosis, { model: mixed }))).toContain("Approve diagnosis</button>");
+  });
+
+  it("does not offer approval when every item was rejected, and points to revision", () => {
+    const allRejected = model({ items: model().items.map((entry) => ({ ...entry, decision: { decision: "REJECTED", reason: "No", correctedPayload: null } })) });
+    const html = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: allRejected }));
+    expect(html).not.toContain("Approve diagnosis</button>");
+    expect(html).toContain("Every item was rejected, so this diagnosis cannot be approved");
+    expect(html).toContain("Request a revised diagnosis");
   });
 
   it("offers a human-initiated run only when ready, and shows no decision forms after approval", () => {
@@ -212,5 +220,13 @@ describe("Approved artifact builder", () => {
     ]))).toThrow();
     expect(() => buildApprovedDiagnosisArtifact(input([{ diagnosisItemId: "i-1", decision: "ACCEPTED", correctedPayload: null }])))
       .toThrow("has no valid decision");
+  });
+
+  it("refuses to build an artifact from an all-rejected review", () => {
+    expect(() => buildApprovedDiagnosisArtifact(input([
+      { diagnosisItemId: "i-1", decision: "REJECTED", correctedPayload: null },
+      { diagnosisItemId: "i-2", decision: "REJECTED", correctedPayload: null },
+      { diagnosisItemId: "i-3", decision: "REJECTED", correctedPayload: null },
+    ]))).toThrow("at least one accepted or corrected item");
   });
 });

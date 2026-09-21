@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   analysisRuns,
   approvedDiagnoses,
   businessStateSnapshots,
+  diagnosisItemReviews,
   workflowTransitions,
 } from "@/db/schema";
 import { EVIDENCE_COHERENCE_MODULE } from "@/domain/evidence-coherence";
@@ -130,11 +131,18 @@ export const approvePhase1Precondition: WorkflowTransitionPrecondition = async (
   const [approved] = await database.select({
     analysisRunId: approvedDiagnoses.analysisRunId,
     snapshotId: approvedDiagnoses.snapshotId,
+    reviewSessionId: approvedDiagnoses.reviewSessionId,
   }).from(approvedDiagnoses).where(and(
     eq(approvedDiagnoses.id, approvedDiagnosisId),
     eq(approvedDiagnoses.businessId, businessId),
   ));
   if (!approved) throw new Error("Approved diagnosis not found");
+  const [surviving] = await database.select({ id: diagnosisItemReviews.id }).from(diagnosisItemReviews).where(and(
+    eq(diagnosisItemReviews.reviewSessionId, approved.reviewSessionId),
+    eq(diagnosisItemReviews.businessId, businessId),
+    inArray(diagnosisItemReviews.decision, ["ACCEPTED", "CORRECTED"]),
+  )).limit(1);
+  if (!surviving) throw new Error("An all-rejected diagnosis cannot be approved");
   const [latestRun] = await database.select({ id: analysisRuns.id }).from(analysisRuns).where(and(
     eq(analysisRuns.businessId, businessId),
     eq(analysisRuns.module, PHASE1_DIAGNOSIS_MODULE),

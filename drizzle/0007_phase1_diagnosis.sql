@@ -317,7 +317,7 @@ BEFORE UPDATE OR DELETE ON diagnosis_item_reviews
 FOR EACH ROW EXECUTE FUNCTION prevent_immutable_record_change();--> statement-breakpoint
 -- An approved diagnosis must record exactly the run it approves: a successful
 -- phase1_diagnosis run, its snapshot and version, its input/prompt versions and
--- input hash, and a COMPLETED review of that run.
+-- input hash, and a COMPLETED review of that run with at least one surviving item.
 CREATE FUNCTION approved_diagnosis_guard() RETURNS trigger AS $$
 DECLARE
   run_record record;
@@ -343,6 +343,15 @@ BEGIN
     WHERE id = NEW.review_session_id AND business_id = NEW.business_id;
   IF session_status IS DISTINCT FROM 'COMPLETED' THEN
     RAISE EXCEPTION 'an approved diagnosis requires a COMPLETED review session';
+  END IF;
+  -- An all-rejected review is not approvable; it must go back through revision.
+  IF NOT EXISTS (
+    SELECT 1 FROM diagnosis_item_reviews review
+    WHERE review.review_session_id = NEW.review_session_id
+      AND review.business_id = NEW.business_id
+      AND review.decision IN ('ACCEPTED', 'CORRECTED')
+  ) THEN
+    RAISE EXCEPTION 'an approved diagnosis requires at least one ACCEPTED or CORRECTED item';
   END IF;
   RETURN NEW;
 END;
