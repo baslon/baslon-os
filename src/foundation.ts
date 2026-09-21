@@ -25,6 +25,9 @@ import { AddInformationRepository } from "@/repositories/add-information-reposit
 import { InitialIntakeRepository } from "@/repositories/initial-intake-repository";
 import { InitialIntakeService } from "@/services/initial-intake-service";
 import { GapResolutionService } from "@/services/gap-resolution-service";
+import { OpenAIPhase1DiagnosisModel } from "@/ai/phase1-diagnosis/openai-adapter";
+import { Phase1DiagnosisRepository } from "@/repositories/phase1-diagnosis-repository";
+import { Phase1DiagnosisService } from "@/services/phase1-diagnosis-service";
 
 export function getInitialIntakeService() {
   return new InitialIntakeService(
@@ -108,6 +111,15 @@ export function getGapResolutionService() {
   const database = getDatabase();
   return new GapResolutionService(
     new EvidenceCoherenceRepository(database),
+    createStrategyOrchestrator(database),
+  );
+}
+
+export function getPhase1DiagnosisService() {
+  const database = getDatabase();
+  return new Phase1DiagnosisService(
+    new Phase1DiagnosisRepository(database),
+    new OpenAIPhase1DiagnosisModel(),
     createStrategyOrchestrator(database),
   );
 }

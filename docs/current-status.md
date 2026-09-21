@@ -84,8 +84,21 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 
 **Phase 1 boundary: the Business is `PHASE1_READY`, but Phase 1 Diagnosis has not started.**
 `PHASE1_READY` does not authorise a diagnosis run. Diagnosis execution remains blocked
-pending completion and review of the outstanding Milestone 4 diagnosis-contract work
-(M4-05, M4-06, M4-07), and separate Product Owner authorisation.
+until the diagnosis contract (M4-05, M4-06, M4-07) is reviewed and merged, migration
+`0007` is applied to `baslon_os` with Product Owner approval, and the Product Owner
+separately authorises a run.
+
+**M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): implemented on `claude/milestone-4`,
+awaiting Solution Architect review.**
+
+- **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
+- **Input:** exact-snapshot binding, run-local C/E/M/G/D handles and software-owned calculations.
+- **Validation:** fail-closed, covering grounding, the missing-data guardrail and M4-06 qualifier/precision semantics.
+- **Human review:** mandatory at `PHASE1_AWAITING_REVIEW`, with ACCEPT/CORRECT/REJECT and an immutable, server-built approved artifact.
+- **Migration `0007_phase1_diagnosis`** (additive) is applied to `baslon_os_test` only. **`baslon_os` is not migrated.**
+
+See `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`
+and `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`.
 
 **M4-12 (Evidence Coherence snapshot-local reference handles): RESOLVED.** Merged in PR #9
 (`d370d7d`, implementation `449cbe4`), post-merge verified, and confirmed by the Snapshot 4

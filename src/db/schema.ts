@@ -24,6 +24,13 @@ import {
   findingMaterialities,
 } from "@/domain/evidence-coherence";
 import { numericPrecisions } from "@/domain/numeric-precision";
+import {
+  diagnosisGroundings,
+  diagnosisInterpretationConfidences,
+  diagnosisItemTypes,
+  diagnosisReferenceRoles,
+  diagnosisReviewSessionStatuses,
+} from "@/domain/phase1-diagnosis";
 
 export const claimType = pgEnum("claim_type", [
   "fact", "observation", "management_belief", "hypothesis",
@@ -67,6 +74,17 @@ export const numericPrecision = pgEnum("numeric_precision", numericPrecisions);
 export const analysisFindingReferenceRole = pgEnum(
   "analysis_finding_reference_role",
   analysisFindingReferenceRoles,
+);
+export const diagnosisItemType = pgEnum("diagnosis_item_type", diagnosisItemTypes);
+export const diagnosisGrounding = pgEnum("diagnosis_grounding", diagnosisGroundings);
+export const diagnosisInterpretationConfidence = pgEnum(
+  "diagnosis_interpretation_confidence",
+  diagnosisInterpretationConfidences,
+);
+export const diagnosisReferenceRole = pgEnum("diagnosis_reference_role", diagnosisReferenceRoles);
+export const diagnosisReviewSessionStatus = pgEnum(
+  "diagnosis_review_session_status",
+  diagnosisReviewSessionStatuses,
 );
 
 const timestamps = {
@@ -603,6 +621,278 @@ export const proposalReviews = pgTable("proposal_reviews", {
   check("proposal_reviews_noncanonical_decision_check", sql`
     ${table.decision} not in ('REJECTED', 'UNRESOLVED')
     or (${table.canonicalEntityType} is null and ${table.canonicalEntityId} is null)
+  `),
+]);
+
+// Phase 1 Diagnosis (M4-05 / M4-06 / M4-07): analytical state, never canonical.
+// Every table is Business-owned and immutable once written (triggers in 0007).
+
+export const diagnosisCalculations = pgTable("diagnosis_calculations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  calculationRef: text("calculation_ref").notNull(),
+  ruleKey: text("rule_key").notNull(),
+  ruleVersion: text("rule_version").notNull(),
+  label: text("label").notNull(),
+  formula: text("formula").notNull(),
+  valueNumeric: numeric("value_numeric", { precision: 20, scale: 4 }),
+  valuePrecision: numericPrecision("value_precision").notNull(),
+  valueLower: numeric("value_lower", { precision: 20, scale: 4 }),
+  valueUpper: numeric("value_upper", { precision: 20, scale: 4 }),
+  unit: text("unit").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("diagnosis_calculations_id_business_unique").on(table.id, table.businessId),
+  unique("diagnosis_calculations_id_business_run_unique").on(table.id, table.businessId, table.analysisRunId),
+  unique("diagnosis_calculations_run_ref_unique").on(table.analysisRunId, table.calculationRef),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "diagnosis_calculations_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_calculations_ref_check", sql`${table.calculationRef} ~ '^D(?:[0-9]{3}|[1-9][0-9]{3,})$'`),
+  check("diagnosis_calculations_required_text_check", sql`
+    length(btrim(${table.ruleKey})) > 0 and length(btrim(${table.ruleVersion})) > 0
+    and length(btrim(${table.label})) > 0 and length(btrim(${table.formula})) > 0
+    and length(btrim(${table.unit})) > 0
+  `),
+  check("diagnosis_calculations_value_check", sql`
+    (${table.valuePrecision} = 'range'
+      and ${table.valueLower} is not null and ${table.valueUpper} is not null
+      and ${table.valueLower} <= ${table.valueUpper} and ${table.valueNumeric} is null)
+    or (${table.valuePrecision} in ('exact', 'approximate', 'estimate', 'unspecified')
+      and ${table.valueNumeric} is not null and ${table.valueLower} is null and ${table.valueUpper} is null)
+  `),
+]);
+
+export const diagnosisCalculationSources = pgTable("diagnosis_calculation_sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  diagnosisCalculationId: uuid("diagnosis_calculation_id").notNull(),
+  metricId: uuid("metric_id"),
+  evidenceId: uuid("evidence_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("diagnosis_calculation_sources_calculation_idx").on(table.diagnosisCalculationId),
+  uniqueIndex("diagnosis_calculation_sources_metric_unique")
+    .on(table.diagnosisCalculationId, table.metricId)
+    .where(sql`${table.metricId} is not null`),
+  uniqueIndex("diagnosis_calculation_sources_evidence_unique")
+    .on(table.diagnosisCalculationId, table.evidenceId)
+    .where(sql`${table.evidenceId} is not null`),
+  foreignKey({
+    columns: [table.diagnosisCalculationId, table.businessId],
+    foreignColumns: [diagnosisCalculations.id, diagnosisCalculations.businessId],
+    name: "diagnosis_calculation_sources_calculation_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.metricId, table.businessId],
+    foreignColumns: [metrics.id, metrics.businessId],
+    name: "diagnosis_calculation_sources_metric_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceId, table.businessId],
+    foreignColumns: [evidence.id, evidence.businessId],
+    name: "diagnosis_calculation_sources_evidence_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_calculation_sources_one_source_check", sql`
+    num_nonnulls(${table.metricId}, ${table.evidenceId}) = 1
+  `),
+]);
+
+export const diagnosisItems = pgTable("diagnosis_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  itemRef: text("item_ref").notNull(),
+  itemType: diagnosisItemType("item_type").notNull(),
+  statement: text("statement").notNull(),
+  rationale: text("rationale").notNull(),
+  grounding: diagnosisGrounding("grounding").notNull(),
+  materiality: findingMateriality("materiality").notNull(),
+  interpretationConfidence: diagnosisInterpretationConfidence("interpretation_confidence"),
+  limitations: text("limitations"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("diagnosis_items_id_business_unique").on(table.id, table.businessId),
+  unique("diagnosis_items_id_business_run_unique").on(table.id, table.businessId, table.analysisRunId),
+  unique("diagnosis_items_run_ref_unique").on(table.analysisRunId, table.itemRef),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "diagnosis_items_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_items_ref_check", sql`${table.itemRef} ~ '^I(?:[0-9]{3}|[1-9][0-9]{3,})$'`),
+  check("diagnosis_items_required_text_check", sql`
+    length(btrim(${table.statement})) > 0 and length(btrim(${table.rationale})) > 0
+    and (${table.limitations} is null or length(btrim(${table.limitations})) > 0)
+  `),
+  check("diagnosis_items_interpretation_limitations_check", sql`
+    ${table.grounding} not in ('interpretive', 'hypothesis') or ${table.limitations} is not null
+  `),
+]);
+
+export const diagnosisItemReferences = pgTable("diagnosis_item_references", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  diagnosisItemId: uuid("diagnosis_item_id").notNull(),
+  role: diagnosisReferenceRole("role").notNull(),
+  claimId: uuid("claim_id"),
+  evidenceId: uuid("evidence_id"),
+  metricId: uuid("metric_id"),
+  evidenceGapId: uuid("evidence_gap_id"),
+  diagnosisCalculationId: uuid("diagnosis_calculation_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("diagnosis_item_references_item_idx").on(table.diagnosisItemId),
+  uniqueIndex("diagnosis_item_references_claim_unique").on(table.diagnosisItemId, table.claimId)
+    .where(sql`${table.claimId} is not null`),
+  uniqueIndex("diagnosis_item_references_evidence_unique").on(table.diagnosisItemId, table.evidenceId)
+    .where(sql`${table.evidenceId} is not null`),
+  uniqueIndex("diagnosis_item_references_metric_unique").on(table.diagnosisItemId, table.metricId)
+    .where(sql`${table.metricId} is not null`),
+  uniqueIndex("diagnosis_item_references_gap_unique").on(table.diagnosisItemId, table.evidenceGapId)
+    .where(sql`${table.evidenceGapId} is not null`),
+  uniqueIndex("diagnosis_item_references_calculation_unique").on(table.diagnosisItemId, table.diagnosisCalculationId)
+    .where(sql`${table.diagnosisCalculationId} is not null`),
+  // Same-run backstop: an item's references belong to that item's run.
+  foreignKey({
+    columns: [table.diagnosisItemId, table.businessId, table.analysisRunId],
+    foreignColumns: [diagnosisItems.id, diagnosisItems.businessId, diagnosisItems.analysisRunId],
+    name: "diagnosis_item_references_item_same_run_fk",
+  }).onDelete("restrict"),
+  // Same-run backstop: a cited calculation belongs to the item's run.
+  foreignKey({
+    columns: [table.diagnosisCalculationId, table.businessId, table.analysisRunId],
+    foreignColumns: [diagnosisCalculations.id, diagnosisCalculations.businessId, diagnosisCalculations.analysisRunId],
+    name: "diagnosis_item_references_calculation_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.claimId, table.businessId],
+    foreignColumns: [claims.id, claims.businessId],
+    name: "diagnosis_item_references_claim_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceId, table.businessId],
+    foreignColumns: [evidence.id, evidence.businessId],
+    name: "diagnosis_item_references_evidence_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.metricId, table.businessId],
+    foreignColumns: [metrics.id, metrics.businessId],
+    name: "diagnosis_item_references_metric_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.evidenceGapId, table.businessId],
+    foreignColumns: [evidenceGaps.id, evidenceGaps.businessId],
+    name: "diagnosis_item_references_gap_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_item_references_one_target_check", sql`
+    num_nonnulls(${table.claimId}, ${table.evidenceId}, ${table.metricId}, ${table.evidenceGapId}, ${table.diagnosisCalculationId}) = 1
+  `),
+  check("diagnosis_item_references_gap_role_check", sql`
+    (${table.role} = 'limiting_gap') = (${table.evidenceGapId} is not null)
+  `),
+]);
+
+export const diagnosisReviewSessions = pgTable("diagnosis_review_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  reviewerId: text("reviewer_id").notNull(),
+  status: diagnosisReviewSessionStatus("status").default("OPEN").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  unique("diagnosis_review_sessions_run_unique").on(table.analysisRunId),
+  unique("diagnosis_review_sessions_id_business_unique").on(table.id, table.businessId),
+  unique("diagnosis_review_sessions_id_business_run_unique").on(table.id, table.businessId, table.analysisRunId),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "diagnosis_review_sessions_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_review_sessions_reviewer_check", sql`length(btrim(${table.reviewerId})) > 0`),
+  check("diagnosis_review_sessions_completion_check", sql`
+    (${table.status} = 'OPEN' and ${table.completedAt} is null)
+    or (${table.status} = 'COMPLETED' and ${table.completedAt} is not null)
+  `),
+]);
+
+export const diagnosisItemReviews = pgTable("diagnosis_item_reviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  diagnosisItemId: uuid("diagnosis_item_id").notNull(),
+  decision: evidenceReviewDecision("decision").notNull(),
+  correctedPayload: jsonb("corrected_payload").$type<Record<string, unknown>>(),
+  reason: text("reason"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("diagnosis_item_reviews_item_unique").on(table.diagnosisItemId),
+  index("diagnosis_item_reviews_session_idx").on(table.reviewSessionId, table.reviewedAt),
+  // Same-run backstops: the review's session and item belong to one run.
+  foreignKey({
+    columns: [table.reviewSessionId, table.businessId, table.analysisRunId],
+    foreignColumns: [diagnosisReviewSessions.id, diagnosisReviewSessions.businessId, diagnosisReviewSessions.analysisRunId],
+    name: "diagnosis_item_reviews_session_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.diagnosisItemId, table.businessId, table.analysisRunId],
+    foreignColumns: [diagnosisItems.id, diagnosisItems.businessId, diagnosisItems.analysisRunId],
+    name: "diagnosis_item_reviews_item_same_run_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_item_reviews_decision_check", sql`${table.decision} in ('ACCEPTED', 'CORRECTED', 'REJECTED')`),
+  check("diagnosis_item_reviews_corrected_payload_check", sql`
+    (${table.decision} = 'CORRECTED' and ${table.correctedPayload} is not null
+      and jsonb_typeof(${table.correctedPayload}) = 'object')
+    or (${table.decision} <> 'CORRECTED' and ${table.correctedPayload} is null)
+  `),
+]);
+
+export const approvedDiagnoses = pgTable("approved_diagnoses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  snapshotId: uuid("snapshot_id").notNull(),
+  snapshotVersion: integer("snapshot_version").notNull(),
+  inputProjectionVersion: text("input_projection_version").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  inputHash: text("input_hash").notNull(),
+  artifactVersion: text("artifact_version").notNull(),
+  version: integer("version").notNull(),
+  approvedBy: text("approved_by").notNull(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+  approvedContent: jsonb("approved_content").$type<Record<string, unknown>>().notNull(),
+}, (table) => [
+  unique("approved_diagnoses_run_unique").on(table.analysisRunId),
+  unique("approved_diagnoses_session_unique").on(table.reviewSessionId),
+  unique("approved_diagnoses_business_version_unique").on(table.businessId, table.version),
+  unique("approved_diagnoses_id_business_unique").on(table.id, table.businessId),
+  // Same-run backstop: the approval's session reviewed this exact run.
+  foreignKey({
+    columns: [table.reviewSessionId, table.businessId, table.analysisRunId],
+    foreignColumns: [diagnosisReviewSessions.id, diagnosisReviewSessions.businessId, diagnosisReviewSessions.analysisRunId],
+    name: "approved_diagnoses_session_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "approved_diagnoses_run_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.snapshotId, table.businessId],
+    foreignColumns: [businessStateSnapshots.id, businessStateSnapshots.businessId],
+    name: "approved_diagnoses_snapshot_same_business_fk",
+  }).onDelete("restrict"),
+  check("approved_diagnoses_version_check", sql`${table.version} > 0 and ${table.snapshotVersion} > 0`),
+  check("approved_diagnoses_content_object_check", sql`jsonb_typeof(${table.approvedContent}) = 'object'`),
+  check("approved_diagnoses_required_text_check", sql`
+    length(btrim(${table.approvedBy})) > 0 and length(btrim(${table.artifactVersion})) > 0
   `),
 ]);
 
