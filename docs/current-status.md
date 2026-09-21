@@ -59,22 +59,26 @@ The M4-10 approximation-scope refinement is merged (PR #8, `fddca0b`): one
 approximation cue governs a later measurement of the same coordinated phrase
 ("roughly a three-day, 30-hour working week"), and nothing wider.
 
-**Baslon Digital controlled rebuild v2: HELD at `GAP_ANALYSIS`, awaiting a Product Owner-approved Evidence Coherence run on Snapshot 4.**
+**Baslon Digital controlled rebuild v2: at `GAP_RESOLUTION_REQUIRED` on Snapshot 4 (0 contradictions, 6 validated gaps). `CONTINUE_WITH_GAPS` has not been taken.**
 Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
 2026 v2") has processed approved sources S1–S4 through human review:
 
 - Snapshot 4 `da6e9a8e-1ae0-4436-ab67-429a7d33197b` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`): 39 Claims, 59 Evidence, 18 Metrics, 54 relationships.
 - Documented deviations are accepted and left unrepaired: five S3 Evidence records carry inferred period boundaries (`2025-09-01` → `2026-08-31`); S4 has a garbled `claim_1`, a duplicate clean `claim_2`, and a non-standard `metric_1` dimension.
-- Evidence Coherence run `9883e5cb-f2d8-4798-b4ac-16647c203d53` on Snapshot 4 failed because the model corrupted a canonical UUID. It was the second failure of this kind on the same Evidence (Snapshot 3 run `8c3f1af5-…`). No retry has been run since. The next run needs explicit Product Owner approval.
+- Evidence Coherence run `9883e5cb-f2d8-4798-b4ac-16647c203d53` on Snapshot 4 failed because the model corrupted a canonical UUID. It was the second failure of this kind on the same Evidence (Snapshot 3 run `8c3f1af5-…`).
+- The Product Owner-approved Evidence Coherence run `bcc6fd6c-d0cb-4d8d-b2d1-64813738ce9e` on Snapshot 4 **SUCCEEDED** under `evidence_coherence_input_v3` / `evidence_coherence_v4`, with 0 contradictions and 6 validated gaps (4 high, 2 medium).
+- The 6 gaps are profitability; pipeline and conversion; channel attribution with acquisition cost and founder time; revenue-mix baseline and recurring-revenue target; customer segments; and founder time allocation.
+- The workflow is `GAP_RESOLUTION_REQUIRED`. Whether to add information or continue with known gaps is a Product Owner decision; `CONTINUE_WITH_GAPS` has not been taken.
 
-**M4-12 (Evidence Coherence snapshot-local reference handles): merged (PR #9, merge
-`d370d7d`, implementation `449cbe4`) and post-merge verified on 21 September 2026.**
-`evidence_coherence_input_v3` and `evidence_coherence_v4` are now active.
+**M4-12 (Evidence Coherence snapshot-local reference handles): RESOLVED.** Merged in PR #9
+(`d370d7d`, implementation `449cbe4`), post-merge verified, and confirmed by the Snapshot 4
+live regression `bcc6fd6c-…`.
 
-- They replace model-reproduced canonical UUIDs with handles (`C001`, `E001`, `M001` …), which application code resolves to canonical UUIDs after validation.
-- v2/v3 are frozen and still available. Persistence still stores canonical UUIDs, and no migration was needed.
-- Post-merge verification found Snapshots 1–4, the canonical counts, the workflow state and all four earlier analysis runs unchanged. No v3/v4 run exists yet.
-- M4-12 remains **OPEN** in the Findings Register until one approved Evidence Coherence run on Snapshot 4 succeeds under v3/v4.
+- `evidence_coherence_input_v3` and `evidence_coherence_v4` are active. They replace model-reproduced canonical UUIDs with handles (`C001`, `E001`, `M001` …), which application code resolves to canonical UUIDs after validation.
+- In the live regression, all 39 model references were valid handles, and no UUID was exposed to or emitted by the model.
+- The Evidence the model had corrupted twice was cited as `E040` and resolved to its correct canonical UUID.
+- Canonical state and Snapshots 1–4 were unchanged.
+- v2/v3 are frozen and still available, persistence still stores canonical UUIDs, and no migration was needed.
 
 See `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-decision.md`
 and Findings Register entry M4-12.
