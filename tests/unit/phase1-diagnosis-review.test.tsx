@@ -4,6 +4,7 @@ import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { diagnosisItemSchema } from "@/ai/phase1-diagnosis/contracts";
 import { diagnosisItems } from "@/db/schema";
+import { REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE } from "@/domain/phase1-diagnosis";
 import { buildApprovedDiagnosisArtifact } from "@/domain/phase1-diagnosis-artifact";
 import type { DiagnosisReferenceMap } from "@/domain/phase1-diagnosis-handles";
 import {
@@ -137,6 +138,23 @@ describe("Diagnosis review surface completeness (M4-07)", () => {
     expect(approved).toContain("Rejected and excluded: I001");
     expect(approved).not.toContain('value="ACCEPTED"');
     expect(approved).not.toContain("Run Phase 1 Diagnosis");
+  });
+
+  it("in REVISION_REQUIRED explains that a newer snapshot is needed, offers Add Information and never Run (v1)", () => {
+    const html = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model({
+      workflowState: "REVISION_REQUIRED",
+      items: model().items.map((entry) => ({ ...entry, decision: { decision: "REJECTED", reason: "No", correctedPayload: null } })),
+    }) }));
+    expect(html).toContain(escape(REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE));
+    expect(html).toContain('href="/businesses/business/information"');
+    expect(html).not.toContain("Run Phase 1 Diagnosis");
+    expect(html).not.toContain("Retry diagnosis");
+    expect(html).not.toContain("<form");
+    // The diagnosis sent for revision stays visible, read-only.
+    expect(html).toContain("Pricing strategy needs a decision.");
+    expect(html).not.toContain('value="ACCEPTED"');
+    expect(html).not.toContain("Approve diagnosis</button>");
+    expect(html).not.toContain("Request a revised diagnosis");
   });
 });
 

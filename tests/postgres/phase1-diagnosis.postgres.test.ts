@@ -13,9 +13,18 @@ import {
   diagnosisItems,
   diagnosisReviewSessions,
 } from "@/db/schema";
+import { AddInformationRepository } from "@/repositories/add-information-repository";
 import { BusinessDeletionRepository } from "@/repositories/business-deletion-repository";
+import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
+import { EvidenceReviewRepository } from "@/repositories/evidence-review-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
+import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
+import { AddInformationService } from "@/services/add-information-service";
 import { BusinessService } from "@/services/business-service";
+import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
+import { EvidenceReviewService } from "@/services/evidence-review-service";
+import { RevisionRequiresNewSnapshotError } from "@/services/phase1-diagnosis-service";
+import { SourceSubmissionService } from "@/services/source-submission-service";
 import {
   requirePostgresTestDatabaseUrl,
   verifyPostgresTestDatabase,
@@ -225,6 +234,43 @@ describe("real PostgreSQL 17 Phase 1 Diagnosis integrity (synthetic data only)",
     expect(await database.select({ value: count() }).from(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, fixture.business.id))).toEqual([{ value: 0 }]);
     const [workflow] = await pool.query("select state from strategy_workflows where business_id=$1", [fixture.business.id]).then((result) => result.rows);
     expect(workflow.state).toBe("PHASE1_AWAITING_REVIEW");
+  });
+
+  it("refuses same-snapshot re-diagnosis in REVISION_REQUIRED and returns through Add Information (v1)", async () => {
+    const fixture = await phase1ReadyBusiness(database, `Diagnosis revision ${randomUUID()}`);
+    const businessId = fixture.business.id;
+    const model = new FakeDiagnosisModel(validDiagnosis);
+    const service = diagnosisService(database, model, fixture.orchestrator);
+    await service.generate({ businessId });
+    await service.requestRevision({ businessId, reason: "Needs new evidence" });
+    const counts = async () => pool.query(`select
+        (select count(*) from analysis_runs where business_id=$1 and module='phase1_diagnosis')::int as runs,
+        (select count(*) from workflow_transitions t join strategy_workflows w on w.id=t.workflow_id
+          where w.business_id=$1 and t.event='GENERATE_PHASE1')::int as generates,
+        (select state from strategy_workflows where business_id=$1) as state`, [businessId]).then((result) => result.rows[0]);
+    const before = await counts();
+    expect(before).toEqual({ runs: 1, generates: 1, state: "REVISION_REQUIRED" });
+
+    await expect(service.generate({ businessId })).rejects.toBeInstanceOf(RevisionRequiresNewSnapshotError);
+    await expect(fixture.orchestrator.transition({ businessId, event: "GENERATE_PHASE1", actorType: "human", actorId: "Reviewer", metadata: {} }))
+      .rejects.toThrow("Invalid workflow transition: REVISION_REQUIRED + GENERATE_PHASE1");
+    expect(model.calls).toBe(1);
+    expect(await counts()).toEqual(before);
+
+    const addInformation = new AddInformationService(
+      new AddInformationRepository(database),
+      new SourceSubmissionService(new SourceSubmissionRepository(database)),
+      new EvidenceExtractionService(new EvidenceExtractionRepository(database), {
+        getConfiguration: () => ({ provider: "test", model: "deterministic", metadata: {} }),
+        extract: async () => ({ output: { claims: [], evidence: [], metrics: [], relationships: [] }, rawOutput: {} }),
+      }),
+      new EvidenceReviewService(new EvidenceReviewRepository(database), fixture.orchestrator),
+    );
+    await addInformation.submit({ businessId, rawText: "Synthetic follow-up information for the revision." });
+    const [transition] = await pool.query(`select t.event, t.from_state, t.to_state from workflow_transitions t
+      join strategy_workflows w on w.id=t.workflow_id where w.business_id=$1 order by t.created_at desc limit 1`, [businessId])
+      .then((result) => result.rows);
+    expect(transition).toEqual({ event: "ADD_EVIDENCE", from_state: "REVISION_REQUIRED", to_state: "EVIDENCE_PROCESSING" });
   });
 
   it("keeps diagnosis output and calculations immutable", async () => {

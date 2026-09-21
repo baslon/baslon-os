@@ -14,6 +14,16 @@ export const PHASE1_DIAGNOSIS_INPUT_VERSION = "phase1_diagnosis_input_v1";
 /** Schema version of the frozen `approved_diagnoses.approved_content` artifact. */
 export const PHASE1_DIAGNOSIS_ARTIFACT_VERSION = "phase1_diagnosis_artifact_v1";
 
+/**
+ * v1 revision semantics: a diagnosis sent for revision is never re-run or
+ * reused on the snapshot that produced it. A new diagnosis needs a newer
+ * snapshot, reached through the normal evidence and coherence path back to
+ * PHASE1_READY. Same-snapshot re-diagnosis would need its own run-identity and
+ * revision contract.
+ */
+export const REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE =
+  "A new diagnosis requires updated evidence and a new snapshot. Add or review information first, then run Phase 1 Diagnosis again. If the evidence is correct but an interpretation needs changing, use Correct during diagnosis review.";
+
 /** Diagnostic category of one analytical item. */
 export const diagnosisItemTypes = [
   "position",

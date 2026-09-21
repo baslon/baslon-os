@@ -9,7 +9,7 @@
 ## Flow
 
 ```text
-PHASE1_READY / REVISION_REQUIRED
+PHASE1_READY
   → GENERATE_PHASE1 (human)                      → PHASE1_ANALYSING
   → deterministic input + calculations → model → deterministic validation
   → MARK_ANALYSIS_COMPLETE (system, precondition) → PHASE1_AWAITING_REVIEW
@@ -20,6 +20,23 @@ PHASE1_READY / REVISION_REQUIRED
 - **Existing workflow states and events are reused.** `PHASE1_AWAITING_REVIEW` is the mandatory review checkpoint (`DIAGNOSIS_REVIEW_REQUIRED` in the Architecture Decision).
 - **Failed runs:** a failed or invalid run leaves the workflow at `PHASE1_ANALYSING`, where a retry may run. A failed run never advances the workflow.
 - **Revision:** `REQUEST_REVISION` sends a whole diagnosis back without creating an artifact. B-19 behaviour is unchanged.
+
+## Revision semantics (v1)
+
+After `REQUEST_REVISION`, a new Phase 1 Diagnosis requires a **newer evidence snapshot** than the one used by the diagnosis sent for revision.
+
+- **No same-snapshot re-diagnosis.** In `REVISION_REQUIRED`, the service refuses before any run lookup. It creates no run, reuses no earlier run, makes no model call, records no `GENERATE_PHASE1` and leaves the workflow unchanged. The UI hides Run Phase 1 Diagnosis and explains: "A new diagnosis requires updated evidence and a new snapshot. Add or review information first, then run Phase 1 Diagnosis again. If the evidence is correct but an interpretation needs changing, use Correct during diagnosis review."
+- **Return route.** Ordinary Add Information is accepted in `REVISION_REQUIRED`, using the existing `REVISION_REQUIRED + ADD_EVIDENCE` rule. No transition was added:
+
+  ```text
+  REVISION_REQUIRED → ADD_EVIDENCE → EVIDENCE_PROCESSING → Evidence Review → EVIDENCE_READY (newer snapshot)
+    → Evidence Coherence → GAP_RESOLUTION_REQUIRED → gap decision → PHASE1_READY → GENERATE_PHASE1
+  ```
+
+- **Dead transition removed.** `REVISION_REQUIRED + GENERATE_PHASE1` is no longer in the state machine. A newer snapshot can only exist after leaving `REVISION_REQUIRED`, so a fresh diagnosis always starts from `PHASE1_READY`.
+- **History is preserved.** `REQUEST_REVISION` leaves the original run, items, calculations, review session, decisions and snapshot unchanged. A diagnosis of the newer snapshot is a new run with a new review lifecycle. Run idempotency (`analysis_runs_equivalent_active_unique`) is unchanged.
+- **Canonical state changes only through Evidence Review**, never through diagnosis generation or revision.
+- **Future possibility (not implemented).** Re-diagnosing the same snapshot with explicit human revision instructions would need its own run-identity and revision contract, for example a revision discriminator in the run identity, and a separate architecture decision.
 
 ## Versions
 
@@ -130,6 +147,6 @@ PHASE1_READY / REVISION_REQUIRED
 
 ## Workflow preconditions (Orchestrator, in-transaction)
 
-- **`GENERATE_PHASE1`:** the latest snapshot must equal the recorded continuation snapshot, and the recorded Evidence Coherence run must be the continued-with successful run on it.
+- **`GENERATE_PHASE1`** (from `PHASE1_READY` only): the latest snapshot must equal the recorded continuation snapshot, and the recorded Evidence Coherence run must be the continued-with successful run on it.
 - **`MARK_ANALYSIS_COMPLETE`** (from `PHASE1_ANALYSING` only): needs a successful diagnosis of the latest snapshot.
 - **`APPROVE_PHASE1`:** needs the approved artifact of the current diagnosis of the latest snapshot, and at least one ACCEPTED or CORRECTED item in its review.

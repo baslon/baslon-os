@@ -22,8 +22,21 @@ import {
   workflowTransitions,
 } from "@/db/schema";
 import type { Phase1DiagnosisModel } from "@/ai/phase1-diagnosis/model";
+import { REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE } from "@/domain/phase1-diagnosis";
+import { AddInformationRepository } from "@/repositories/add-information-repository";
+import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
+import { EvidenceExtractionRepository } from "@/repositories/evidence-extraction-repository";
+import { EvidenceReviewRepository } from "@/repositories/evidence-review-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
+import { SourceSubmissionRepository } from "@/repositories/source-submission-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
+import { AddInformationService } from "@/services/add-information-service";
+import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
+import { EvidenceExtractionService } from "@/services/evidence-extraction-service";
+import { EvidenceReviewService } from "@/services/evidence-review-service";
+import { GapResolutionService } from "@/services/gap-resolution-service";
+import { RevisionRequiresNewSnapshotError } from "@/services/phase1-diagnosis-service";
+import { SourceSubmissionService } from "@/services/source-submission-service";
 import {
   FakeDiagnosisModel,
   diagnosisService,
@@ -249,6 +262,145 @@ describe("Phase 1 Diagnosis application flow (synthetic data only)", () => {
     expect((await database.select().from(metrics).where(eq(metrics.businessId, fixture.business.id)))).toHaveLength(1);
     expect((await database.select().from(claimEvidence).where(eq(claimEvidence.businessId, fixture.business.id)))).toHaveLength(1);
     expect((await database.select().from(businessStateSnapshots).where(eq(businessStateSnapshots.businessId, fixture.business.id)))).toHaveLength(1);
+  });
+
+  describe("v1 revision semantics: a revised diagnosis needs a newer snapshot", () => {
+    async function transitions(businessId: string) {
+      const [workflow] = await database.select().from(strategyWorkflows).where(eq(strategyWorkflows.businessId, businessId));
+      return database.select().from(workflowTransitions).where(eq(workflowTransitions.workflowId, workflow.id))
+        .then((rows) => rows.toSorted((left, right) => left.createdAt.getTime() - right.createdAt.getTime()));
+    }
+    /** Every persisted row of one diagnosis lifecycle, for immutability comparison. */
+    async function diagnosisRecord(runId: string, snapshotId: string) {
+      const items = await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, runId));
+      const sessions = await database.select().from(diagnosisReviewSessions).where(eq(diagnosisReviewSessions.analysisRunId, runId));
+      return {
+        run: await database.select().from(analysisRuns).where(eq(analysisRuns.id, runId)),
+        items,
+        references: await database.select().from(diagnosisItemReferences).where(eq(diagnosisItemReferences.analysisRunId, runId)),
+        calculations: await database.select().from(diagnosisCalculations).where(eq(diagnosisCalculations.analysisRunId, runId)),
+        sessions,
+        reviews: sessions.length
+          ? await database.select().from(diagnosisItemReviews).where(eq(diagnosisItemReviews.reviewSessionId, sessions[0].id))
+          : [],
+        snapshot: await database.select().from(businessStateSnapshots).where(eq(businessStateSnapshots.id, snapshotId)),
+      };
+    }
+
+    it("refuses same-snapshot re-diagnosis, then returns through the normal evidence loop to a fresh diagnosis of a newer snapshot", async () => {
+      const fixture = await phase1ReadyBusiness("Diagnosis revision loop");
+      const businessId = fixture.business.id;
+      const model = new FakeDiagnosisModel(validDiagnosis);
+      const diagnosis = service(model, fixture.orchestrator);
+
+      // First diagnosis, reviewed, then sent for revision.
+      const { run: first } = await diagnosis.generate({ businessId });
+      const firstItems = await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, first.id));
+      const session = await diagnosis.startReview({ businessId, runId: first.id, reviewerId: "Reviewer" });
+      for (const item of firstItems) {
+        await diagnosis.reviewItem({ businessId, reviewSessionId: session.id, reviewerId: "Reviewer", diagnosisItemId: item.id, decision: "REJECTED" });
+      }
+      const beforeRevision = await diagnosisRecord(first.id, fixture.snapshot.id);
+      await diagnosis.requestRevision({ businessId, reason: "Interpretation needs new evidence" });
+      expect(await workflowState(businessId)).toBe("REVISION_REQUIRED");
+      expect((await transitions(businessId)).at(-1)).toMatchObject({
+        event: "REQUEST_REVISION", fromState: "PHASE1_AWAITING_REVIEW", toState: "REVISION_REQUIRED", actorType: "human",
+      });
+      // REQUEST_REVISION leaves the run, items, review session, decisions and snapshot untouched.
+      expect(await diagnosisRecord(first.id, fixture.snapshot.id)).toEqual(beforeRevision);
+
+      // Same snapshot: no run, no reuse, no model call, no GENERATE_PHASE1, no state change.
+      const canonicalBefore = await canonicalFingerprint(businessId);
+      const transitionsBefore = await transitions(businessId);
+      const runsBefore = await database.select().from(analysisRuns).where(eq(analysisRuns.businessId, businessId));
+      await expect(diagnosis.generate({ businessId })).rejects.toBeInstanceOf(RevisionRequiresNewSnapshotError);
+      await expect(diagnosis.generate({ businessId })).rejects.toThrow(REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE);
+      await expect(fixture.orchestrator.transition({
+        businessId, event: "GENERATE_PHASE1", actorType: "human", actorId: "Reviewer",
+        metadata: { snapshotId: fixture.snapshot.id, coherenceRunId: fixture.coherenceRun.id },
+      })).rejects.toThrow("Invalid workflow transition: REVISION_REQUIRED + GENERATE_PHASE1");
+      expect(model.calls).toBe(1);
+      expect(await database.select().from(analysisRuns).where(eq(analysisRuns.businessId, businessId))).toEqual(runsBefore);
+      expect(await transitions(businessId)).toEqual(transitionsBefore);
+      expect(await workflowState(businessId)).toBe("REVISION_REQUIRED");
+      expect(await canonicalFingerprint(businessId)).toBe(canonicalBefore);
+
+      // Ordinary Add Information is accepted and enters the normal evidence loop.
+      const orchestrator = fixture.orchestrator;
+      const reviews = new EvidenceReviewService(new EvidenceReviewRepository(database), orchestrator);
+      const rawText = "Costs are now tracked in monthly management accounts.";
+      const extraction = new EvidenceExtractionService(new EvidenceExtractionRepository(database), {
+        getConfiguration: () => ({ provider: "test", model: "deterministic", metadata: {} }),
+        extract: async () => {
+          const output = { claims: [], metrics: [], relationships: [], evidence: [{
+            proposalRef: "evidence_1", evidenceType: "management_record", statement: rawText,
+            valueNumeric: null, valuePrecision: null, valueLower: null, valueUpper: null, valueText: null, unit: null,
+            periodStart: null, periodEnd: null, sourceType: "business_intake", sourceReference: null, sourceMetadata: { suppliedBy: "founder", notes: "Synthetic revision test" },
+            reliabilityLevel: "medium", reliabilityScore: 0.6, directnessLevel: "direct", recencyLevel: "current",
+            rawPayload: { excerpt: rawText }, materiality: "medium", sourceExcerpt: rawText,
+          }] };
+          return { output, rawOutput: output };
+        },
+      });
+      const addInformation = new AddInformationService(
+        new AddInformationRepository(database),
+        new SourceSubmissionService(new SourceSubmissionRepository(database)),
+        extraction,
+        reviews,
+      );
+      const added = await addInformation.submit({ businessId, rawText });
+      expect(await workflowState(businessId)).toBe("EVIDENCE_PROCESSING");
+      expect((await transitions(businessId)).find((row) => row.event === "ADD_EVIDENCE")).toMatchObject({
+        fromState: "REVISION_REQUIRED", toState: "EVIDENCE_PROCESSING", actorType: "human",
+      });
+      // Nothing canonical changes until a human completes Evidence Review.
+      expect(await canonicalFingerprint(businessId)).toBe(canonicalBefore);
+
+      const evidenceSession = await reviews.startReview({ businessId, extractionRunId: added.run.id, reviewerId: "Reviewer" });
+      for (const proposal of (await reviews.getReview(evidenceSession.id, businessId)).proposals) {
+        await reviews.reviewProposal({ businessId, reviewSessionId: evidenceSession.id, reviewerId: "Reviewer", proposalId: proposal.id, decision: "ACCEPTED" });
+      }
+      const completed = await reviews.completeReview({ businessId, reviewSessionId: evidenceSession.id, reviewerId: "Reviewer" });
+      expect(completed.snapshot.version).toBe(fixture.snapshot.version + 1);
+      expect(await workflowState(businessId)).toBe("EVIDENCE_READY");
+      expect(await database.select().from(evidence).where(eq(evidence.businessId, businessId))).toHaveLength(4);
+
+      // Evidence Coherence on the newer snapshot, then the human gap decision back to PHASE1_READY.
+      const coherence = new EvidenceCoherenceRepository(database);
+      const coherenceRun = await new EvidenceCoherenceService(coherence, {
+        getConfiguration: () => ({ provider: "fake", model: "coherence", metadata: {} }),
+        analyse: async () => {
+          const output = { contradictions: [], questions: [], gaps: [
+            { findingRef: "gap_1", area: "financial_performance", missingInformation: "Profit is still unreported.", decisionImpact: "Profitability cannot be assessed.", materiality: "high", priorityRank: 1, references: [{ entityType: "evidence", ref: "E002", role: "primary" }] },
+          ] };
+          return { output, rawOutput: output };
+        },
+      }, orchestrator).analyseCurrentSnapshot({ businessId });
+      expect(coherenceRun.run.inputSnapshotId).toBe(completed.snapshot.id);
+      expect(await workflowState(businessId)).toBe("GAP_RESOLUTION_REQUIRED");
+      await new GapResolutionService(coherence, orchestrator).continueWithGaps({ businessId });
+      expect(await workflowState(businessId)).toBe("PHASE1_READY");
+
+      // A fresh diagnosis: a new run bound to the newer snapshot, from PHASE1_READY.
+      const canonicalAfterEvidence = await canonicalFingerprint(businessId);
+      const second = await diagnosis.generate({ businessId });
+      expect(second.reused).toBe(false);
+      expect(second.run.id).not.toBe(first.id);
+      expect(second.run.inputSnapshotId).toBe(completed.snapshot.id);
+      expect(second.run.modelConfiguration.gapSourceRunId).toBe(coherenceRun.run.id);
+      expect(model.calls).toBe(2);
+      expect(model.inputs[1].snapshot.evidence.map((item) => item.statement)).toContain(rawText);
+      expect(await workflowState(businessId)).toBe("PHASE1_AWAITING_REVIEW");
+      expect((await transitions(businessId)).filter((row) => row.event === "GENERATE_PHASE1").map((row) => row.fromState))
+        .toEqual(["PHASE1_READY", "PHASE1_READY"]);
+      // A new review lifecycle; the old diagnosis and its review stay exactly as they were.
+      const secondSession = await diagnosis.startReview({ businessId, runId: second.run.id, reviewerId: "Reviewer" });
+      expect(secondSession.id).not.toBe(session.id);
+      expect(await diagnosisRecord(first.id, fixture.snapshot.id)).toEqual(beforeRevision);
+      // Diagnosis itself never changed canonical state; only Evidence Review did.
+      expect(await canonicalFingerprint(businessId)).toBe(canonicalAfterEvidence);
+      expect(await database.select().from(businessStateSnapshots).where(eq(businessStateSnapshots.businessId, businessId))).toHaveLength(2);
+    });
   });
 
   describe("approval requires at least one surviving item", () => {

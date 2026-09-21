@@ -576,9 +576,15 @@ as Claim truth probability or proof weight unless an explicitly approved later m
 - **ACCEPT / CORRECT / REJECT:** corrections may change every material field, including references and grounding, and must pass the same validation.
 - **Approval:**
   - requires exactly one decision per item (application and trigger);
+  - requires at least one ACCEPTED or CORRECTED item. An all-rejected review cannot be approved; the reviewer uses Request Revision (UI, application, Orchestrator precondition and trigger);
   - the immutable, versioned artifact is built server-side;
   - REJECTED items are excluded, and carried-forward gaps are always included;
   - the reviewer, decisions, corrections, timestamps, run, snapshot and versions are audited.
+- **v1 revision semantics:**
+  - after `REQUEST_REVISION`, a new diagnosis needs a newer snapshot;
+  - a revision never re-runs or reuses the diagnosis on the snapshot that produced it;
+  - `REVISION_REQUIRED` returns through ordinary Add Information (`ADD_EVIDENCE`) and the normal evidence and coherence path to `PHASE1_READY`;
+  - `REVISION_REQUIRED + GENERATE_PHASE1` was removed from the state machine.
 
 ### Rule
 Milestone 4 diagnosis/recommendation output must remain analytical state.
@@ -1367,6 +1373,16 @@ The test now stubs `TEST_DATABASE_URL` to empty for the no-argument check and re
 In one of three `evidence_extractor_v6` runs, `gpt-5.6-luna` proposed the value 5 from "a five-day week", although the prompt says compound number words stay qualitative. The deterministic validator rejected the run as designed, so no invalid value could reach review. Because validation is all-or-nothing (B-15), the run's correct items were discarded too, and a retry is needed.
 
 This does not reopen M4-02 or M4-10: the rule is aligned and enforced. The sample (7 calls) is too small to estimate a rate. If rejections become frequent in real use, consider adding "five-day" to the prompt's compound examples (a new prompt version) or revisiting B-15. See `docs/m4-02a-h4-live-model-validation.md`.
+
+---
+
+## B-32 — `PHASE1_AWAITING_REVIEW + ADD_EVIDENCE` is defined but not reachable
+
+**Origin:** PR #13 revision-route verification, 21 September 2026.**Status:** **BACKLOG — non-blocking workflow observation**
+
+The state machine allows `PHASE1_AWAITING_REVIEW + ADD_EVIDENCE → EVIDENCE_PROCESSING`, but ordinary Add Information (`addInformationStates`) does not accept `PHASE1_AWAITING_REVIEW`, so no command can use the rule. This does not block review: a reviewer can decide the diagnosis or request a revision, and `REVISION_REQUIRED` accepts Add Information.
+
+Decide whether evidence may be added mid-review, which would leave the open review on an older snapshot, or remove the rule. Deliberately out of scope for PR #13.
 
 ---
 

@@ -12,6 +12,7 @@ import {
   diagnosisItemTypes,
   diagnosisLabelDefinitions,
   diagnosisMaterialities,
+  REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE,
 } from "@/domain/phase1-diagnosis";
 import {
   diagnosisReviewFields,
@@ -151,8 +152,10 @@ function Approved({ model }: { model: DiagnosisViewModel }) {
 export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; error?: string }) {
   const { business, run } = model;
   const archived = business.status === "archived";
-  const canGenerate = !archived && (["PHASE1_READY", "REVISION_REQUIRED"].includes(model.workflowState)
+  // REVISION_REQUIRED never offers Run: v1 revision needs a newer snapshot.
+  const canGenerate = !archived && (model.workflowState === "PHASE1_READY"
     || (model.workflowState === "PHASE1_ANALYSING" && run?.status === "FAILED"));
+  const revisionRequired = model.workflowState === "REVISION_REQUIRED";
   const reviewing = model.workflowState === "PHASE1_AWAITING_REVIEW" && run?.status === "SUCCEEDED";
   const allDecided = model.items.length > 0 && model.items.every((item) => item.decision);
   const anySurviving = model.items.some((item) => item.decision?.decision === "ACCEPTED" || item.decision?.decision === "CORRECTED");
@@ -170,6 +173,13 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
       <p>The diagnosis reads snapshot {model.snapshot?.version} exactly as recorded, with its known evidence gaps. You will review every item before anything is approved.</p>
       <form action={generateDiagnosisAction}><input type="hidden" name="businessId" value={business.id} />
         <button type="submit">{run?.status === "FAILED" ? "Retry diagnosis" : "Run Phase 1 Diagnosis"}</button></form>
+    </section> : null}
+    {revisionRequired ? <section className="status-panel" aria-labelledby="revision-heading">
+      <p className="eyebrow">Workflow: {label(model.workflowState)}</p>
+      <h2 id="revision-heading">Revision requested: updated evidence needed</h2>
+      <p>{REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE}</p>
+      <p className="muted">The diagnosis sent for revision stays below, unchanged, as a record of snapshot {model.snapshot?.version}.</p>
+      {!archived ? <Link className="button-link" href={`/businesses/${business.id}/information`}>Add Information</Link> : null}
     </section> : null}
     {!canGenerate && !run && !archived ? <section className="empty-state"><h2>Phase 1 Diagnosis is not available yet</h2><p>Continue with the latest snapshot&apos;s known gaps first.</p></section> : null}
     {run?.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Diagnosis in progress</p><h2>Analysing snapshot {model.snapshot?.version}</h2></section> : null}

@@ -6,6 +6,7 @@ import {
   PHASE1_DIAGNOSIS_INPUT_VERSION,
   PHASE1_DIAGNOSIS_MODULE,
   PHASE1_DIAGNOSIS_RUN_TYPE,
+  REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE,
   diagnosisReviewDecisions,
 } from "@/domain/phase1-diagnosis";
 import { ANNUALISED_RUN_RATE_RULE } from "@/domain/phase1-diagnosis-calculations";
@@ -70,6 +71,13 @@ export class Phase1DiagnosisAnalysisError extends Error {
   }
 }
 
+export class RevisionRequiresNewSnapshotError extends Error {
+  constructor() {
+    super(REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE);
+    this.name = "RevisionRequiresNewSnapshotError";
+  }
+}
+
 type Run = NonNullable<Awaited<ReturnType<Phase1DiagnosisRepository["getRun"]>>>;
 
 /**
@@ -89,6 +97,11 @@ export class Phase1DiagnosisService {
   async generate(input: unknown) {
     const { businessId } = businessSchema.parse(input);
     await this.repository.assertBusinessActive(businessId);
+    // Checked before any run lookup, so a revision can never reuse the
+    // diagnosis it sent back. REVISION_REQUIRED only leaves through new evidence.
+    if ((await this.repository.getWorkflow(businessId))?.state === "REVISION_REQUIRED") {
+      throw new RevisionRequiresNewSnapshotError();
+    }
     const snapshot = await this.repository.getLatestSnapshot(businessId);
     if (!snapshot) throw new Error("A canonical snapshot is required before Phase 1 Diagnosis");
     const basis = await this.repository.getContinuationBasis(businessId);
@@ -125,7 +138,7 @@ export class Phase1DiagnosisService {
     }
 
     const workflow = await this.repository.getWorkflow(businessId);
-    if (workflow?.state === "PHASE1_READY" || workflow?.state === "REVISION_REQUIRED") {
+    if (workflow?.state === "PHASE1_READY") {
       await this.orchestrator.transition({
         businessId,
         event: "GENERATE_PHASE1",

@@ -94,7 +94,8 @@ awaiting Solution Architect review.**
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
 - **Input:** exact-snapshot binding, run-local C/E/M/G/D handles and software-owned calculations.
 - **Validation:** fail-closed, covering grounding, the missing-data guardrail and M4-06 qualifier/precision semantics.
-- **Human review:** mandatory at `PHASE1_AWAITING_REVIEW`, with ACCEPT/CORRECT/REJECT and an immutable, server-built approved artifact.
+- **Human review:** mandatory at `PHASE1_AWAITING_REVIEW`, with ACCEPT/CORRECT/REJECT and an immutable, server-built approved artifact. Approval needs at least one ACCEPTED or CORRECTED item.
+- **Revision (v1):** after `REQUEST_REVISION`, a new diagnosis needs a newer snapshot. `REVISION_REQUIRED` returns through ordinary Add Information and the normal evidence path to `PHASE1_READY`; same-snapshot re-diagnosis is refused.
 - **Migration `0007_phase1_diagnosis`** (additive) is applied to `baslon_os_test` only. **`baslon_os` is not migrated.**
 
 See `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`
@@ -114,7 +115,8 @@ See `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-deci
 and Findings Register entry M4-12.
 
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
-grounding) and B-31 (compound number words).
+grounding), B-31 (compound number words) and B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
+is defined but not reachable).
 
 Not started: M4-02B and Phase 1 Diagnosis (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
 
