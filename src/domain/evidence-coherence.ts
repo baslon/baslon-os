@@ -28,9 +28,19 @@ export type AnalysisFindingReferenceRole =
 
 export const EVIDENCE_COHERENCE_MODULE = "evidence_coherence";
 export const EVIDENCE_COHERENCE_RUN_TYPE = "snapshot_analysis";
-export const EVIDENCE_COHERENCE_INPUT_VERSION = "evidence_coherence_input_v2";
+/** Frozen: model input carrying canonical UUIDs, kept so historical runs remain auditable. */
+export const EVIDENCE_COHERENCE_INPUT_V2_VERSION = "evidence_coherence_input_v2";
+/** Current (M4-12): model input carrying snapshot-local handles instead of canonical UUIDs. */
+export const EVIDENCE_COHERENCE_INPUT_VERSION = "evidence_coherence_input_v3";
 export const MAX_SURFACED_QUESTIONS = 3;
 
+export const evidenceCoherenceEntityTypes = ["claim", "evidence", "metric"] as const;
+export type EvidenceCoherenceEntityType = (typeof evidenceCoherenceEntityTypes)[number];
+
+/**
+ * Application-side projection of one immutable snapshot. It carries canonical
+ * UUIDs and is never sent to the model under `evidence_coherence_input_v3`.
+ */
 export type EvidenceCoherenceProjection = {
   businessId: string;
   snapshotId: string;
@@ -81,6 +91,41 @@ export type EvidenceCoherenceProjection = {
     /** Semantic-link confidence only; not truth, credibility or proof weight. */
     strengthScore: string | null;
   }>;
+};
+
+type Projected<T> = T extends Array<infer Item> ? Item : never;
+type WithoutId<T> = Omit<T, "id">;
+
+/**
+ * Model-facing snapshot for `evidence_coherence_input_v3` (M4-12). Records are
+ * identified only by snapshot-local handles; no canonical UUID is included.
+ */
+export type EvidenceCoherenceHandleProjection = {
+  snapshotVersion: number;
+  profile: Record<string, unknown>;
+  claims: Array<{ handle: string } & WithoutId<Projected<EvidenceCoherenceProjection["claims"]>>>;
+  evidence: Array<{ handle: string } & WithoutId<Projected<EvidenceCoherenceProjection["evidence"]>>>;
+  metrics: Array<{ handle: string; sourceEvidenceHandle: string | null }
+    & Omit<Projected<EvidenceCoherenceProjection["metrics"]>, "id" | "sourceEvidenceId">>;
+  relationships: Array<{
+    claimHandle: string;
+    evidenceHandle: string;
+    relationshipType: string;
+    /** Semantic-link confidence only; not truth, credibility or proof weight. */
+    strengthScore: string | null;
+  }>;
+};
+
+/** Model input for `evidence_coherence_input_v3`. */
+export type EvidenceCoherenceModelInput = {
+  projectionVersion: string;
+  snapshot: EvidenceCoherenceHandleProjection;
+};
+
+/** Frozen model input for `evidence_coherence_input_v2` (canonical UUIDs). */
+export type EvidenceCoherenceV2ModelInput = {
+  projectionVersion: string;
+  snapshot: EvidenceCoherenceProjection;
 };
 
 export type SurfaceableQuestion = {

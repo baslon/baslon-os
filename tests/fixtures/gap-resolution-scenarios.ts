@@ -3,7 +3,7 @@ import { count, desc, eq } from "drizzle-orm";
 import { expect, it } from "vitest";
 import type { Database } from "@/db/client";
 import * as s from "@/db/schema";
-import type { EvidenceCoherenceOutput } from "@/ai/evidence-coherence/contracts";
+import type { EvidenceCoherenceModelOutput } from "@/ai/evidence-coherence/contracts";
 import { BusinessArchivedError } from "@/repositories/business-lifecycle-guard";
 import { AddInformationRepository } from "@/repositories/add-information-repository";
 import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
@@ -26,7 +26,7 @@ type Findings = "none" | "low_only" | "high_question";
 export async function createGapResolutionContext(db: Database, findings: Findings) {
   const foundation = new FoundationRepository(db);
   const business = await foundation.createBusiness({ name: `Gap resolution ${randomUUID()}` });
-  const claim = await foundation.addClaim({
+  await foundation.addClaim({
     businessId: business.id, statement: "Most clients come from referrals.",
     claimType: "management_belief", subjectArea: "acquisition",
     confidenceLevel: "medium", sourceType: "test",
@@ -43,9 +43,10 @@ export async function createGapResolutionContext(db: Database, findings: Finding
     missingInformation: "Client acquisition sources are unmeasured.",
     decisionImpact: "Acquisition priorities cannot be compared.",
     materiality, priorityRank: 1,
-    references: [{ recordType: "claim" as const, recordId: claim.id, role: "primary" as const }],
+    // The snapshot's only Claim projects as C001.
+    references: [{ entityType: "claim" as const, ref: "C001", role: "primary" as const }],
   });
-  const output: EvidenceCoherenceOutput = findings === "none"
+  const output: EvidenceCoherenceModelOutput = findings === "none"
     ? { contradictions: [], gaps: [], questions: [] }
     : {
       contradictions: [],

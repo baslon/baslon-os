@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. The Baslon Digital controlled rebuild is paused after S1; M4-02B and Phase 1 Diagnosis have not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is an open Milestone 4 blocker: the Baslon Digital controlled rebuild v2 is held at `GAP_ANALYSIS` on Snapshot 4 until it is resolved and merged. M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -671,6 +671,39 @@ Evidence `sourceType`, `sourceReference` and `sourceMetadata.suppliedBy`, and Cl
 - **Visible and read-only:** provenance is shown on the card and cannot be corrected; the strict correction schemas reject it.
 - **No separation needed:** `sourceType` is a channel, not overloaded. The AI's interpretive classification is `evidenceType`, which stays AI-proposed, visible and correctable. No schema change.
 - **Immutable proposals:** proposals keep the model's echoed values and are never rewritten.
+
+---
+
+## M4-12 — Evidence Coherence relies on model reproduction of canonical UUIDs
+
+**Origin:** Baslon Digital controlled rebuild v2, live Evidence Coherence runs, 21 September 2026.\
+**Classification:** Milestone 4 blocker.\
+**Status:** **OPEN — implemented on `claude/milestone-4`, awaiting Solution Architect review.** Stays open until implementation, automated tests, live regression validation and merge are complete.\
+**Governing decision:** `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-decision.md`
+
+### Finding
+Evidence Coherence requires the model to reproduce full canonical UUIDs in finding references. Repeated live-model runs corrupted the same valid Snapshot Evidence identifier, causing deterministic validation failure. Replace model-authored canonical identifiers with deterministic snapshot-local handles resolved to canonical UUIDs by application code.
+
+### Evidence
+Two of three runs that had to cite the profitability-gap Evidence `4142656f-8877-447b-86c9-5c0c3e35a58d` failed:
+
+| Run | Snapshot | Model emitted | Result |
+|---|---|---|---|
+| `8c3f1af5-…` | 3 | `414b90e2-4593-4e45-9382-f54660270c37` (splice of two valid IDs) | FAILED |
+| `90cd5ec9-…` | 3 (retry) | the correct UUID | SUCCEEDED |
+| `9883e5cb-…` | 4 | `414b2656-8877-447b-86c9-5c0c3e35a58d` (scrambled first segment) | FAILED |
+
+The all-or-nothing validator rejected both corrupted outputs, and nothing was persisted. The validator worked; the contract that asks a model to reproduce opaque identifiers did not.
+
+### Risk
+As snapshots grow, model-authored UUID reproduction creates avoidable failures and can stop workflow progression even when the analytical content is valid. The rebuild is held at `GAP_ANALYSIS` on Snapshot 4 until this is resolved.
+
+### Implementation (awaiting review)
+- **New versions:** `evidence_coherence_input_v3` and `evidence_coherence_v4`. `evidence_coherence_input_v2` and `evidence_coherence_v3` are frozen verbatim; historical runs are not rewritten or revalidated.
+- **Handles:** Claims `C001…`, Evidence `E001…`, Metrics `M001…`, assigned in admission order (`createdAt`, then canonical UUID) and independent of stored array order.
+- **No UUIDs to the model:** the model input carries handles only; relationships and Metric source Evidence use handles too.
+- **Application-owned resolution:** a strict handle syntax, then an exact lookup in a map built only from the analysed snapshot. There is no fuzzy repair, text search or live-state lookup. An unknown, malformed or wrong-namespace handle, or a model-emitted UUID, rejects the whole output.
+- **Persistence unchanged:** `analysis_finding_references` still stores canonical UUIDs. Handles appear only in the input payload and raw model output. No migration.
 
 ---
 

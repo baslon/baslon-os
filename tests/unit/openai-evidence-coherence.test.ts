@@ -16,16 +16,14 @@ describe("OpenAI Evidence Coherence configuration", () => {
       model: "not_configured",
       metadata: {
         api: "responses",
-        promptVersion: "evidence_coherence_v3",
+        promptVersion: "evidence_coherence_v4",
         structuredOutput: "json_schema_strict",
         store: false,
       },
     });
     await expect(model.analyse({
-      projectionVersion: "evidence_coherence_input_v2",
+      projectionVersion: "evidence_coherence_input_v3",
       snapshot: {
-        businessId: "00000000-0000-4000-8000-000000000001",
-        snapshotId: "00000000-0000-4000-8000-000000000002",
         snapshotVersion: 1,
         profile: {},
         claims: [],

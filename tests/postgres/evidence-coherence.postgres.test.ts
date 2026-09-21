@@ -19,9 +19,8 @@ import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { BusinessService } from "@/services/business-service";
 import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
 import {
-  buildEvidenceCoherenceProjection,
-  evidenceCoherenceModelInput,
-  hashEvidenceCoherenceProjection,
+  buildEvidenceCoherenceModelInput,
+  hashEvidenceCoherenceModelInput,
 } from "@/domain/evidence-coherence-projection";
 import {
   EVIDENCE_COHERENCE_INPUT_VERSION,
@@ -198,11 +197,10 @@ describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
         ["PROCESS_EVIDENCE", "system"],
         ["MARK_ANALYSIS_COMPLETE", "system"],
       ] as const) await orchestrator.transition({ businessId: business.id, event, actorType });
-      const projection = buildEvidenceCoherenceProjection({
+      const { modelInput: inputPayload } = buildEvidenceCoherenceModelInput({
         ...snapshot,
         snapshotData: snapshot.snapshotData as Record<string, unknown>,
       });
-      const inputPayload = evidenceCoherenceModelInput(projection);
       const identity = {
         businessId: business.id,
         inputSnapshotId: snapshot.id,
@@ -210,7 +208,7 @@ describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
         runType: EVIDENCE_COHERENCE_RUN_TYPE,
         inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
         inputPayload,
-        inputHash: hashEvidenceCoherenceProjection(projection),
+        inputHash: hashEvidenceCoherenceModelInput(inputPayload),
         promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
         provider: "test",
         modelIdentifier: "abandoned",
@@ -259,4 +257,67 @@ describe("real PostgreSQL 17 Evidence Coherence integrity", () => {
       await Promise.all([firstPool.end(), secondPool.end()]);
     }
   }, 15_000);
+
+  it("resolves model handles to canonical UUID references and fails invalid handles closed (M4-12)", async () => {
+    const foundation = new FoundationRepository(database);
+    const business = await new BusinessService(foundation).create({ name: `Coherence handles ${randomUUID()}` });
+    const claim = await foundation.addClaim({
+      businessId: business.id, statement: "Profitability is not measured.", claimType: "observation",
+      subjectArea: "finance", confidenceLevel: "medium", sourceType: "test",
+    });
+    const gapEvidence = await foundation.addEvidence({
+      businessId: business.id, evidenceType: "profitability_data_gap",
+      statement: "Reliable profit figures are unavailable.", sourceType: "test",
+      reliabilityLevel: "medium", directnessLevel: "direct", recencyLevel: "current", materiality: "high",
+    });
+    await foundation.linkClaimEvidence({ claimId: claim.id, evidenceId: gapEvidence.id, relationshipType: "supports" });
+    const snapshot = await foundation.createSnapshot(business.id);
+    const orchestrator = createStrategyOrchestrator(database);
+    for (const [event, actorType] of [
+      ["START_INTAKE", "human"], ["SUBMIT_INTAKE", "human"],
+      ["PROCESS_EVIDENCE", "system"], ["MARK_ANALYSIS_COMPLETE", "system"],
+    ] as const) await orchestrator.transition({ businessId: business.id, event, actorType });
+
+    const seen: unknown[] = [];
+    const gapOutput = (ref: string) => ({
+      contradictions: [],
+      gaps: [{
+        findingRef: "gap_1", area: "financial_performance", missingInformation: "Profit is unknown.",
+        decisionImpact: "Profitability cannot be assessed.", materiality: "high", priorityRank: 1,
+        references: [
+          { entityType: "claim", ref: "C001", role: "primary" },
+          { entityType: "evidence", ref, role: "context" },
+        ],
+      }],
+      questions: [{ findingType: "gap", findingRef: "gap_1", question: "What was the profit?", priorityOrder: 1 }],
+    });
+    const modelReturning = (output: unknown) => ({
+      getConfiguration: () => ({ provider: "test", model: "deterministic", metadata: {} }),
+      analyse: async (input: unknown) => { seen.push(input); return { output, rawOutput: output }; },
+    });
+    const repository = new EvidenceCoherenceRepository(database);
+
+    // The live failure mode: the model reproduces a canonical UUID instead of a handle.
+    await expect(new EvidenceCoherenceService(repository, modelReturning(gapOutput(gapEvidence.id)), orchestrator)
+      .analyseCurrentSnapshot({ businessId: business.id })).rejects.toThrow("analysis failed");
+    for (const table of [contradictions, evidenceGaps, analysisFindingReferences, analysisQuestions]) {
+      expect(await database.select().from(table).where(eq(table.businessId, business.id))).toHaveLength(0);
+    }
+
+    const result = await new EvidenceCoherenceService(repository, modelReturning(gapOutput("E001")), orchestrator)
+      .analyseCurrentSnapshot({ businessId: business.id });
+    expect(result.run).toMatchObject({
+      status: "SUCCEEDED", inputSnapshotId: snapshot.id,
+      inputProjectionVersion: "evidence_coherence_input_v3", promptVersion: "evidence_coherence_v4",
+    });
+    for (const input of seen) {
+      expect(JSON.stringify(input)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    }
+    const references = await database.select().from(analysisFindingReferences)
+      .where(eq(analysisFindingReferences.businessId, business.id));
+    expect(references.map((item) => [item.claimId, item.evidenceId, item.role]).toSorted())
+      .toEqual([[claim.id, null, "primary"], [null, gapEvidence.id, "context"]].toSorted());
+    const runs = await database.select().from(analysisRuns).where(eq(analysisRuns.businessId, business.id));
+    expect(runs.map((run) => run.status).toSorted()).toEqual(["FAILED", "SUCCEEDED"]);
+  });
 });

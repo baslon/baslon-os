@@ -16,15 +16,17 @@ import {
   metrics,
 } from "@/db/schema";
 import type { EvidenceCoherenceModel } from "@/ai/evidence-coherence/model";
-import type { EvidenceCoherenceOutput } from "@/ai/evidence-coherence/contracts";
+import type {
+  EvidenceCoherenceModelOutput,
+  EvidenceCoherenceOutput,
+} from "@/ai/evidence-coherence/contracts";
 import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
 import { createStrategyOrchestrator } from "@/repositories/workflow-repository";
 import { EvidenceCoherenceService } from "@/services/evidence-coherence-service";
 import {
-  buildEvidenceCoherenceProjection,
-  evidenceCoherenceModelInput,
-  hashEvidenceCoherenceProjection,
+  buildEvidenceCoherenceModelInput,
+  hashEvidenceCoherenceModelInput,
 } from "@/domain/evidence-coherence-projection";
 import {
   EVIDENCE_COHERENCE_INPUT_VERSION,
@@ -87,15 +89,16 @@ describe("Evidence Coherence application flow", () => {
     return { business, claim, evidenceItem, metric, snapshot, orchestrator };
   }
 
-  function validOutput(fixture: Awaited<ReturnType<typeof readyBusiness>>): EvidenceCoherenceOutput {
+  // Each fixture snapshot holds one Claim, Evidence and Metric, so they project as C001, E001 and M001.
+  function validOutput(): EvidenceCoherenceModelOutput {
     return {
       contradictions: [{
         findingRef: "contradiction_1", area: "marketing_and_acquisition",
         statement: "Acquisition records conflict.", rationale: "The sources attribute customers differently.",
         materiality: "high", priorityRank: 1,
         references: [
-          { recordType: "claim", recordId: fixture.claim.id, role: "primary" },
-          { recordType: "evidence", recordId: fixture.evidenceItem.id, role: "conflicting" },
+          { entityType: "claim", ref: "C001", role: "primary" },
+          { entityType: "evidence", ref: "E001", role: "conflicting" },
         ],
       }],
       gaps: [{
@@ -103,10 +106,31 @@ describe("Evidence Coherence application flow", () => {
         missingInformation: "Customer acquisition cost is unknown.",
         decisionImpact: "Acquisition economics cannot be assessed.",
         materiality: "medium", priorityRank: 2,
-        references: [{ recordType: "metric", recordId: fixture.metric.id, role: "context" }],
+        references: [{ entityType: "metric", ref: "M001", role: "context" }],
       }],
       questions: [{ findingType: "gap", findingRef: "gap_1", question: "What is current customer acquisition cost?", priorityOrder: 1 }],
     };
+  }
+
+  /** The same findings after application-side resolution, as the repository persists them. */
+  function canonicalOutput(fixture: Awaited<ReturnType<typeof readyBusiness>>): EvidenceCoherenceOutput {
+    const output = validOutput();
+    const ids = { claim: fixture.claim.id, evidence: fixture.evidenceItem.id, metric: fixture.metric.id };
+    const resolve = (items: EvidenceCoherenceModelOutput["gaps"][number]["references"]) => items.map((item) => ({
+      recordType: item.entityType, recordId: ids[item.entityType], role: item.role,
+    }));
+    return {
+      contradictions: output.contradictions.map((item) => ({ ...item, references: resolve(item.references) })),
+      gaps: output.gaps.map((item) => ({ ...item, references: resolve(item.references) })),
+      questions: output.questions,
+    };
+  }
+
+  function modelInputFor(fixture: Awaited<ReturnType<typeof readyBusiness>>) {
+    return buildEvidenceCoherenceModelInput({
+      ...fixture.snapshot,
+      snapshotData: fixture.snapshot.snapshotData as Record<string, unknown>,
+    }).modelInput;
   }
 
   it("persists the RUNNING run before the model, then atomically succeeds without canonical mutation", async () => {
@@ -123,7 +147,7 @@ describe("Evidence Coherence application flow", () => {
       const run = await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id);
       expect(run?.status).toBe("RUNNING");
       expect(run?.inputPayload).toEqual(input);
-      return validOutput(fixture);
+      return validOutput();
     });
     const service = new EvidenceCoherenceService(repository, model, fixture.orchestrator);
     const result = await service.analyseCurrentSnapshot({ businessId: fixture.business.id });
@@ -133,6 +157,22 @@ describe("Evidence Coherence application flow", () => {
     expect(persisted?.contradictions).toHaveLength(1);
     expect(persisted?.gaps).toHaveLength(1);
     expect(persisted?.questions).toHaveLength(1);
+    expect(result.run).toMatchObject({
+      inputProjectionVersion: "evidence_coherence_input_v3",
+      promptVersion: "evidence_coherence_v4",
+      inputHash: hashEvidenceCoherenceModelInput(modelInputFor(fixture)),
+    });
+    // The model saw handles only; the database received canonical UUIDs only.
+    const payload = JSON.stringify(result.run.inputPayload);
+    for (const id of [fixture.claim.id, fixture.evidenceItem.id, fixture.metric.id, fixture.business.id, fixture.snapshot.id]) {
+      expect(payload).not.toContain(id);
+    }
+    expect(persisted?.contradictions[0].references.map((item) => [item.claimId, item.evidenceId]))
+      .toEqual(expect.arrayContaining([[fixture.claim.id, null], [null, fixture.evidenceItem.id]]));
+    expect(persisted?.gaps[0].references).toEqual([expect.objectContaining({ metricId: fixture.metric.id, role: "context" })]);
+    expect(result.run.structuredOutput).toEqual(canonicalOutput(fixture));
+    expect(JSON.stringify(result.run.structuredOutput)).not.toMatch(/"(C|E|M)\d{3}"/);
+    expect(result.run.rawModelOutput).toEqual(validOutput());
     expect((await database.select({ value: count() }).from(claims).where(eq(claims.businessId, fixture.business.id)))[0].value).toBe(before.claims);
     expect((await database.select({ value: count() }).from(evidence).where(eq(evidence.businessId, fixture.business.id)))[0].value).toBe(before.evidence);
     expect((await database.select({ value: count() }).from(metrics).where(eq(metrics.businessId, fixture.business.id)))[0].value).toBe(before.metrics);
@@ -145,7 +185,7 @@ describe("Evidence Coherence application flow", () => {
     const repository = new EvidenceCoherenceRepository(database);
     const result = await new EvidenceCoherenceService(
       repository,
-      new FakeModel(() => validOutput(fixture)),
+      new FakeModel(() => validOutput()),
       fixture.orchestrator,
     ).analyseCurrentSnapshot({ businessId: fixture.business.id });
     const [secondary] = await database.insert(analysisRuns).values({
@@ -173,11 +213,7 @@ describe("Evidence Coherence application flow", () => {
     try {
       const fixture = await readyBusiness("Coherence stale recovery");
       const repository = new EvidenceCoherenceRepository(database);
-      const projection = buildEvidenceCoherenceProjection({
-        ...fixture.snapshot,
-        snapshotData: fixture.snapshot.snapshotData as Record<string, unknown>,
-      });
-      const modelInput = evidenceCoherenceModelInput(projection);
+      const modelInput = modelInputFor(fixture);
       const abandoned = await repository.createRun({
         businessId: fixture.business.id,
         inputSnapshotId: fixture.snapshot.id,
@@ -185,7 +221,7 @@ describe("Evidence Coherence application flow", () => {
         runType: EVIDENCE_COHERENCE_RUN_TYPE,
         inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
         inputPayload: modelInput,
-        inputHash: hashEvidenceCoherenceProjection(projection),
+        inputHash: hashEvidenceCoherenceModelInput(modelInput),
         promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
         provider: "fake",
         modelIdentifier: "abandoned",
@@ -194,7 +230,7 @@ describe("Evidence Coherence application flow", () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       const retried = await new EvidenceCoherenceService(
         repository,
-        new FakeModel(() => validOutput(fixture)),
+        new FakeModel(() => validOutput()),
         fixture.orchestrator,
       ).analyseCurrentSnapshot({ businessId: fixture.business.id });
       const [historical] = await database.select().from(analysisRuns)
@@ -219,18 +255,15 @@ describe("Evidence Coherence application flow", () => {
   it("rejects recovery of a current run and terminally records reconciliation failure", async () => {
     const fixture = await readyBusiness("Coherence reconciliation recovery");
     const repository = new EvidenceCoherenceRepository(database);
-    const projection = buildEvidenceCoherenceProjection({
-      ...fixture.snapshot,
-      snapshotData: fixture.snapshot.snapshotData as Record<string, unknown>,
-    });
+    const modelInput = modelInputFor(fixture);
     const created = await repository.createRun({
       businessId: fixture.business.id,
       inputSnapshotId: fixture.snapshot.id,
       module: EVIDENCE_COHERENCE_MODULE,
       runType: EVIDENCE_COHERENCE_RUN_TYPE,
       inputProjectionVersion: EVIDENCE_COHERENCE_INPUT_VERSION,
-      inputPayload: evidenceCoherenceModelInput(projection),
-      inputHash: hashEvidenceCoherenceProjection(projection),
+      inputPayload: modelInput,
+      inputHash: hashEvidenceCoherenceModelInput(modelInput),
       promptVersion: EVIDENCE_COHERENCE_PROMPT_VERSION,
       provider: "fake",
       modelIdentifier: "current",
@@ -250,7 +283,7 @@ describe("Evidence Coherence application flow", () => {
       rawModelOutput: null,
       validationErrors: [{ code: "test_cleanup" }],
     });
-    const model = new FakeModel(() => validOutput(fixture));
+    const model = new FakeModel(() => validOutput());
     const failingOrchestrator = {
       transition: async () => { throw new Error("forced workflow reconciliation failure"); },
     } as unknown as typeof fixture.orchestrator;
@@ -265,7 +298,7 @@ describe("Evidence Coherence application flow", () => {
   it("reuses a successful equivalent run without a second model call", async () => {
     const fixture = await readyBusiness("Coherence reuse");
     const repository = new EvidenceCoherenceRepository(database);
-    const model = new FakeModel(() => validOutput(fixture));
+    const model = new FakeModel(() => validOutput());
     const service = new EvidenceCoherenceService(repository, model, fixture.orchestrator);
     const first = await service.analyseCurrentSnapshot({ businessId: fixture.business.id });
     const second = await service.analyseCurrentSnapshot({ businessId: fixture.business.id });
@@ -284,7 +317,7 @@ describe("Evidence Coherence application flow", () => {
     const model = new FakeModel(async () => {
       signalModelStarted();
       await modelGate;
-      return validOutput(fixture);
+      return validOutput();
     });
     const service = new EvidenceCoherenceService(repository, model, fixture.orchestrator);
 
@@ -309,23 +342,36 @@ describe("Evidence Coherence application flow", () => {
     const failed = await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id);
     expect(failed?.status).toBe("FAILED");
     expect((await database.select().from(contradictions).where(eq(contradictions.analysisRunId, failed!.id)))).toHaveLength(0);
-    const retryModel = new FakeModel(() => validOutput(fixture));
+    const retryModel = new FakeModel(() => validOutput());
     const retry = await new EvidenceCoherenceService(repository, retryModel, fixture.orchestrator)
       .analyseCurrentSnapshot({ businessId: fixture.business.id });
     expect(retry.run.status).toBe("SUCCEEDED");
     expect(retry.run.id).not.toBe(failed?.id);
   });
 
-  it("fails invalid snapshot references with no partial findings", async () => {
+  it("fails invalid snapshot references closed, persisting no finding of any kind", async () => {
     const fixture = await readyBusiness("Coherence invalid reference");
     const repository = new EvidenceCoherenceRepository(database);
-    const output = validOutput(fixture);
-    output.gaps[0].references[0].recordId = "99999999-9999-4999-8999-999999999999";
-    const service = new EvidenceCoherenceService(repository, new FakeModel(() => output), fixture.orchestrator);
-    await expect(service.analyseCurrentSnapshot({ businessId: fixture.business.id })).rejects.toThrow("analysis failed");
-    const run = await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id);
-    expect(run?.status).toBe("FAILED");
-    expect((await database.select().from(evidenceGaps).where(eq(evidenceGaps.analysisRunId, run!.id)))).toHaveLength(0);
+    const cases: Array<{ entityType: "claim" | "evidence" | "metric"; ref: string; error: string }> = [
+      { entityType: "metric", ref: "M999", error: "reference metric:M999 is not in the analysed snapshot" },
+      // A model that reproduces a real canonical UUID is still rejected under evidence_coherence_v4.
+      { entityType: "evidence", ref: fixture.evidenceItem.id, error: "Invalid string" },
+      { entityType: "claim", ref: "E001", error: "reference claim:E001 uses a handle outside the declared entity type's namespace" },
+    ];
+    for (const invalid of cases) {
+      const output = validOutput();
+      output.gaps[0].references[0] = { entityType: invalid.entityType, ref: invalid.ref, role: "context" };
+      const service = new EvidenceCoherenceService(repository, new FakeModel(() => output), fixture.orchestrator);
+      await expect(service.analyseCurrentSnapshot({ businessId: fixture.business.id })).rejects.toThrow("analysis failed");
+      const run = await repository.getLatestRunForSnapshot(fixture.snapshot.id, fixture.business.id);
+      expect(run).toMatchObject({ status: "FAILED", structuredOutput: null, rawModelOutput: output });
+      expect(JSON.stringify(run?.validationErrors)).toContain(invalid.error);
+    }
+    // The valid contradiction in each output was discarded with the invalid gap.
+    for (const table of [contradictions, evidenceGaps, analysisFindingReferences, analysisQuestions]) {
+      expect(await database.select().from(table).where(eq(table.businessId, fixture.business.id))).toHaveLength(0);
+    }
+    expect((await foundation.getWorkflow(fixture.business.id))?.state).toBe("GAP_ANALYSIS");
   });
 
   it("rolls back every finding when persistence fails after earlier inserts", async () => {
@@ -344,7 +390,7 @@ describe("Evidence Coherence application flow", () => {
       modelIdentifier: "coherence-test",
       modelConfiguration: {},
     });
-    const output = validOutput(fixture);
+    const output = canonicalOutput(fixture);
     output.questions[0].findingRef = "missing_gap";
 
     await expect(repository.completeRun({
@@ -367,7 +413,7 @@ describe("Evidence Coherence application flow", () => {
     const model = new FakeModel(async () => {
       await foundation.addClaim({ businessId: fixture.business.id, statement: "Later live claim", claimType: "observation", subjectArea: "market", confidenceLevel: "low", sourceType: "test" });
       await foundation.createSnapshot(fixture.business.id);
-      return validOutput(fixture);
+      return validOutput();
     });
     const result = await new EvidenceCoherenceService(repository, model, fixture.orchestrator)
       .analyseCurrentSnapshot({ businessId: fixture.business.id });
@@ -380,7 +426,7 @@ describe("Evidence Coherence application flow", () => {
     const latestSnapshot = await repository.getLatestSnapshot(fixture.business.id);
     const currentResult = await new EvidenceCoherenceService(
       repository,
-      new FakeModel(() => validOutput(fixture)),
+      new FakeModel(() => validOutput()),
       fixture.orchestrator,
     ).analyseCurrentSnapshot({ businessId: fixture.business.id });
     expect(currentResult.run.inputSnapshotId).toBe(latestSnapshot?.id);
@@ -393,7 +439,7 @@ describe("Evidence Coherence application flow", () => {
     const fixture = await readyBusiness("Coherence archived");
     await foundation.archiveBusiness(fixture.business.id);
     const repository = new EvidenceCoherenceRepository(database);
-    await expect(new EvidenceCoherenceService(repository, new FakeModel(() => validOutput(fixture)), fixture.orchestrator)
+    await expect(new EvidenceCoherenceService(repository, new FakeModel(() => validOutput()), fixture.orchestrator)
       .analyseCurrentSnapshot({ businessId: fixture.business.id })).rejects.toThrow("archived");
     expect(await database.select().from(analysisRuns).where(eq(analysisRuns.businessId, fixture.business.id))).toHaveLength(0);
   });

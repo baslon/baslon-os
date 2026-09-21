@@ -11,8 +11,11 @@ import {
   evidenceGaps,
   strategyWorkflows,
 } from "@/db/schema";
-import type { EvidenceCoherenceOutput } from "@/ai/evidence-coherence/contracts";
-import type { EvidenceCoherenceModelInput } from "@/ai/evidence-coherence/contracts";
+import type {
+  EvidenceCoherenceModelInput,
+  EvidenceCoherenceOutput,
+  EvidenceCoherenceV2ModelInput,
+} from "@/ai/evidence-coherence/contracts";
 import {
   assertActiveBusinessForUpdate,
   assertBusinessActive,
@@ -74,7 +77,8 @@ export class EvidenceCoherenceRepository {
 
   async createRun(input: AnalysisRunIdentity & {
     runType: string;
-    inputPayload: EvidenceCoherenceModelInput;
+    // The payload matches the run's own input projection version.
+    inputPayload: EvidenceCoherenceModelInput | EvidenceCoherenceV2ModelInput;
     inputHash: string;
     provider: string;
     modelIdentifier: string;

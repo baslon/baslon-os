@@ -9,8 +9,9 @@ import {
   selectSurfacedQuestions,
 } from "@/domain/evidence-coherence";
 import {
+  buildEvidenceCoherenceModelInput,
   buildEvidenceCoherenceProjection,
-  hashEvidenceCoherenceProjection,
+  hashEvidenceCoherenceModelInput,
 } from "@/domain/evidence-coherence-projection";
 import { EvidenceQuality } from "../../app/evidence-quality";
 import { BusinessWorkspace } from "../../app/business-workspace";
@@ -42,10 +43,10 @@ function snapshot() {
 function output() {
   return {
     contradictions: [{ findingRef: "contradiction_1", area: "sales_and_conversion", statement: "Accounts differ", rationale: "The accepted records are incompatible.", materiality: "high", priorityRank: 1, references: [
-      { recordType: "claim", recordId: replacementId, role: "primary" },
-      { recordType: "evidence", recordId: evidenceId, role: "conflicting" },
+      { entityType: "claim", ref: "C001", role: "primary" },
+      { entityType: "evidence", ref: "E001", role: "conflicting" },
     ] }],
-    gaps: [{ findingRef: "gap_1", area: "financial_performance", missingInformation: "Current margin is unknown", decisionImpact: "It limits economic assessment.", materiality: "medium", priorityRank: 2, references: [{ recordType: "metric", recordId: metricId, role: "context" }] }],
+    gaps: [{ findingRef: "gap_1", area: "financial_performance", missingInformation: "Current margin is unknown", decisionImpact: "It limits economic assessment.", materiality: "medium", priorityRank: 2, references: [{ entityType: "metric", ref: "M001", role: "context" }] }],
     questions: [{ findingType: "gap", findingRef: "gap_1", question: "What is the current gross margin?", priorityOrder: 1 }],
   };
 }
@@ -59,11 +60,12 @@ describe("Evidence Coherence domain", () => {
     expect(changedLiveState).toBeTruthy();
   });
 
-  it("hashes identical projections identically and relevant changes differently", () => {
-    const projection = buildEvidenceCoherenceProjection(snapshot());
-    expect(hashEvidenceCoherenceProjection(projection)).toBe(hashEvidenceCoherenceProjection(structuredClone(projection)));
-    expect(hashEvidenceCoherenceProjection({ ...projection, snapshotVersion: 3 })).not.toBe(hashEvidenceCoherenceProjection(projection));
-    expect(EVIDENCE_COHERENCE_INPUT_VERSION).toBe("evidence_coherence_input_v2");
+  it("hashes identical model inputs identically and relevant changes differently", () => {
+    const { modelInput } = buildEvidenceCoherenceModelInput(snapshot());
+    expect(hashEvidenceCoherenceModelInput(modelInput)).toBe(hashEvidenceCoherenceModelInput(structuredClone(modelInput)));
+    expect(hashEvidenceCoherenceModelInput({ ...modelInput, snapshot: { ...modelInput.snapshot, snapshotVersion: 3 } }))
+      .not.toBe(hashEvidenceCoherenceModelInput(modelInput));
+    expect(EVIDENCE_COHERENCE_INPUT_VERSION).toBe("evidence_coherence_input_v3");
   });
 
   it("strictly validates the analytical contract and rejects diagnostic additions", () => {
@@ -75,18 +77,20 @@ describe("Evidence Coherence domain", () => {
   });
 
   it("rejects references outside the exact snapshot and invalid question mappings", () => {
-    const projection = buildEvidenceCoherenceProjection(snapshot());
-    expect(validateEvidenceCoherenceOutput(output(), projection)).toBeTruthy();
-    expect(() => validateEvidenceCoherenceOutput({ ...output(), gaps: [{ ...output().gaps[0], references: [{ recordType: "claim", recordId: claimId, role: "context" }] }] }, projection)).toThrow("outside the analysed snapshot");
-    expect(() => validateEvidenceCoherenceOutput({ ...output(), questions: [{ findingType: "gap", findingRef: "missing", question: "Question?", priorityOrder: 1 }] }, projection)).toThrow("missing gap");
+    const { references } = buildEvidenceCoherenceModelInput(snapshot());
+    expect(validateEvidenceCoherenceOutput(output(), references)).toBeTruthy();
+    // The superseded Claim is not projected, so there is no handle through which to cite it.
+    expect([...references.values()].map((item) => item.id)).not.toContain(claimId);
+    expect(() => validateEvidenceCoherenceOutput({ ...output(), gaps: [{ ...output().gaps[0], references: [{ entityType: "claim", ref: "C002", role: "context" }] }] }, references)).toThrow("is not in the analysed snapshot");
+    expect(() => validateEvidenceCoherenceOutput({ ...output(), questions: [{ findingType: "gap", findingRef: "missing", question: "Question?", priorityOrder: 1 }] }, references)).toThrow("missing gap");
   });
 
-  it("rejects duplicate findings and duplicate canonical references", () => {
-    const projection = buildEvidenceCoherenceProjection(snapshot());
-    expect(() => validateEvidenceCoherenceOutput({ ...output(), gaps: [{ ...output().gaps[0], findingRef: "contradiction_1" }] }, projection)).toThrow("Finding references must be unique");
+  it("rejects duplicate findings and duplicate references", () => {
+    const { references } = buildEvidenceCoherenceModelInput(snapshot());
+    expect(() => validateEvidenceCoherenceOutput({ ...output(), gaps: [{ ...output().gaps[0], findingRef: "contradiction_1" }] }, references)).toThrow("Finding references must be unique");
     const duplicate = output();
     duplicate.gaps[0].references.push(duplicate.gaps[0].references[0]);
-    expect(() => validateEvidenceCoherenceOutput(duplicate, projection)).toThrow("duplicate canonical reference");
+    expect(() => validateEvidenceCoherenceOutput(duplicate, references)).toThrow("duplicate reference");
   });
 
   it("surfaces at most three high/medium questions in deterministic priority", () => {
@@ -100,8 +104,8 @@ describe("Evidence Coherence domain", () => {
     expect(selectSurfacedQuestions(questions).map((item) => item.id)).toEqual(["h1", "h2", "m1"]);
   });
 
-  it("keeps the v1 prompt constrained to evidence readiness", () => {
-    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v3");
+  it("keeps the current prompt constrained to evidence readiness", () => {
+    expect(EVIDENCE_COHERENCE_PROMPT_VERSION).toBe("evidence_coherence_v4");
     expect(evidenceCoherencePrompt).toContain("not Claim truth probability");
     expect(evidenceCoherencePrompt).toContain("Analyse only the supplied snapshot projection");
     expect(evidenceCoherencePrompt).toContain("Do not diagnose");
