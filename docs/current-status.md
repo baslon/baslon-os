@@ -59,7 +59,7 @@ The M4-10 approximation-scope refinement is merged (PR #8, `fddca0b`): one
 approximation cue governs a later measurement of the same coordinated phrase
 ("roughly a three-day, 30-hour working week"), and nothing wider.
 
-**Baslon Digital controlled rebuild v2: at `GAP_RESOLUTION_REQUIRED` on Snapshot 4 (0 contradictions, 6 validated gaps). `CONTINUE_WITH_GAPS` has not been taken.**
+**Baslon Digital controlled rebuild v2: at `PHASE1_READY` on Snapshot 4. The Product Owner continued with 6 known gaps (`CONTINUE_WITH_GAPS`, 21 September 2026).**
 Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
 2026 v2") has processed approved sources S1–S4 through human review:
 
@@ -67,8 +67,25 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 - Documented deviations are accepted and left unrepaired: five S3 Evidence records carry inferred period boundaries (`2025-09-01` → `2026-08-31`); S4 has a garbled `claim_1`, a duplicate clean `claim_2`, and a non-standard `metric_1` dimension.
 - Evidence Coherence run `9883e5cb-f2d8-4798-b4ac-16647c203d53` on Snapshot 4 failed because the model corrupted a canonical UUID. It was the second failure of this kind on the same Evidence (Snapshot 3 run `8c3f1af5-…`).
 - The Product Owner-approved Evidence Coherence run `bcc6fd6c-d0cb-4d8d-b2d1-64813738ce9e` on Snapshot 4 **SUCCEEDED** under `evidence_coherence_input_v3` / `evidence_coherence_v4`, with 0 contradictions and 6 validated gaps (4 high, 2 medium).
-- The 6 gaps are profitability; pipeline and conversion; channel attribution with acquisition cost and founder time; revenue-mix baseline and recurring-revenue target; customer segments; and founder time allocation.
-- The workflow is `GAP_RESOLUTION_REQUIRED`. Whether to add information or continue with known gaps is a Product Owner decision; `CONTINUE_WITH_GAPS` has not been taken.
+- On 21 September 2026 at 15:25 UTC, the Product Owner took `CONTINUE_WITH_GAPS` exactly once through the application.
+  - Transition: `GAP_RESOLUTION_REQUIRED → PHASE1_READY` (workflow version 18).
+  - The event records Snapshot 4 (`da6e9a8e-…`, version 4), run `bcc6fd6c-…` and prompt `evidence_coherence_v4`.
+  - Canonical records, Snapshots 1–4 and all findings are unchanged.
+- From `PHASE1_READY` a human can still add information. Nothing has been archived or deleted.
+
+**Six validated gaps carried into Phase 1.** Continuing did **not** resolve these; they remain open on record:
+
+1. **High — financial performance:** direct delivery costs, operating costs, founder compensation, profit/loss and cash generated are not reliably tracked.
+2. **High — sales and conversion:** no reliable end-to-end opportunity history or lead-to-sale conversion history.
+3. **High — marketing and acquisition:** channel-level opportunities, sales, revenue, acquisition cost and founder time are not reliably tracked.
+4. **High — financial performance / revenue mix:** no reliable comparable historical revenue-mix baseline, and no established target recurring-revenue percentage.
+5. **Medium — customers and market:** reliable customer counts, revenue, lifetime value, retention and conversion metrics are not available by customer segment.
+6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
+
+**Phase 1 boundary: the Business is `PHASE1_READY`, but Phase 1 Diagnosis has not started.**
+`PHASE1_READY` does not authorise a diagnosis run. Diagnosis execution remains blocked
+pending completion and review of the outstanding Milestone 4 diagnosis-contract work
+(M4-05, M4-06, M4-07), and separate Product Owner authorisation.
 
 **M4-12 (Evidence Coherence snapshot-local reference handles): RESOLVED.** Merged in PR #9
 (`d370d7d`, implementation `449cbe4`), post-merge verified, and confirmed by the Snapshot 4
@@ -86,7 +103,7 @@ and Findings Register entry M4-12.
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding) and B-31 (compound number words).
 
-Not started: M4-02B and Phase 1 Diagnosis. The current Baslon Digital Business has not been archived.
+Not started: M4-02B and Phase 1 Diagnosis (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
 
 ## Active Baslon Digital Business
 
