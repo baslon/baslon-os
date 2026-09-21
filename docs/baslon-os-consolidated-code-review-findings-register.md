@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) remains an open Milestone 4 blocker. It is merged (PR #9) and post-merge verified; it resolves when a Product Owner-approved Evidence Coherence run on Snapshot 4 succeeds. The Baslon Digital controlled rebuild v2 is held at `GAP_ANALYSIS` on Snapshot 4 until then. M4-02B and Phase 1 Diagnosis have not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `GAP_RESOLUTION_REQUIRED` on Snapshot 4, with 0 contradictions and 6 validated gaps; `CONTINUE_WITH_GAPS` has not been taken. M4-02B and Phase 1 Diagnosis have not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -678,7 +678,7 @@ Evidence `sourceType`, `sourceReference` and `sourceMetadata.suppliedBy`, and Cl
 
 **Origin:** Baslon Digital controlled rebuild v2, live Evidence Coherence runs, 21 September 2026.\
 **Classification:** Milestone 4 blocker.\
-**Status:** **OPEN — merged (PR #9, merge `d370d7d`, implementation `449cbe4`) and post-merge verified 21 September 2026; awaiting the Snapshot 4 live regression.** Implementation, automated tests and merge are complete. It resolves only when one Product Owner-approved Evidence Coherence run on Snapshot 4 succeeds under `evidence_coherence_input_v3` / `evidence_coherence_v4`.\
+**Status:** **RESOLVED — M4-12 (merged 21 September 2026, PR #9 `d370d7d`; implementation `449cbe4`), confirmed by the Snapshot 4 live regression `bcc6fd6c-d0cb-4d8d-b2d1-64813738ce9e`.**\
 **Governing decision:** `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-decision.md`
 
 ### Finding
@@ -718,8 +718,17 @@ As snapshots grow, model-authored UUID reproduction creates avoidable failures a
   - The four earlier runs, including failed run `9883e5cb-…`, are unchanged. No v3/v4 run exists anywhere.
   - No `CONTINUE_WITH_GAPS`, diagnosis, archive or delete has occurred. Both earlier Baslon Digital Businesses are unchanged.
 
-### Remaining to resolve
-One Evidence Coherence run on Snapshot 4 under v3/v4, with explicit Product Owner approval, must succeed. Mark RESOLVED only then.
+### Resolution — Snapshot 4 live regression (21 September 2026)
+The Product Owner approved one Evidence Coherence run on Snapshot 4 `da6e9a8e-…`. Run `bcc6fd6c-d0cb-4d8d-b2d1-64813738ce9e` **SUCCEEDED** under `evidence_coherence_input_v3` / `evidence_coherence_v4`.
+
+- **Input hash:** `3307d197…`, identical to the hash computed offline before merge.
+- **Handles:** all 39 model references were valid snapshot-local handles (15 Claims, 19 Evidence, 5 Metrics). No UUID was exposed to or emitted by the model.
+- **The failing record:** Evidence `4142656f-8877-447b-86c9-5c0c3e35a58d`, which the model had corrupted in runs `8c3f1af5-…` and `9883e5cb-…`, was cited as `E040` and resolved to its correct canonical UUID.
+- **State unchanged:** canonical state and Snapshots 1–4 are unchanged.
+- **Result:** 0 contradictions and 6 validated gaps. The rebuild moved to `GAP_RESOLUTION_REQUIRED`.
+
+### Boundary
+The governing rule is: **AI selects bounded snapshot-local references; software owns canonical identity.** The Architecture Decision (§19) recommends reusing it wherever a model is asked to reproduce opaque identifiers.
 
 ---
 
