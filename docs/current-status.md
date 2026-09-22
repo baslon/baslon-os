@@ -4,15 +4,21 @@ Updated: 22 September 2026
 
 ## Current engineering milestone
 
+**Current position (22 September 2026):** Milestone 4.
+- The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
+- M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
+- **Phase 2 has not started.** Its entry boundary is recorded below, and the next Phase 2 architecture task is for the Solution Architect to define.
+- Repository baseline: `main` at the PR #21 merge (`32996a6802556c56df58372256749194347ba226`, approved-diagnosis presentation).
+
 Milestone 3D pre-diagnosis hardening is merged (`8602b98`), followed by the
 initial-intake review guard (PR #1, `93e03e3`).
 
 Milestone 4A — Gap Resolution & Phase 1 Entry is merged (PR #2, `57bddec`). `GAP_RESOLUTION_REQUIRED` is a human
 resolution checkpoint: a human can add information (with or without a surfaced
 question) or explicitly continue with known gaps to `PHASE1_READY`. From
-`PHASE1_READY` a human can still add information. No Phase 1 diagnosis engine,
-diagnosis persistence or new database migration has been introduced. See
-`docs/milestone-4a-gap-resolution-phase1-entry.md`.
+`PHASE1_READY` a human can still add information. Milestone 4A itself introduced no
+diagnosis engine, diagnosis persistence or migration; those came later with
+M4-05/06/07 (below). See `docs/milestone-4a-gap-resolution-phase1-entry.md`.
 
 M4-02A — Numeric Precision Foundation is merged (PR #3, `bba1d08`; implementation
 commit `4260071`). New canonical Evidence and
@@ -59,7 +65,7 @@ The M4-10 approximation-scope refinement is merged (PR #8, `fddca0b`): one
 approximation cue governs a later measurement of the same coordinated phrase
 ("roughly a three-day, 30-hour working week"), and nothing wider.
 
-**Baslon Digital controlled rebuild v2: at `PHASE1_READY` on Snapshot 4. The Product Owner continued with 6 known gaps (`CONTINUE_WITH_GAPS`, 21 September 2026).**
+**Baslon Digital controlled rebuild v2: Phase 1 APPROVED on Snapshot 4 (`PHASE1_APPROVED` v21, 22 September 2026).** The Product Owner continued with 6 known gaps (`CONTINUE_WITH_GAPS`, 21 September 2026) before diagnosis.
 Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Rebuild
 2026 v2") has processed approved sources S1–S4 through human review:
 
@@ -71,7 +77,7 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
   - Transition: `GAP_RESOLUTION_REQUIRED → PHASE1_READY` (workflow version 18).
   - The event records Snapshot 4 (`da6e9a8e-…`, version 4), run `bcc6fd6c-…` and prompt `evidence_coherence_v4`.
   - Canonical records, Snapshots 1–4 and all findings are unchanged.
-- From `PHASE1_READY` a human can still add information. Nothing has been archived or deleted.
+- The workflow then moved through Phase 1 Diagnosis and review to `PHASE1_APPROVED` (see "Phase 1: APPROVED" below). Nothing has been archived or deleted.
 
 **Six validated gaps carried into Phase 1.** Continuing did **not** resolve these; they remain open on record:
 
@@ -155,7 +161,7 @@ deployment together, not on the merge alone.
   - Permanent Delete coverage was verified by tests, without deleting a live Business.
   - Live application compatibility was verified with read-only page loads.
 - **Baslon Digital unchanged:** rebuild `a658df7e-…` is `PHASE1_READY` v18 on Snapshot 4 `da6e9a8e-…` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`), with 39 Claims, 59 Evidence, 18 Metrics and 54 relationships (row fingerprints identical before and after migration). There were 0 `GENERATE_PHASE1` transitions at migration time.
-- **Repository baseline** after the status PR #14: `57ad36e`.
+- **Repository baseline at resolution:** `57ad36e` (after the status PR #14).
 
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
 - **Input:** exact-snapshot binding, run-local C/E/M/G/D handles and software-owned calculations.
@@ -190,9 +196,10 @@ Not started: M4-02B and Phase 2 (see the Phase 2 entry boundary above). The curr
 
 - Business ID: `74230122-26a9-4268-92c0-0fe963d1ee8f`
 - Status: active
-- Current workflow state: `GAP_RESOLUTION_REQUIRED` (observed read-only on
-  19 September 2026)
-- Not archived and not rebuilt; the rebuild has not started.
+- Current workflow state: `GAP_RESOLUTION_REQUIRED` v11, unchanged since
+  16 September 2026 (observed read-only on 22 September 2026)
+- Not archived. The controlled rebuild has been run in separate rebuild Businesses
+  (see above); this Business itself has not been changed by it.
 - Initial clean Snapshot 1: `b9f55eae-66f1-46d4-817a-c9b74f665873`
 - Current cumulative Snapshot 2: `2041745c-71c0-48ed-9c95-685f9f993b6a`
 - Snapshot 2 contains the approved clean rebuild source plus David's reviewed
@@ -248,7 +255,8 @@ It must not be restored or permanently deleted without separate explicit approva
 - Business name: `Baslon OS Synthetic Smoke Test`
 - Business ID: `43445cd1-135b-4e48-beba-ec3c3403ab04`
 - Status: active
-- Workflow state: `NEW`
+- Workflow state: `EVIDENCE_PROCESSING` v9, last changed 18 September 2026 (observed
+  read-only on 22 September 2026)
 
 Use this clearly labelled Business for fictional, scenario-only, fabricated or
 destructive development smoke-test inputs. Do not populate it with unapproved
