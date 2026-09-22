@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 21 September 2026
+Updated: 22 September 2026
 
 ## Current engineering milestone
 
@@ -83,13 +83,21 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
 
 **Phase 1 boundary: the Business is `PHASE1_READY`, but Phase 1 Diagnosis has not started.**
-`PHASE1_READY` does not authorise a diagnosis run. Diagnosis execution remains blocked
-until the diagnosis contract (M4-05, M4-06, M4-07) is reviewed and merged, migration
-`0007` is applied to `baslon_os` with Product Owner approval, and the Product Owner
-separately authorises a run.
+`PHASE1_READY` does not authorise a diagnosis run. The diagnosis contract is now merged,
+but diagnosis execution remains blocked until migration `0007` is applied to `baslon_os`
+with Product Owner approval, post-merge verification and bounded validation are
+complete, and the Product Owner separately authorises a run.
 
-**M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): implemented on `claude/milestone-4`,
-awaiting Solution Architect review.**
+**M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): merged in PR #13 (`ca63e4f`, 22 September
+2026), not yet RESOLVED.** They stay pending until `0007` is applied to `baslon_os`, followed by
+post-merge verification and bounded validation.
+
+- **Commits:** implementation `6c59857`, plus two Solution Architect pre-merge amendments: `7d6a540` (approval needs a surviving item) and `183c41b` (v1 revision semantics).
+- **Pre-merge validation:** 286 unit/PGlite and 109 PostgreSQL tests passed. Browser smoke tests on `baslon_os_test` used synthetic Businesses only.
+- **Post-merge read-only check (22 September 2026):**
+  - `baslon_os` still has 7 migrations and no diagnosis tables or types;
+  - there are no `phase1_diagnosis` runs;
+  - the rebuild is still `PHASE1_READY` v18 on Snapshot 4 (`bd0e75c5…`, 39/59/18/54).
 
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
 - **Input:** exact-snapshot binding, run-local C/E/M/G/D handles and software-owned calculations.
@@ -118,7 +126,7 @@ Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding), B-31 (compound number words) and B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
 is defined but not reachable).
 
-Not started: M4-02B and Phase 1 Diagnosis (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
+Not started: M4-02B and any Phase 1 Diagnosis run (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
 
 ## Active Baslon Digital Business
 
@@ -167,8 +175,9 @@ It must not be restored or permanently deleted without separate explicit approva
 - Clean Snapshot 1 Evidence Coherence run:
   `4d3c3221-cec2-458a-8baa-cb4a63efe64b`
 - Input Snapshot: `b9f55eae-66f1-46d4-817a-c9b74f665873`
-- Current Evidence Coherence prompt: `evidence_coherence_v3` with input
-  `evidence_coherence_input_v2`, adding numeric precision (M4-02A); `v1`/`v2` remain historical.
+- Current Evidence Coherence prompt: `evidence_coherence_v4` with input
+  `evidence_coherence_input_v3` (M4-12 reference handles). `v3` with input
+  `evidence_coherence_input_v2` added numeric precision (M4-02A); `v1`–`v3` remain historical.
 - Result: succeeded with no material contradictions, five evidence gaps and five
   questions.
 - The first question received a genuine answer through the implemented Question →
