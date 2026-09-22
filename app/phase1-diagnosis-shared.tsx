@@ -1,11 +1,17 @@
 import { diagnosisLabelDefinitions } from "@/domain/phase1-diagnosis";
-import { diagnosisReviewFields } from "@/domain/phase1-diagnosis-review-card";
+import {
+  diagnosisReviewFields,
+  type DiagnosisReviewField,
+} from "@/domain/phase1-diagnosis-review-card";
 import type { DiagnosisDisplayItem, DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
 
 export const label = (value: string) => value.replaceAll("_", " ");
 
 /** Renders one material field exactly as given: the generated item or the effective reviewed item. */
-export function FieldValue({ item, field }: { item: DiagnosisDisplayItem; field: (typeof diagnosisReviewFields)[number]["field"] }) {
+export function FieldValue({ item, field }: { item: DiagnosisDisplayItem; field: DiagnosisReviewField["field"] }) {
+  if (field === "headline") {
+    return item.headline ? <>{item.headline}</> : <span className="muted">Not given</span>;
+  }
   if (field === "references") {
     return item.references.length
       ? <ul className="reference-list">{item.references.map((reference) => <li key={`${reference.handle}-${reference.role}`}>
@@ -29,10 +35,13 @@ export function FieldValue({ item, field }: { item: DiagnosisDisplayItem; field:
   return <>{item[field]}</>;
 }
 
-/** All eight material fields, exactly as recorded (review and audit surfaces). */
-export function Fields({ item }: { item: DiagnosisDisplayItem }) {
+/**
+ * Every material field of the item's own contract, exactly as recorded (review
+ * and audit surfaces). The manifest is the run's: 8 fields for v1, 9 for v2.
+ */
+export function Fields({ item, fields = diagnosisReviewFields }: { item: DiagnosisDisplayItem; fields?: readonly DiagnosisReviewField[] }) {
   return <dl className="review-record-details">
-    {diagnosisReviewFields.map(({ field, label: fieldLabel }) => <div key={field} data-field={field}>
+    {fields.map(({ field, label: fieldLabel }) => <div key={field} data-field={field}>
       <dt>{fieldLabel}</dt><dd><FieldValue item={item} field={field} /></dd>
     </div>)}
   </dl>;

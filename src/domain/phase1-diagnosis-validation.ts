@@ -1,14 +1,13 @@
 import { z } from "zod";
-import {
-  diagnosisItemSchema,
-  phase1DiagnosisOutputSchema,
-} from "@/ai/phase1-diagnosis/contracts";
+import { duplicateHeadlineIssues, validateHeadline } from "@/domain/diagnosis-headline";
+import { numbersIn, sameNumber as same } from "@/domain/diagnosis-numbers";
 import {
   resolveDiagnosisHandle,
   type DiagnosisReference,
   type DiagnosisReferenceMap,
 } from "@/domain/phase1-diagnosis-handles";
 import type { DiagnosisItemDraft } from "@/domain/phase1-diagnosis";
+import type { Phase1DiagnosisContract } from "@/domain/phase1-diagnosis-versions";
 
 export class Phase1DiagnosisContractError extends Error {
   constructor(readonly issues: string[]) {
@@ -51,16 +50,10 @@ const qualifierAsTruth = [
   /\b(?:averag|mean|combin|weight|sum|aggregat)\w*\b[^.]{0,40}\b(?:reliability|directness|recency|qualifiers?)\b/i,
 ];
 
-function numbersIn(text: string): number[] {
-  return [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((match) => Number(match[0].replaceAll(",", "")));
-}
-
 function exactClaimsIn(text: string): number[] {
   return [...text.matchAll(/\b(?:exactly|precisely)\s+(?:[£$€]\s?)?(\d[\d,]*(?:\.\d+)?)/gi)]
     .map((match) => Number(match[1].replaceAll(",", "")));
 }
-
-const same = (left: number, right: number) => Math.abs(left - right) < 1e-9;
 
 /**
  * Validates one item, proposed or corrected, against the run's reference map.
@@ -102,6 +95,17 @@ export function validateDiagnosisItem(
   }
 
   const text = [draft.statement, draft.rationale, draft.limitations ?? ""].join(" ");
+  // v2 only: the headline is checked as a label of its own statement. A v1
+  // draft has no headline, so v1 validation is unchanged.
+  if (draft.headline !== undefined) {
+    issues.push(...validateHeadline(draft.headline, draft.statement, `${label} headline`));
+    if (negativeVerdict.test(draft.headline) && !negativeVerdict.test(draft.statement)) {
+      issues.push(`${label} headline states a negative performance conclusion its statement does not make`);
+    }
+    if (qualifierAsTruth.some((pattern) => pattern.test(draft.headline!))) {
+      issues.push(`${label} headline treats a qualifier, strengthScore or confidence as a truth weight or probability`);
+    }
+  }
   if (negativeVerdict.test(draft.statement)) {
     const quantitative = primary.some((item) => references.get(item.ref)?.numeric
       && item.entityType !== "claim" && item.entityType !== "gap");
@@ -133,26 +137,34 @@ export function validateDiagnosisItem(
   return { issues, resolved: { ...fields, references: resolved } };
 }
 
-/** Strict parse for a human-corrected item (same shape as a model item). */
-export function parseDiagnosisItem(value: unknown): DiagnosisItemDraft {
-  return diagnosisItemSchema.parse(value);
+/**
+ * Strict parse for a human-corrected item, using the contract of the run it
+ * corrects: a v1 correction must not carry a headline, a v2 correction must.
+ */
+export function parseDiagnosisItem(value: unknown, contract: Phase1DiagnosisContract): DiagnosisItemDraft {
+  return contract.itemSchema.parse(value);
 }
 
 /**
- * Validates `phase1_diagnosis_v1` output against the run's reference map.
- * Any invalid item rejects the whole output (fail-closed, no partial admission).
+ * Validates model output against the run's reference map, under the contract
+ * of the run's recorded prompt version. Any invalid item rejects the whole
+ * output (fail-closed, no partial admission).
  */
 export function validatePhase1DiagnosisOutput(
   output: unknown,
   references: DiagnosisReferenceMap,
+  contract: Phase1DiagnosisContract,
 ): ResolvedDiagnosisItem[] {
-  const parsed = phase1DiagnosisOutputSchema.parse(output);
+  const parsed = contract.outputSchema.parse(output);
   const issues: string[] = [];
   const items = parsed.items.map((item, index) => {
     const result = validateDiagnosisItem(item, references, `item ${index + 1}`);
     issues.push(...result.issues);
     return result.resolved;
   });
+  if (contract.hasHeadline) {
+    issues.push(...duplicateHeadlineIssues(parsed.items.map((item, index) => ({ label: `item ${index + 1} headline`, headline: item.headline ?? "" }))));
+  }
   if (issues.length) throw new Phase1DiagnosisContractError(issues);
   return items;
 }

@@ -28,6 +28,7 @@ import {
   assertActiveBusinessForUpdate,
   assertBusinessActive,
 } from "@/repositories/business-lifecycle-guard";
+import { latestApprovedHeadlineSet } from "@/repositories/diagnosis-headline-repository";
 
 /**
  * Approval accepts a diagnosis as the analytical basis for the next phase, so
@@ -271,6 +272,8 @@ export class Phase1DiagnosisRepository {
           materiality: item.materiality,
           interpretationConfidence: item.interpretationConfidence,
           limitations: item.limitations,
+          // v2 only; a v1 item has no headline and the 0008 trigger requires null there.
+          headline: item.headline ?? null,
         }).returning();
         if (item.references.length) {
           await tx.insert(diagnosisItemReferences).values(item.references.map((reference) => ({
@@ -368,6 +371,14 @@ export class Phase1DiagnosisRepository {
       eq(approvedDiagnoses.businessId, businessId),
     ));
     return approved;
+  }
+
+  /**
+   * The current companion headline set of one approved diagnosis, if any.
+   * Read-only, for approved-diagnosis rendering; headlines are never generated here.
+   */
+  getLatestApprovedHeadlineSet(approvedDiagnosisId: string, businessId: string) {
+    return latestApprovedHeadlineSet(this.database, approvedDiagnosisId, businessId);
   }
 
   /** Locks the Business and re-checks the review is for the current run in review. */

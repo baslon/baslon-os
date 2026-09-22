@@ -1,15 +1,19 @@
 import type { DiagnosisReferenceMap } from "@/domain/phase1-diagnosis-handles";
-import {
-  PHASE1_DIAGNOSIS_ARTIFACT_VERSION,
-  type CarriedForwardGap,
-  type DiagnosisEntityType,
-  type DiagnosisReviewDecision,
+import { duplicateHeadlineIssues } from "@/domain/diagnosis-headline";
+import type {
+  CarriedForwardGap,
+  DiagnosisEntityType,
+  DiagnosisReviewDecision,
 } from "@/domain/phase1-diagnosis";
 import {
   Phase1DiagnosisContractError,
   parseDiagnosisItem,
   validateDiagnosisItem,
 } from "@/domain/phase1-diagnosis-validation";
+import {
+  diagnosisContractForPrompt,
+  type Phase1DiagnosisContract,
+} from "@/domain/phase1-diagnosis-versions";
 
 /** What approval means, recorded inside every artifact (ADR §8.4). */
 export const APPROVAL_SEMANTICS = "Approval accepts this diagnosis as the current analytical basis for the next strategic phase. "
@@ -27,6 +31,8 @@ type PersistedReference = {
 type PersistedItem = {
   id: string;
   itemRef: string;
+  /** Present only for `phase1_diagnosis_v2` items; always null on v1 rows. */
+  headline?: string | null;
   itemType: string;
   statement: string;
   rationale: string;
@@ -82,8 +88,9 @@ export type EffectiveDiagnosisReference = {
   label: string;
 };
 
-/** The material values a decided item contributes to an approved diagnosis. */
+/** The material values a decided item contributes to an approved diagnosis. `headline` is v2 only. */
 export type EffectiveDiagnosisItem = {
+  headline?: string;
   itemType: string;
   statement: string;
   rationale: string;
@@ -100,15 +107,20 @@ export type EffectiveDiagnosisItem = {
  * complete corrected payload, revalidated against the run's references;
  * REJECTED contributes nothing (null). The approved-artifact builder and the
  * review page both use this, so a reviewer sees exactly what they approve.
+ *
+ * The contract is the run's (dispatched from its recorded prompt version):
+ * a v1 item is read exactly as before and never gains a headline; a v2 item's
+ * effective headline is the generated one (ACCEPTED) or the corrected one.
  */
 export function effectiveDiagnosisItem(
   item: PersistedItem,
   review: Pick<PersistedReview, "decision" | "correctedPayload">,
   references: DiagnosisReferenceMap,
+  contract: Phase1DiagnosisContract,
 ): EffectiveDiagnosisItem | null {
   if (review.decision === "REJECTED") return null;
   if (review.decision === "CORRECTED") {
-    const corrected = parseDiagnosisItem(review.correctedPayload);
+    const corrected = parseDiagnosisItem(review.correctedPayload, contract);
     const { issues, resolved } = validateDiagnosisItem(corrected, references, `corrected ${item.itemRef}`);
     if (issues.length) throw new Phase1DiagnosisContractError(issues);
     return {
@@ -117,8 +129,12 @@ export function effectiveDiagnosisItem(
     };
   }
   if (review.decision !== "ACCEPTED") throw new Error(`Diagnosis item ${item.itemRef} has no valid decision`);
+  if (contract.hasHeadline && !item.headline) {
+    throw new Phase1DiagnosisContractError([`${item.itemRef} is a ${contract.promptVersion} item without a headline`]);
+  }
   const handles = handleIndex(references);
   return {
+    ...(contract.hasHeadline ? { headline: item.headline! } : {}),
     itemType: item.itemType,
     statement: item.statement,
     rationale: item.rationale,
@@ -171,6 +187,8 @@ export function buildApprovedDiagnosisArtifact(input: {
     if (!handle) throw new Error(`Persisted ${entityType} ${id} is not in this diagnosis input`);
     return handle;
   };
+  // The run's recorded prompt version selects the contract; an unknown version fails closed.
+  const contract = diagnosisContractForPrompt(input.run.promptVersion);
   const reviewByItem = new Map(input.reviews.map((review) => [review.diagnosisItemId, review]));
   const counts: Record<DiagnosisReviewDecision, number> = { ACCEPTED: 0, CORRECTED: 0, REJECTED: 0 };
   const items: Record<string, unknown>[] = [];
@@ -183,7 +201,7 @@ export function buildApprovedDiagnosisArtifact(input: {
     }
     const decision = review.decision as DiagnosisReviewDecision;
     counts[decision] += 1;
-    const effective = effectiveDiagnosisItem(item, review, input.references);
+    const effective = effectiveDiagnosisItem(item, review, input.references, contract);
     if (!effective) {
       excluded.push({ itemRef: item.itemRef, diagnosisItemId: item.id, decision, reason: review.reason });
       continue;
@@ -192,11 +210,15 @@ export function buildApprovedDiagnosisArtifact(input: {
   }
 
   if (!items.length) throw new Error("An approved diagnosis must contain at least one accepted or corrected item");
+  if (contract.hasHeadline) {
+    const duplicates = duplicateHeadlineIssues(items.map((item) => ({ label: `${item.itemRef} headline`, headline: String(item.headline) })));
+    if (duplicates.length) throw new Phase1DiagnosisContractError(duplicates);
+  }
 
   return {
-    artifactVersion: PHASE1_DIAGNOSIS_ARTIFACT_VERSION,
+    artifactVersion: contract.artifactVersion,
     content: {
-      artifactVersion: PHASE1_DIAGNOSIS_ARTIFACT_VERSION,
+      artifactVersion: contract.artifactVersion,
       semantics: APPROVAL_SEMANTICS,
       businessId: input.businessId,
       analysisRunId: input.run.id,

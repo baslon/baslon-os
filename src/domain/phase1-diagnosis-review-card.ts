@@ -21,6 +21,14 @@ export const diagnosisReviewFields = [
   { field: "references", label: "Supporting references" },
 ] as const satisfies ReadonlyArray<{ field: keyof DiagnosisItemDraft; label: string }>;
 
+/** `phase1_diagnosis_v2` items add the headline as a first-class material field. */
+export const diagnosisReviewFieldsV2 = [
+  { field: "headline", label: "Headline" },
+  ...diagnosisReviewFields,
+] as const satisfies ReadonlyArray<{ field: keyof DiagnosisItemDraft; label: string }>;
+
+export type DiagnosisReviewField = (typeof diagnosisReviewFieldsV2)[number];
+
 export const DIAGNOSIS_REVIEW_CARD_VERSION = "phase1_diagnosis_review_v1";
 
 /**

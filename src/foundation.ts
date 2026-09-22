@@ -25,6 +25,9 @@ import { AddInformationRepository } from "@/repositories/add-information-reposit
 import { InitialIntakeRepository } from "@/repositories/initial-intake-repository";
 import { InitialIntakeService } from "@/services/initial-intake-service";
 import { GapResolutionService } from "@/services/gap-resolution-service";
+import { OpenAIDiagnosisHeadlineModel } from "@/ai/diagnosis-headlines/openai-adapter";
+import { DiagnosisHeadlineRepository } from "@/repositories/diagnosis-headline-repository";
+import { DiagnosisHeadlineService } from "@/services/diagnosis-headline-service";
 import { OpenAIPhase1DiagnosisModel } from "@/ai/phase1-diagnosis/openai-adapter";
 import { Phase1DiagnosisRepository } from "@/repositories/phase1-diagnosis-repository";
 import { Phase1DiagnosisService } from "@/services/phase1-diagnosis-service";
@@ -126,4 +129,11 @@ export function getPhase1DiagnosisService() {
 
 export function getEvidenceQualityService() {
   return new EvidenceQualityService(new EvidenceCoherenceRepository(getDatabase()));
+}
+
+export function getDiagnosisHeadlineService() {
+  return new DiagnosisHeadlineService(
+    new DiagnosisHeadlineRepository(getDatabase()),
+    new OpenAIDiagnosisHeadlineModel(),
+  );
 }

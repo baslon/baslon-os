@@ -191,6 +191,10 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0.4rem; bac
 .badge.decision-corrected { background: #f7edd5; }
 .badge.decision-accepted { background: var(--green-soft); }
 .position-statement { font-size: 1.12rem; line-height: 1.6; }
+/* A reviewed headline leads the card; the approved statement stays beneath it. */
+.finding-headline { margin: 0 0 0.35rem; font-size: 1.15rem; line-height: 1.4; }
+.finding-statement { margin: 0; line-height: 1.6; }
+.proposed-headline { margin: 0 0 0.3rem; font-weight: 600; }
 .decisions-required { padding: 1.25rem; border-left: 5px solid #d59b35; border-radius: 0.4rem; background: var(--paper); }
 .summary-block { padding: 1.1rem 1.25rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--paper); }
 .summary-block h2 { font-size: 1.2rem; }

@@ -42,3 +42,23 @@ export type Phase1DiagnosisOutput = z.output<typeof phase1DiagnosisOutputSchema>
 export type DiagnosisItemOutput = z.output<typeof diagnosisItemSchema>;
 
 export const phase1DiagnosisJsonSchema = z.toJSONSchema(phase1DiagnosisOutputSchema);
+
+/**
+ * `phase1_diagnosis_v2` item: the v1 item plus a required `headline`, a short
+ * presentation label for the statement. No v1 field changes meaning. Headline
+ * structure and the number-subset rule are enforced by deterministic
+ * validation, so the JSON schema stays within the v1 keyword set.
+ */
+export const diagnosisItemSchemaV2 = z.object({
+  headline: z.string().trim().min(1),
+  ...diagnosisItemSchema.shape,
+}).strict();
+
+/** `phase1_diagnosis_v2` output contract. */
+export const phase1DiagnosisOutputSchemaV2 = z.object({
+  items: z.array(diagnosisItemSchemaV2).min(1),
+}).strict();
+
+export type Phase1DiagnosisOutputV2 = z.output<typeof phase1DiagnosisOutputSchemaV2>;
+
+export const phase1DiagnosisJsonSchemaV2 = z.toJSONSchema(phase1DiagnosisOutputSchemaV2);

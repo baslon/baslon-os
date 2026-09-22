@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ApprovedHeadlineResolution } from "@/domain/diagnosis-headline-resolution";
 import { diagnosisLabelDefinitions } from "@/domain/phase1-diagnosis";
 import type { DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
 import { Disclosure } from "./disclosure";
@@ -38,6 +39,8 @@ type ApprovedItem = {
   interpretationConfidence: string | null;
   limitations: string | null;
   references: ApprovedReference[];
+  /** `phase1_diagnosis_artifact_v2` only; a v1 item is labelled by a companion set, or not at all. */
+  headline?: string;
 };
 type ApprovedGap = { handle: string; id: string; analysisRunId: string; area: string; materiality: string; missingInformation: string; decisionImpact: string };
 type ApprovedCalculation = {
@@ -102,11 +105,16 @@ export function formatCalculationValue(calculation: Pick<ApprovedCalculation, "v
     : `${figure(calculation.valueNumeric)}${unit}`;
 }
 
-function Badges({ item }: { item: ApprovedItem }) {
+/**
+ * With a reviewed headline on the Overview, the section already conveys the
+ * item type and the headline carries the meaning, so only importance is kept.
+ * Full Diagnosis and Audit always show type and review status.
+ */
+function Badges({ item, importanceOnly }: { item: ApprovedItem; importanceOnly: boolean }) {
   return <p className="badges">
-    <span className="badge">{typeLabel(item.itemType)}</span>
+    {importanceOnly ? null : <span className="badge">{typeLabel(item.itemType)}</span>}
     <span className="badge">{importanceLabel(item.materiality)}</span>
-    <span className={`badge decision-${item.decision.toLowerCase()}`}>{decisionLabels[item.decision] ?? humanise(item.decision)}</span>
+    {importanceOnly ? null : <span className={`badge decision-${item.decision.toLowerCase()}`}>{decisionLabels[item.decision] ?? humanise(item.decision)}</span>}
   </p>;
 }
 
@@ -136,25 +144,35 @@ function ItemDetail({ item, showSourceHandles }: { item: ApprovedItem; showSourc
   </dl>;
 }
 
-function FindingCard({ item, showSourceHandles }: { item: ApprovedItem; showSourceHandles: boolean }) {
+/**
+ * A reviewed headline leads and the approved statement follows it directly. The
+ * statement remains the authority; nothing is generated here.
+ */
+function FindingCard({ item, showSourceHandles, headline }: { item: ApprovedItem; showSourceHandles: boolean; headline?: string }) {
   return <article className="record-card finding-card" id={showSourceHandles ? `finding-${item.itemRef}` : undefined}>
-    <Badges item={item} />
-    <h3>{item.statement}</h3>
+    <Badges item={item} importanceOnly={Boolean(headline) && !showSourceHandles} />
+    {headline
+      ? <><h3 className="finding-headline">{headline}</h3><p className="finding-statement">{item.statement}</p></>
+      : <h3>{item.statement}</h3>}
     <Disclosure label="View reasoning & evidence"><ItemDetail item={item} showSourceHandles={showSourceHandles} /></Disclosure>
   </article>;
 }
 
-function Group({ id, title, items, showSourceHandles, className }: { id: string; title: string; items: ApprovedItem[]; showSourceHandles: boolean; className?: string }) {
+function Group({ id, title, items, showSourceHandles, headlines, className }: {
+  id: string; title: string; items: ApprovedItem[]; showSourceHandles: boolean;
+  headlines: Record<string, string>; className?: string;
+}) {
   if (!items.length) return null;
   return <section id={id} data-group={id} className={className} aria-labelledby={`${id}-heading`}>
     <h2 id={`${id}-heading`}>{title} <span className="muted">({items.length})</span></h2>
-    <div className="record-list">{items.map((item) => <FindingCard key={item.itemRef} item={item} showSourceHandles={showSourceHandles} />)}</div>
+    <div className="record-list">{items.map((item) => <FindingCard key={item.itemRef} item={item}
+      showSourceHandles={showSourceHandles} headline={headlines[item.itemRef]} />)}</div>
   </section>;
 }
 
 const byType = (items: ApprovedItem[], ...types: string[]) => items.filter((item) => types.includes(item.itemType));
 
-function Overview({ content }: { content: ApprovedContent }) {
+function Overview({ content, headlines }: { content: ApprovedContent; headlines: Record<string, string> }) {
   const items = content.items ?? [];
   const gaps = content.carriedForwardGaps ?? [];
   const limitations = byType(items, "limitation");
@@ -169,14 +187,15 @@ function Overview({ content }: { content: ApprovedContent }) {
     {byType(items, "position").length ? <section id="position" data-group="position" aria-labelledby="position-heading">
       <h2 id="position-heading">Current position</h2>
       {byType(items, "position").map((item) => <div key={item.itemRef} className="position-summary">
+        {headlines[item.itemRef] ? <p className="finding-headline">{headlines[item.itemRef]}</p> : null}
         <p className="position-statement">{item.statement}</p>
         <Disclosure label="View reasoning & evidence"><ItemDetail item={item} showSourceHandles={false} /></Disclosure>
       </div>)}
     </section> : null}
-    <Group id="working" title="What’s working" items={byType(items, "strength")} showSourceHandles={false} />
-    <Group id="holding-back" title="What’s holding growth back" items={byType(items, "constraint", "risk")} showSourceHandles={false} />
-    <Group id="opportunities" title="Opportunities" items={byType(items, "opportunity")} showSourceHandles={false} />
-    <Group id="decisions" title="Decisions required" items={byType(items, "decision_required")} showSourceHandles={false} className="decisions-required" />
+    <Group id="working" title="What’s working" items={byType(items, "strength")} showSourceHandles={false} headlines={headlines} />
+    <Group id="holding-back" title="What’s holding growth back" items={byType(items, "constraint", "risk")} showSourceHandles={false} headlines={headlines} />
+    <Group id="opportunities" title="Opportunities" items={byType(items, "opportunity")} showSourceHandles={false} headlines={headlines} />
+    <Group id="decisions" title="Decisions required" items={byType(items, "decision_required")} showSourceHandles={false} headlines={headlines} className="decisions-required" />
     {limitations.length ? <section aria-labelledby="limitations-summary-heading" className="summary-block" data-group="limitations-summary">
       <h2 id="limitations-summary-heading">Diagnostic limitations</h2>
       <p>{limitations.length} known {limitations.length === 1 ? "limitation affects" : "limitations affect"} how confidently some findings can be interpreted.</p>
@@ -191,17 +210,17 @@ function Overview({ content }: { content: ApprovedContent }) {
   </>;
 }
 
-function FullDiagnosis({ content }: { content: ApprovedContent }) {
+function FullDiagnosis({ content, headlines }: { content: ApprovedContent; headlines: Record<string, string> }) {
   const items = content.items ?? [];
   return <>
-    <Group id="position" title="Current position" items={byType(items, "position")} showSourceHandles />
-    <Group id="strengths" title="Strengths" items={byType(items, "strength")} showSourceHandles />
-    <Group id="constraints-risks" title="Constraints & risks" items={byType(items, "constraint", "risk")} showSourceHandles />
-    <Group id="opportunities" title="Opportunities" items={byType(items, "opportunity")} showSourceHandles />
-    <Group id="limitations" title="Limitations" items={byType(items, "limitation")} showSourceHandles />
-    <Group id="decisions" title="Decisions required" items={byType(items, "decision_required")} showSourceHandles className="decisions-required" />
+    <Group id="position" title="Current position" items={byType(items, "position")} showSourceHandles headlines={headlines} />
+    <Group id="strengths" title="Strengths" items={byType(items, "strength")} showSourceHandles headlines={headlines} />
+    <Group id="constraints-risks" title="Constraints & risks" items={byType(items, "constraint", "risk")} showSourceHandles headlines={headlines} />
+    <Group id="opportunities" title="Opportunities" items={byType(items, "opportunity")} showSourceHandles headlines={headlines} />
+    <Group id="limitations" title="Limitations" items={byType(items, "limitation")} showSourceHandles headlines={headlines} />
+    <Group id="decisions" title="Decisions required" items={byType(items, "decision_required")} showSourceHandles headlines={headlines} className="decisions-required" />
     {/* Any item type added later is still shown rather than silently dropped. */}
-    <Group id="other" title="Other findings" items={items.filter((item) => !typeOrder.includes(item.itemType))} showSourceHandles />
+    <Group id="other" title="Other findings" items={items.filter((item) => !typeOrder.includes(item.itemType))} showSourceHandles headlines={headlines} />
   </>;
 }
 
@@ -252,6 +271,7 @@ function Rows({ rows }: { rows: Array<[string, ReactNode]> }) {
 
 function AuditProvenance({ model, content }: { model: DiagnosisViewModel; content: ApprovedContent }) {
   const approved = model.approved!;
+  const headlines = model.headlines;
   const items = content.items ?? [];
   const gaps = content.carriedForwardGaps ?? [];
   const calculations = content.calculations ?? [];
@@ -284,6 +304,15 @@ function AuditProvenance({ model, content }: { model: DiagnosisViewModel; conten
     <Disclosure label="Diagnosis run" className="audit-group">
       <Rows rows={provenanceRows(model)} />
     </Disclosure>
+    {headlines.source === "companion" ? <Disclosure label="Headline set" className="audit-group">
+      <Rows rows={[
+        ["Headline set", headlines.setId ?? "unrecorded"],
+        ["Version", String(headlines.setVersion ?? "unrecorded")],
+        ["Approved by", headlines.approvedBy ?? "unrecorded"],
+        ["Approved at", headlines.approvedAt ? <><ApprovalTime iso={headlines.approvedAt} /> ({headlines.approvedAt})</> : "unrecorded"],
+        ["Meaning", "Reviewed presentation labels for this exact approved diagnosis. The approved statements are unchanged and remain the analytical authority."],
+      ]} />
+    </Disclosure> : null}
     <Disclosure label="Review history" className="audit-group">
       <ol className="review-history">{items.map((item) => <li key={item.itemRef} data-audit-item={item.itemRef}>
         <strong>{item.itemRef}</strong> · {item.itemType} · {item.decision}{item.reason ? ` — ${item.reason}` : ""}
@@ -311,6 +340,7 @@ export function ApprovedDiagnosis({ model, view }: { model: DiagnosisViewModel; 
   const approved = model.approved!;
   const content = approved.content as ApprovedContent;
   const decisions = content.decisions ?? {};
+  const headlines: ApprovedHeadlineResolution = model.headlines;
   return <>
     <section className="approved-header" aria-labelledby="approved-summary-heading">
       <h2 id="approved-summary-heading" className="sr-only">Approval summary</h2>
@@ -322,8 +352,8 @@ export function ApprovedDiagnosis({ model, view }: { model: DiagnosisViewModel; 
       {diagnosisViews.map((entry) => <a key={entry.key} href={`?view=${entry.key}`} className={entry.key === view ? "active" : undefined} aria-current={entry.key === view ? "page" : undefined}>{entry.label}</a>)}
     </nav>
     <div data-view={view}>
-      {view === "overview" ? <Overview content={content} /> : null}
-      {view === "full" ? <FullDiagnosis content={content} /> : null}
+      {view === "overview" ? <Overview content={content} headlines={headlines.byItemRef} /> : null}
+      {view === "full" ? <FullDiagnosis content={content} headlines={headlines.byItemRef} /> : null}
       {view === "gaps" ? <EvidenceGaps content={content} /> : null}
       {view === "calculations" ? <Calculations content={content} /> : null}
       {view === "audit" ? <AuditProvenance model={model} content={content} /> : null}

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Phase1DiagnosisModel } from "@/ai/phase1-diagnosis/model";
-import { PHASE1_DIAGNOSIS_PROMPT_VERSION } from "@/ai/phase1-diagnosis/prompt";
 import { staleRunCutoff, staleRunValidationErrors } from "@/domain/ai-run-recovery";
+import { resolveApprovedHeadlines, type ApprovedHeadlineResolution } from "@/domain/diagnosis-headline-resolution";
 import {
   PHASE1_DIAGNOSIS_INPUT_VERSION,
   PHASE1_DIAGNOSIS_MODULE,
@@ -26,6 +26,7 @@ import {
   validateDiagnosisItem,
   validatePhase1DiagnosisOutput,
 } from "@/domain/phase1-diagnosis-validation";
+import { diagnosisContractForPrompt } from "@/domain/phase1-diagnosis-versions";
 import type { Phase1DiagnosisRepository } from "@/repositories/phase1-diagnosis-repository";
 import type { StrategyOrchestrator } from "@/strategy/orchestrator";
 
@@ -115,12 +116,16 @@ export class Phase1DiagnosisService {
       gaps,
     });
     const inputHash = hashPhase1DiagnosisInput(built.modelInput);
+    // The contract comes from the prompt version the model will actually be
+    // called with, and an unsupported version fails before anything is written.
+    const configuration = this.model.getConfiguration();
+    const contract = diagnosisContractForPrompt(configuration.promptVersion);
     const identity = {
       businessId,
       inputSnapshotId: snapshot.id,
       module: PHASE1_DIAGNOSIS_MODULE,
       inputProjectionVersion: PHASE1_DIAGNOSIS_INPUT_VERSION,
-      promptVersion: PHASE1_DIAGNOSIS_PROMPT_VERSION,
+      promptVersion: contract.promptVersion,
     };
 
     let existing: Run | undefined = await this.repository.findEquivalentActive(identity);
@@ -151,14 +156,13 @@ export class Phase1DiagnosisService {
           snapshotVersion: snapshot.version,
           coherenceRunId: basis.analysisRunId,
           inputProjectionVersion: PHASE1_DIAGNOSIS_INPUT_VERSION,
-          promptVersion: PHASE1_DIAGNOSIS_PROMPT_VERSION,
+          promptVersion: contract.promptVersion,
         },
       });
     } else if (workflow?.state !== "PHASE1_ANALYSING") {
       throw new Error(`Phase 1 Diagnosis cannot start while workflow is ${workflow?.state ?? "missing"}`);
     }
 
-    const configuration = this.model.getConfiguration();
     const created = await this.repository.createRun({
       ...identity,
       runType: PHASE1_DIAGNOSIS_RUN_TYPE,
@@ -192,7 +196,7 @@ export class Phase1DiagnosisService {
     try {
       const result = await this.model.analyse(built.modelInput);
       rawModelOutput = asJsonValue(result.rawOutput);
-      const items = validatePhase1DiagnosisOutput(result.output, references);
+      const items = validatePhase1DiagnosisOutput(result.output, references, contract);
       const run = await this.repository.completeRun({ runId: created.run.id, businessId, rawModelOutput, items });
       await this.reconcile(run, businessId);
       return { run, reused: false };
@@ -286,7 +290,8 @@ export class Phase1DiagnosisService {
       const run = session && await this.repository.getRun(session.analysisRunId, parsed.businessId);
       if (!run) throw new Error("Diagnosis review session not found");
       const { references } = await this.rebuildRunInput(run, parsed.businessId);
-      const draft = parseDiagnosisItem(parsed.correctedPayload);
+      // A correction is parsed and validated under the contract of the run it corrects.
+      const draft = parseDiagnosisItem(parsed.correctedPayload, diagnosisContractForPrompt(run.promptVersion));
       const { issues } = validateDiagnosisItem(draft, references, "correction");
       if (issues.length) throw new Phase1DiagnosisContractError(issues);
       correctedPayload = draft as unknown as Record<string, unknown>;
@@ -395,11 +400,13 @@ export class Phase1DiagnosisService {
       items: [],
       session: null,
       approved: null,
+      headlines: { source: "none", byItemRef: {} },
     };
     if (!run || run.status !== "SUCCEEDED") return model;
     const rebuilt = await this.rebuildRunInput(run, parsed.businessId);
     const handleOf = (entityType: string, id: string) => [...rebuilt.references]
       .find(([, reference]) => reference.entityType === entityType && reference.id === id);
+    const contract = diagnosisContractForPrompt(run.promptVersion);
     const items = await this.repository.getItems(run.id, parsed.businessId);
     const session = await this.repository.getReviewSession(run.id, parsed.businessId);
     const reviews = session ? await this.repository.getItemReviews(session.id, parsed.businessId) : [];
@@ -417,10 +424,11 @@ export class Phase1DiagnosisService {
     model.items = items.map((item) => {
       const review = reviews.find((entry) => entry.diagnosisItemId === item.id);
       // The same effective-item function the approved artifact uses (M4-13).
-      const effective = review ? effectiveDiagnosisItem(item, review, rebuilt.references) : null;
+      const effective = review ? effectiveDiagnosisItem(item, review, rebuilt.references, contract) : null;
       return {
         id: item.id,
         itemRef: item.itemRef,
+        headline: item.headline,
         itemType: item.itemType,
         statement: item.statement,
         rationale: item.rationale,
@@ -444,13 +452,31 @@ export class Phase1DiagnosisService {
     model.approved = approved ? {
       id: approved.id, version: approved.version, approvedBy: approved.approvedBy,
       approvedAt: approved.approvedAt.toISOString(), content: approved.approvedContent,
+      artifactVersion: approved.artifactVersion,
     } : null;
+    // Headlines are only ever read here, never generated at render time.
+    if (approved) {
+      const companion = await this.repository.getLatestApprovedHeadlineSet(approved.id, parsed.businessId);
+      model.headlines = resolveApprovedHeadlines({
+        businessId: parsed.businessId,
+        approved: {
+          id: approved.id,
+          version: approved.version,
+          analysisRunId: approved.analysisRunId,
+          artifactVersion: approved.artifactVersion,
+          content: approved.approvedContent,
+        },
+        companion,
+      });
+    }
     return model;
   }
 }
 
-/** The eight material fields of a diagnosis item, with references resolved for display. */
+/** The material fields of a diagnosis item, with references resolved for display. */
 export type DiagnosisDisplayItem = {
+  /** `phase1_diagnosis_v2` only. */
+  headline?: string | null;
   itemType: string;
   statement: string;
   rationale: string;
@@ -486,6 +512,7 @@ export type DiagnosisViewModel = {
   items: Array<{
     id: string;
     itemRef: string;
+    headline: string | null;
     itemType: string;
     statement: string;
     rationale: string;
@@ -499,5 +526,10 @@ export type DiagnosisViewModel = {
     effective: DiagnosisDisplayItem | null;
   }>;
   session: { id: string; reviewerId: string; status: string } | null;
-  approved: { id: string; version: number; approvedBy: string; approvedAt: string; content: Record<string, unknown> } | null;
+  approved: {
+    id: string; version: number; approvedBy: string; approvedAt: string;
+    artifactVersion: string; content: Record<string, unknown>;
+  } | null;
+  /** Reviewed headlines for the approved diagnosis: native v2, companion set, or none. */
+  headlines: ApprovedHeadlineResolution;
 };

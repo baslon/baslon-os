@@ -2,13 +2,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { diagnosisItemSchema } from "@/ai/phase1-diagnosis/contracts";
+import { diagnosisItemSchema, diagnosisItemSchemaV2 } from "@/ai/phase1-diagnosis/contracts";
 import { diagnosisItems } from "@/db/schema";
 import { REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE } from "@/domain/phase1-diagnosis";
 import { buildApprovedDiagnosisArtifact, effectiveDiagnosisItem } from "@/domain/phase1-diagnosis-artifact";
+import { diagnosisContractForPrompt } from "@/domain/phase1-diagnosis-versions";
+
+const v1Contract = diagnosisContractForPrompt("phase1_diagnosis_v1");
 import type { DiagnosisReferenceMap } from "@/domain/phase1-diagnosis-handles";
 import {
   diagnosisReviewFields,
+  diagnosisReviewFieldsV2,
   formatReferenceLines,
   parseReferenceLines,
 } from "@/domain/phase1-diagnosis-review-card";
@@ -36,7 +40,7 @@ function model(overrides: Partial<DiagnosisViewModel> = {}): DiagnosisViewModel 
     }],
     items: [
       {
-        id: "item-1", itemRef: "I001", itemType: "decision_required", statement: "Pricing strategy needs a decision.",
+        id: "item-1", itemRef: "I001", headline: null, itemType: "decision_required", statement: "Pricing strategy needs a decision.",
         rationale: "The rationale shown exactly.", grounding: "interpretive", materiality: "medium", interpretationConfidence: "low",
         limitations: "Profit data is untracked.",
         references: [
@@ -47,7 +51,7 @@ function model(overrides: Partial<DiagnosisViewModel> = {}): DiagnosisViewModel 
         effective: null,
       },
       {
-        id: "item-2", itemRef: "I002", itemType: "position", statement: "Revenue is approximately £240,000.",
+        id: "item-2", itemRef: "I002", headline: null, itemType: "position", statement: "Revenue is approximately £240,000.",
         rationale: "Stated in evidence.", grounding: "evidence_backed", materiality: "high", interpretationConfidence: null,
         limitations: null, references: [{ handle: "E001", entityType: "evidence", role: "primary", label: "Revenue was approximately £240,000." }],
         decision: { decision: "ACCEPTED", reason: null, correctedPayload: null },
@@ -60,6 +64,7 @@ function model(overrides: Partial<DiagnosisViewModel> = {}): DiagnosisViewModel 
     ],
     session: { id: "session-1", reviewerId: "Reviewer", status: "OPEN" },
     approved: null,
+    headlines: { source: "none", byItemRef: {} },
     ...overrides,
   };
 }
@@ -82,13 +87,24 @@ function decide(entry: ViewItem, decision: "ACCEPTED" | "CORRECTED" | "REJECTED"
 }
 
 describe("Diagnosis review surface completeness (M4-07)", () => {
-  it("keeps the review manifest equal to the output contract and the persisted item columns", () => {
-    const manifest = diagnosisReviewFields.map((entry) => entry.field).toSorted();
-    expect(manifest).toEqual(Object.keys(diagnosisItemSchema.shape).toSorted());
+  it("keeps each version's review manifest equal to its output contract and its persisted item columns", () => {
     const infrastructure = new Set(["id", "businessId", "analysisRunId", "itemRef", "createdAt"]);
     const persisted = Object.keys(getTableColumns(diagnosisItems)).filter((column) => !infrastructure.has(column));
     // References persist in diagnosis_item_references and are shown as their own field.
-    expect([...persisted, "references"].toSorted()).toEqual(manifest);
+    for (const [promptVersion, schema, headlineColumns] of [
+      ["phase1_diagnosis_v1", diagnosisItemSchema, [] as string[]],
+      ["phase1_diagnosis_v2", diagnosisItemSchemaV2, ["headline"]],
+    ] as const) {
+      const contract = diagnosisContractForPrompt(promptVersion);
+      const manifest = contract.reviewFields.map((entry) => entry.field).toSorted();
+      expect(manifest).toEqual(Object.keys(schema.shape).toSorted());
+      const columns = persisted.filter((column) => column !== "headline" || headlineColumns.includes(column));
+      expect([...columns, "references"].toSorted()).toEqual(manifest);
+    }
+    expect(diagnosisReviewFields).toHaveLength(8);
+    expect(diagnosisReviewFieldsV2).toHaveLength(9);
+    // The headline is a first-class material field of v2 review, never hidden (M4-11).
+    expect(diagnosisReviewFieldsV2[0]).toEqual({ field: "headline", label: "Headline" });
   });
 
   it("renders every material field with its exact value, plus definitions, gaps, calculations and read-only provenance", () => {
@@ -151,7 +167,7 @@ describe("Diagnosis review surface completeness (M4-07)", () => {
     const approved = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model({
       workflowState: "PHASE1_APPROVED",
       session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" },
-      approved: { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-21T11:00:00.000Z", content: {
+      approved: { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-21T11:00:00.000Z", artifactVersion: "phase1_diagnosis_artifact_v1", content: {
         semantics: "Approval accepts this diagnosis as the current analytical basis.",
         decisions: { ACCEPTED: 1, CORRECTED: 0, REJECTED: 1 },
         items: [{ itemRef: "I002", decision: "ACCEPTED", itemType: "position", statement: "Revenue is approximately £240,000.", grounding: "evidence_backed", materiality: "high" }],
@@ -277,7 +293,7 @@ describe("Approved artifact builder", () => {
     const built = input(reviews);
     const artifactItems = buildApprovedDiagnosisArtifact(built).content.items as Array<Record<string, unknown>>;
     const effective = (itemId: string) => effectiveDiagnosisItem(
-      built.items.find((entry) => entry.id === itemId)!, reviews.find((review) => review.diagnosisItemId === itemId)!, references,
+      built.items.find((entry) => entry.id === itemId)!, reviews.find((review) => review.diagnosisItemId === itemId)!, references, v1Contract,
     );
     const { itemRef: acceptedRef, diagnosisItemId: acceptedId, decision: acceptedDecision, reason: acceptedReason, ...acceptedFields } = artifactItems[0];
     const { itemRef: correctedRef, diagnosisItemId: correctedId, decision: correctedDecision, reason: correctedReason, ...correctedFields } = artifactItems[1];
@@ -290,7 +306,7 @@ describe("Approved artifact builder", () => {
     expect(effective("i-3")).toBeNull();
     // A stored correction that no longer resolves fails closed for the page and for approval alike.
     const unknownReference = { ...corrected, references: [{ entityType: "gap", ref: "G009", role: "limiting_gap" }] };
-    expect(() => effectiveDiagnosisItem(built.items[0], { decision: "CORRECTED", correctedPayload: unknownReference }, references)).toThrow();
+    expect(() => effectiveDiagnosisItem(built.items[0], { decision: "CORRECTED", correctedPayload: unknownReference }, references, v1Contract)).toThrow();
   });
 
   it("refuses to build an artifact from an all-rejected review", () => {
@@ -306,7 +322,7 @@ describe("Final reviewed item surface (M4-13)", () => {
   const ref = (handle: string, role: string, entityType = handle.startsWith("C") ? "claim" : handle.startsWith("E") ? "evidence" : "gap") =>
     ({ handle, entityType, role, label: `${handle} label` });
   const proposal = (itemRef: string, fields: Partial<ViewItem>): ViewItem => ({
-    id: `item-${itemRef}`, itemRef, itemType: "risk", statement: `${itemRef} generated statement.`, rationale: `${itemRef} generated rationale.`,
+    id: `item-${itemRef}`, itemRef, headline: null, itemType: "risk", statement: `${itemRef} generated statement.`, rationale: `${itemRef} generated rationale.`,
     grounding: "evidence_backed", materiality: "high", interpretationConfidence: null, limitations: `${itemRef} generated limitation.`,
     references: [ref("C001", "primary")], decision: null, effective: null, ...fields,
   });
@@ -435,7 +451,7 @@ describe("Approved diagnosis information architecture", () => {
   };
   // Originals for the audit view: the corrected items had different AI statements.
   const reviewItems: ViewItem[] = items.map((item) => ({
-    id: `item-${item.itemRef}`, itemRef: item.itemRef, itemType: item.itemType,
+    id: `item-${item.itemRef}`, itemRef: item.itemRef, headline: null, itemType: item.itemType,
     statement: item.decision === "CORRECTED" ? `ORIGINAL AI statement for ${item.itemRef}.` : item.statement,
     rationale: item.rationale, grounding: item.itemRef === "I009" ? "hypothesis" : item.grounding, materiality: item.materiality,
     interpretationConfidence: item.interpretationConfidence, limitations: item.limitations,
@@ -446,7 +462,7 @@ describe("Approved diagnosis information architecture", () => {
     workflowState: "PHASE1_APPROVED",
     session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" },
     items: reviewItems,
-    approved: { id: "11111111-2222-4333-8444-555555555555", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content },
+    approved: { id: "11111111-2222-4333-8444-555555555555", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", artifactVersion: "phase1_diagnosis_artifact_v1", content },
   });
   const views = ["overview", "full", "gaps", "calculations", "audit"] as const;
   const render = (view?: (typeof views)[number]) => renderToStaticMarkup(createElement(Phase1Diagnosis, { model: approvedModel, view }));
@@ -643,7 +659,7 @@ describe("Approved diagnosis information architecture", () => {
 });
 
 describe("Workflow-gated approved state (fail closed on mismatch)", () => {
-  const artifact: NonNullable<DiagnosisViewModel["approved"]> = { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content: {
+  const artifact: NonNullable<DiagnosisViewModel["approved"]> = { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", artifactVersion: "phase1_diagnosis_artifact_v1", content: {
     semantics: "Approval accepts this diagnosis as the current analytical basis for the next strategic phase.",
     decisions: { ACCEPTED: 2, CORRECTED: 0, REJECTED: 0 },
     items: [{ itemRef: "I002", decision: "ACCEPTED", itemType: "position", statement: "Revenue is approximately £240,000.", grounding: "evidence_backed", materiality: "high" }],

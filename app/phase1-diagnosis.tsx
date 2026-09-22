@@ -14,9 +14,11 @@ import {
   REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE,
 } from "@/domain/phase1-diagnosis";
 import { formatReferenceLines } from "@/domain/phase1-diagnosis-review-card";
+import { diagnosisContractForPrompt } from "@/domain/phase1-diagnosis-versions";
 import type { DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
 import { ApprovedDiagnosis, type DiagnosisView } from "./phase1-diagnosis-approved";
 import { Fields, label, provenanceRows } from "./phase1-diagnosis-shared";
+import type { DiagnosisReviewField } from "@/domain/phase1-diagnosis-review-card";
 
 export { formatApprovalTime } from "./phase1-diagnosis-shared";
 
@@ -33,7 +35,7 @@ function Options({ values, selected }: { values: readonly string[]; selected: st
   return <>{values.map((value) => <option key={value} value={value} selected={value === selected}>{label(value)}</option>)}</>;
 }
 
-function DecisionForms({ model, item }: { model: DiagnosisViewModel; item: Item }) {
+function DecisionForms({ model, item, hasHeadline }: { model: DiagnosisViewModel; item: Item; hasHeadline: boolean }) {
   const session = model.session!;
   const hidden = <>
     <input type="hidden" name="businessId" value={model.business.id} />
@@ -49,6 +51,7 @@ function DecisionForms({ model, item }: { model: DiagnosisViewModel; item: Item 
       <button type="submit" className="secondary">Reject</button></form>
     <details><summary>Correct this item</summary>
       <form action={reviewDiagnosisItemAction}>{hidden}<input type="hidden" name="decision" value="CORRECTED" />
+        {hasHeadline ? <label>Headline<input name="headline" defaultValue={item.headline ?? ""} maxLength={120} required /></label> : null}
         <label>Type<select name="itemType"><Options values={diagnosisItemTypes} selected={item.itemType} /></select></label>
         <label>Conclusion<textarea name="statement" defaultValue={item.statement} required /></label>
         <label>Rationale<textarea name="rationale" defaultValue={item.rationale} required /></label>
@@ -74,19 +77,23 @@ function DecisionForms({ model, item }: { model: DiagnosisViewModel; item: Item 
  * approval will persist (M4-13). A corrected or rejected item keeps its
  * original AI proposal only in a labelled, collapsed audit section.
  */
-function ItemCard({ model, item, readOnly }: { model: DiagnosisViewModel; item: Item; readOnly: boolean }) {
+function ItemCard({ model, item, readOnly, fields, hasHeadline }: {
+  model: DiagnosisViewModel; item: Item; readOnly: boolean;
+  fields: readonly DiagnosisReviewField[]; hasHeadline: boolean;
+}) {
   const canDecide = model.session?.status === "OPEN" && !item.decision && !readOnly;
   const decision = item.decision?.decision;
   const reason = item.decision?.reason ? ` — ${item.decision.reason}` : "";
   const original = <details className="original-item" data-section="original">
     <summary>Original AI diagnosis item (audit, read-only)</summary>
-    <Fields item={item} />
+    <Fields item={item} fields={fields} />
   </details>;
   return <article className="record-card" aria-label={`Diagnosis item ${item.itemRef}`}>
     {!decision ? <>
       <p className="eyebrow">{item.itemRef} · AI-proposed diagnosis item</p>
+      {hasHeadline ? <p className="proposed-headline">{item.headline}</p> : null}
       <h3>{item.statement}</h3>
-      <Fields item={item} />
+      <Fields item={item} fields={fields} />
     </> : null}
     {decision === "ACCEPTED" || decision === "CORRECTED" ? <>
       <p className="eyebrow">{item.itemRef} · Final reviewed diagnosis item</p>
@@ -95,8 +102,9 @@ function ItemCard({ model, item, readOnly }: { model: DiagnosisViewModel; item: 
           ? " The generated item is accepted unchanged."
           : " The corrected values below replace the AI proposal."}</span></p>
       <section data-section="effective" aria-label={`Final reviewed item ${item.itemRef}`}>
+        {hasHeadline ? <p className="proposed-headline">{item.effective!.headline}</p> : null}
         <h3>{item.effective!.statement}</h3>
-        <Fields item={item.effective!} />
+        <Fields item={item.effective!} fields={fields} />
       </section>
       {decision === "CORRECTED" ? original : null}
     </> : null}
@@ -105,7 +113,7 @@ function ItemCard({ model, item, readOnly }: { model: DiagnosisViewModel; item: 
       <p className="notice"><strong>Decision: REJECTED</strong>{reason} This item will not be included in the approved diagnosis.</p>
       {original}
     </> : null}
-    {canDecide ? <DecisionForms model={model} item={item} /> : null}
+    {canDecide ? <DecisionForms model={model} item={item} hasHeadline={hasHeadline} /> : null}
   </article>;
 }
 
@@ -147,6 +155,8 @@ export function Phase1Diagnosis({ model, error, view = "overview" }: { model: Di
     </main>;
   }
 
+  // Material fields follow the run's own contract (8 for v1, 9 for v2).
+  const contract = run ? diagnosisContractForPrompt(run.promptVersion) : null;
   const provenance = run ? <Provenance model={model} /> : null;
   const gaps = model.gaps.length ? <section data-section="gaps"><h2>Known evidence gaps carried forward</h2><p className="muted">These remain open. Missing data is not evidence of poor performance.</p>
     <ul>{model.gaps.map((gap) => <li key={gap.handle}><code>{gap.handle}</code> · {gap.materiality} materiality · {label(gap.area)}: {gap.missingInformation}</li>)}</ul></section> : null;
@@ -161,7 +171,8 @@ export function Phase1Diagnosis({ model, error, view = "overview" }: { model: Di
       <label>Your name or identifier<input name="reviewerId" required /></label>
       <button type="submit">Start review</button>
     </form> : null}
-    <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} readOnly={readOnly} />)}</div>
+    <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} readOnly={readOnly}
+      fields={contract!.reviewFields} hasHeadline={contract!.hasHeadline} />)}</div>
   </section> : null;
 
   return <main>
