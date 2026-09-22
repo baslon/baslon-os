@@ -10,50 +10,23 @@ import {
   diagnosisGroundings,
   diagnosisInterpretationConfidences,
   diagnosisItemTypes,
-  diagnosisLabelDefinitions,
   diagnosisMaterialities,
   REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE,
 } from "@/domain/phase1-diagnosis";
-import {
-  diagnosisReviewFields,
-  formatReferenceLines,
-} from "@/domain/phase1-diagnosis-review-card";
-import type { DiagnosisDisplayItem, DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
+import { formatReferenceLines } from "@/domain/phase1-diagnosis-review-card";
+import type { DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
+import { ApprovedDiagnosis, type DiagnosisView } from "./phase1-diagnosis-approved";
+import { Fields, label, provenanceRows } from "./phase1-diagnosis-shared";
+
+export { formatApprovalTime } from "./phase1-diagnosis-shared";
 
 type Item = DiagnosisViewModel["items"][number];
-
-const label = (value: string) => value.replaceAll("_", " ");
 
 function numeric(calculation: DiagnosisViewModel["calculations"][number]) {
   const value = calculation.valuePrecision === "range"
     ? `${calculation.valueLower}–${calculation.valueUpper}`
     : calculation.valueNumeric;
   return `${value} ${calculation.unit} (precision: ${calculation.valuePrecision})`;
-}
-
-/** Renders one material field exactly as given: the generated item or the effective reviewed item. */
-function FieldValue({ item, field }: { item: DiagnosisDisplayItem; field: (typeof diagnosisReviewFields)[number]["field"] }) {
-  if (field === "references") {
-    return item.references.length
-      ? <ul className="reference-list">{item.references.map((reference) => <li key={`${reference.handle}-${reference.role}`}>
-        <code>{reference.handle}</code> · {label(reference.role)} · {reference.entityType}: {reference.label}
-      </li>)}</ul>
-      : <span className="muted">No references</span>;
-  }
-  if (field === "grounding") {
-    return <>{label(item.grounding)} <span className="muted">({diagnosisLabelDefinitions.grounding[item.grounding as keyof typeof diagnosisLabelDefinitions.grounding]})</span></>;
-  }
-  if (field === "materiality") {
-    return <>{item.materiality} <span className="muted">({diagnosisLabelDefinitions.materiality})</span></>;
-  }
-  if (field === "interpretationConfidence") {
-    return item.interpretationConfidence
-      ? <>{item.interpretationConfidence} <span className="muted">({diagnosisLabelDefinitions.interpretationConfidence})</span></>
-      : <span className="muted">Not given</span>;
-  }
-  if (field === "limitations") return item.limitations ? <>{item.limitations}</> : <span className="muted">None stated</span>;
-  if (field === "itemType") return <>{label(item.itemType)}</>;
-  return <>{item[field]}</>;
 }
 
 function Options({ values, selected }: { values: readonly string[]; selected: string | null }) {
@@ -94,14 +67,6 @@ function DecisionForms({ model, item }: { model: DiagnosisViewModel; item: Item 
       </form>
     </details>
   </div>;
-}
-
-function Fields({ item }: { item: DiagnosisDisplayItem }) {
-  return <dl className="review-record-details">
-    {diagnosisReviewFields.map(({ field, label: fieldLabel }) => <div key={field} data-field={field}>
-      <dt>{fieldLabel}</dt><dd><FieldValue item={item} field={field} /></dd>
-    </div>)}
-  </dl>;
 }
 
 /**
@@ -145,78 +110,12 @@ function ItemCard({ model, item, readOnly }: { model: DiagnosisViewModel; item: 
 }
 
 function Provenance({ model }: { model: DiagnosisViewModel }) {
-  const run = model.run!;
-  const rows: Array<[string, string]> = [
-    ["Diagnosis run", run.id],
-    ["Snapshot", model.snapshot ? `${model.snapshot.id} (version ${model.snapshot.version})` : "none"],
-    ["Snapshot content hash", run.snapshotContentHash ?? "unrecorded"],
-    ["Input version", run.inputProjectionVersion],
-    ["Prompt version", run.promptVersion],
-    ["Input hash", run.inputHash],
-    ["Provider / model", `${run.provider} / ${run.modelIdentifier}`],
-    ["Started", run.createdAt],
-    ["Completed", run.completedAt ?? "not completed"],
-  ];
   return <details className="review-provenance"><summary>Provenance (recorded by Baslon OS, read-only)</summary>
-    <dl>{rows.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+    <dl>{provenanceRows(model).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
   </details>;
 }
 
-type ApprovedContent = {
-  semantics?: string;
-  decisions?: Record<string, number>;
-  items?: Array<{ itemRef: string; decision: string; itemType: string; statement: string; grounding: string; materiality: string }>;
-  excludedItems?: Array<{ itemRef: string; reason: string | null }>;
-};
-
-/**
- * A stored UTC timestamp shown for people, in UK time (the product's launch
- * market). The stored value is unchanged and kept in the element's dateTime.
- */
-export function formatApprovalTime(iso: string): string {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric",
-    hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short",
-  }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
-  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} ${parts.timeZoneName}`;
-}
-
-function ApprovalTime({ iso }: { iso: string }) {
-  return <time dateTime={iso}>{formatApprovalTime(iso)}</time>;
-}
-
-/** Approved state: make the outcome obvious before any supporting detail. */
-function ApprovedSummary({ model }: { model: DiagnosisViewModel }) {
-  const approved = model.approved!;
-  const content = approved.content as ApprovedContent;
-  const decisions = content.decisions ?? {};
-  return <section className="status-panel" aria-labelledby="approved-summary-heading">
-    <p className="eyebrow">Workflow: {label(model.workflowState)}</p>
-    <h2 id="approved-summary-heading">Phase 1 Diagnosis approved</h2>
-    <ul className="summary-list">
-      <li>Approved by {approved.approvedBy} on <ApprovalTime iso={approved.approvedAt} /></li>
-      <li>Version {approved.version}</li>
-      <li>{(content.items ?? []).length} diagnosis items</li>
-      <li>{decisions.ACCEPTED ?? 0} accepted · {decisions.CORRECTED ?? 0} corrected · {decisions.REJECTED ?? 0} rejected</li>
-    </ul>
-  </section>;
-}
-
-function Approved({ model }: { model: DiagnosisViewModel }) {
-  const approved = model.approved!;
-  const content = approved.content as ApprovedContent;
-  return <section className="panel" aria-labelledby="approved-heading">
-    <p className="eyebrow">Approved diagnosis · version {approved.version}</p>
-    <h2 id="approved-heading">Approved analytical basis for the next strategic phase</h2>
-    <p>Approved by {approved.approvedBy} at <ApprovalTime iso={approved.approvedAt} />.</p>
-    <p className="note">{content.semantics}</p>
-    <p className="muted">Decisions: {Object.entries(content.decisions ?? {}).map(([key, value]) => `${value} ${key.toLowerCase()}`).join(" · ")}</p>
-    <ol>{(content.items ?? []).map((item) => <li key={item.itemRef}><strong>{label(item.itemType)}</strong> ({label(item.grounding)}, {item.materiality} materiality, {item.decision.toLowerCase()}): {item.statement}</li>)}</ol>
-    {content.excludedItems?.length ? <p className="muted">Rejected and excluded: {content.excludedItems.map((item) => item.itemRef).join(", ")}</p> : null}
-  </section>;
-}
-
-export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; error?: string }) {
+export function Phase1Diagnosis({ model, error, view = "overview" }: { model: DiagnosisViewModel; error?: string; view?: DiagnosisView }) {
   const { business, run } = model;
   const archived = business.status === "archived";
   // The workflow is authoritative for the approved presentation, not the
@@ -254,10 +153,8 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
   const calculations = model.calculations.length ? <section data-section="calculations"><h2>Software calculations</h2><p className="muted">Derived by software from canonical Metrics. They are calculated, not founder-supplied evidence.</p>
     <ul>{model.calculations.map((calculation) => <li key={calculation.handle}><code>{calculation.handle}</code> · {calculation.label}: {numeric(calculation)} · Formula: {calculation.formula} · Sources: {calculation.sources.join(", ")} · Rule {calculation.ruleKey} {calculation.ruleVersion}</li>)}</ul></section> : null;
   const items = model.items.length ? <section data-section="items">
-    <h2>{approvedState ? "Reviewed diagnosis items" : "Diagnosis items"}</h2>
-    <p className="note">{approvedState
-      ? "These are the final reviewed diagnosis items that form the approved Phase 1 diagnosis. Corrected items show the final approved values, with the original AI proposal retained below for audit."
-      : "Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with."}</p>
+    <h2>Diagnosis items</h2>
+    <p className="note">Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with.</p>
     {reviewing && !model.session && !readOnly ? <form action={startDiagnosisReviewAction} className="panel">
       <input type="hidden" name="businessId" value={business.id} />
       <input type="hidden" name="runId" value={run!.id} />
@@ -269,7 +166,7 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
 
   return <main>
     {header}
-    <p className="lede">An AI analysis of one immutable evidence snapshot. It is analytical, not canonical: it never changes Claims, Evidence or Metrics, and nothing advances until a person reviews every item and approves.</p>
+    {approvedState ? null : <p className="lede">An AI analysis of one immutable evidence snapshot. It is analytical, not canonical: it never changes Claims, Evidence or Metrics, and nothing advances until a person reviews every item and approves.</p>}
     {error ? <p className="error" role="alert">{error}</p> : null}
     {archived ? <div className="notice"><strong>Archived — read-only</strong></div> : null}
     {approvalMismatch ? <p className="error" role="alert" data-integrity="artifact-without-approved-workflow"><strong>Integrity check failed.</strong> An approved diagnosis exists for this run, but the workflow is {label(model.workflowState)}, not PHASE1 APPROVED. The diagnosis is shown read-only for its current workflow state, and no action is available. Nothing has been changed.</p> : null}
@@ -291,14 +188,7 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
     {!canGenerate && !run && !archived ? <section className="empty-state"><h2>Phase 1 Diagnosis is not available yet</h2><p>Continue with the latest snapshot&apos;s known gaps first.</p></section> : null}
     {run?.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Diagnosis in progress</p><h2>Analysing snapshot {model.snapshot?.version}</h2></section> : null}
 
-    {approvedState ? <>
-      <ApprovedSummary model={model} />
-      <Approved model={model} />
-      {items}
-      {gaps}
-      {calculations}
-      {provenance}
-    </> : <>
+    {approvedState ? <ApprovedDiagnosis model={model} view={view} /> : <>
       {provenance}
       {gaps}
       {calculations}

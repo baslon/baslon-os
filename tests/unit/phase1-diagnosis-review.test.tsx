@@ -14,6 +14,7 @@ import {
 } from "@/domain/phase1-diagnosis-review-card";
 import type { DiagnosisDisplayItem, DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
 import { Phase1Diagnosis, formatApprovalTime } from "../../app/phase1-diagnosis";
+import { formatCalculationValue, parseDiagnosisView } from "../../app/phase1-diagnosis-approved";
 
 const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll("\"", "&quot;");
 
@@ -157,8 +158,8 @@ describe("Diagnosis review surface completeness (M4-07)", () => {
         excludedItems: [{ itemRef: "I001", reason: "No" }],
       } },
     }) }));
-    expect(approved).toContain("Approved diagnosis · version 1");
-    expect(approved).toContain("Rejected and excluded: I001");
+    expect(approved).toContain("Phase 1 Diagnosis — Approved");
+    expect(approved).toContain("Version 1");
     expect(approved).not.toContain('value="ACCEPTED"');
     expect(approved).not.toContain("Run Phase 1 Diagnosis");
   });
@@ -395,81 +396,244 @@ describe("Final reviewed item surface (M4-13)", () => {
   });
 });
 
-describe("Approved diagnosis presentation", () => {
-  const corrected = { ...generated(model().items[0]), statement: "Final corrected statement.", grounding: "hypothesis", limitations: "Corrected limitation." };
+describe("Approved diagnosis information architecture", () => {
+  const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const handle = /\b[CEMGD]\d{3}\b/;
+  const ref = (handle: string, role: string, entityType: string, label: string, n: number) =>
+    ({ entityType, handle, role, id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, label });
+  const finding = (itemRef: string, itemType: string, statement: string, extra: Record<string, unknown> = {}) => ({
+    itemRef, diagnosisItemId: `item-${itemRef}`, decision: "ACCEPTED", reason: null, itemType, statement,
+    rationale: `${itemRef} rationale text.`, grounding: "evidence_backed", materiality: "high", interpretationConfidence: null,
+    limitations: `${itemRef} limitation text.`, references: [ref("C001", "primary", "claim", "Claim one label", 1), ref("E002", "context", "evidence", "Evidence two label", 2)],
+    ...extra,
+  });
+  const items = [
+    finding("I001", "position", "The business positions itself for established service firms.", { decision: "CORRECTED", reason: "Preserve source meaning" }),
+    finding("I002", "strength", "A documented client outcome exists."),
+    finding("I003", "strength", "Recurring revenue is present.", { materiality: "medium" }),
+    finding("I004", "constraint", "Acquisition lacks predictability."),
+    finding("I005", "risk", "Recurring revenue is concentrated."),
+    finding("I006", "opportunity", "Enquiry capability may be valuable.", { grounding: "interpretive", interpretationConfidence: "medium" }),
+    finding("I007", "limitation", "Profitability cannot be established.", { grounding: "interpretive", interpretationConfidence: "high", references: [ref("G001", "limiting_gap", "gap", "Costs untracked", 3)] }),
+    finding("I008", "limitation", "Channel economics cannot be quantified.", { grounding: "interpretive", interpretationConfidence: "high" }),
+    finding("I009", "decision_required", "A key strategic decision is which channel to build on.", { decision: "CORRECTED", reason: "Frame as a decision", grounding: "interpretive", interpretationConfidence: "medium" }),
+  ];
+  const gaps = [
+    { handle: "G001", id: "00000000-0000-4000-8000-000000000101", analysisRunId: "00000000-0000-4000-8000-000000000900", area: "financial_performance", materiality: "high", missingInformation: "Costs untracked.", decisionImpact: "Profitability cannot be assessed." },
+    { handle: "G002", id: "00000000-0000-4000-8000-000000000102", analysisRunId: "00000000-0000-4000-8000-000000000900", area: "sales_and_conversion", materiality: "high", missingInformation: "No pipeline history.", decisionImpact: "Conversion cannot be assessed." },
+    { handle: "G003", id: "00000000-0000-4000-8000-000000000103", analysisRunId: "00000000-0000-4000-8000-000000000900", area: "customers_and_market", materiality: "medium", missingInformation: "No segment data.", decisionImpact: "Segments cannot be compared." },
+  ];
+  const calculations = [
+    { handle: "D001", id: "00000000-0000-4000-8000-000000000201", derived: true, ruleKey: "annualised_run_rate", ruleVersion: "v1", label: "Annualised run-rate of Recurring revenue", formula: "M002 × 12. The monthly rate annualised; a run-rate, not realised revenue for any period.", valueNumeric: "14400.0000", valuePrecision: "approximate", valueLower: null, valueUpper: null, unit: "GBP per year", sources: [{ entityType: "metric", id: "00000000-0000-4000-8000-000000000301", handle: "M002" }] },
+    { handle: "D002", id: "00000000-0000-4000-8000-000000000202", derived: true, ruleKey: "annualised_run_rate", ruleVersion: "v1", label: "Annualised run-rate of Initial period revenue", formula: "M014 × 12.", valueNumeric: "7200.0000", valuePrecision: "approximate", valueLower: null, valueUpper: null, unit: "GBP per year", sources: [{ entityType: "metric", id: "00000000-0000-4000-8000-000000000302", handle: "M014" }] },
+  ];
+  const content = {
+    artifactVersion: "phase1_diagnosis_artifact_v1", semantics: "Approval accepts this diagnosis as the current analytical basis for the next strategic phase.",
+    analysisRunId: "run-1", reviewSessionId: "session-1", snapshot: { id: "snapshot-4", version: 4, contentHash: "content-hash-123" },
+    inputProjectionVersion: "phase1_diagnosis_input_v1", promptVersion: "phase1_diagnosis_v1", inputHash: "hash-abc", provider: "fake", model: "model-x",
+    reviewer: "Reviewer", decisions: { ACCEPTED: 7, CORRECTED: 2, REJECTED: 0 }, items, excludedItems: [], calculations, carriedForwardGaps: gaps,
+  };
+  // Originals for the audit view: the corrected items had different AI statements.
+  const reviewItems: ViewItem[] = items.map((item) => ({
+    id: `item-${item.itemRef}`, itemRef: item.itemRef, itemType: item.itemType,
+    statement: item.decision === "CORRECTED" ? `ORIGINAL AI statement for ${item.itemRef}.` : item.statement,
+    rationale: item.rationale, grounding: item.itemRef === "I009" ? "hypothesis" : item.grounding, materiality: item.materiality,
+    interpretationConfidence: item.interpretationConfidence, limitations: item.limitations,
+    references: item.references.map(({ handle, entityType, role, label }) => ({ handle, entityType, role, label })),
+    decision: { decision: item.decision, reason: item.reason, correctedPayload: null }, effective: null,
+  }));
   const approvedModel = model({
     workflowState: "PHASE1_APPROVED",
     session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" },
-    items: [decide(model().items[0], "CORRECTED", corrected, "Tighter wording"), decide(model().items[1], "ACCEPTED")],
-    approved: { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content: {
-      semantics: "Approval accepts this diagnosis as the current analytical basis for the next strategic phase.",
-      decisions: { ACCEPTED: 1, CORRECTED: 1, REJECTED: 0 },
-      items: [
-        { itemRef: "I001", decision: "CORRECTED", itemType: "decision_required", statement: "Final corrected statement.", grounding: "hypothesis", materiality: "medium" },
-        { itemRef: "I002", decision: "ACCEPTED", itemType: "position", statement: "Revenue is approximately £240,000.", grounding: "evidence_backed", materiality: "high" },
-      ],
-      excludedItems: [],
-    } },
+    items: reviewItems,
+    approved: { id: "11111111-2222-4333-8444-555555555555", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content },
   });
-  const html = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: approvedModel }));
-  const reviewHtml = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model() }));
-  const reviewCopy = "Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with.";
+  const views = ["overview", "full", "gaps", "calculations", "audit"] as const;
+  const render = (view?: (typeof views)[number]) => renderToStaticMarkup(createElement(Phase1Diagnosis, { model: approvedModel, view }));
+  const region = (html: string) => html.slice(html.indexOf("<div data-view="), html.lastIndexOf("</main>"));
+  const section = (html: string, id: string) => { const start = html.indexOf(`data-group="${id}"`); return start < 0 ? "" : html.slice(start, html.indexOf("</section>", start)); };
+  const visiblePart = (article: string) => article.slice(0, article.indexOf('class="disclosure-content"'));
+  // What a person reads: markup attributes (such as in-page anchor ids) are not displayed.
+  const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  const articles = (html: string) => html.split('<article class="record-card finding-card"').slice(1)
+    .map((chunk) => `<article class="record-card finding-card"${chunk.slice(0, chunk.indexOf("</article>"))}`);
 
-  it("makes the approved state obvious at the top", () => {
+  it("defaults to the Overview with a compact approved header and five keyboard-reachable views", () => {
+    const html = render();
+    expect(html).toContain('<div data-view="overview">');
     expect(html).toContain("Phase 1 Diagnosis — Approved</h1>");
-    expect(html).toContain("Phase 1 Diagnosis approved</h2>");
-    expect(html).toContain("Workflow: PHASE1 APPROVED");
-    expect(html).toContain('Approved by Reviewer on <time dateTime="2026-09-22T12:14:56.497Z">22 September 2026, 13:14 BST</time>');
-    expect(html).toContain("<li>Version 1</li>");
-    expect(html).toContain("<li>2 diagnosis items</li>");
-    expect(html).toContain("<li>1 accepted · 1 corrected · 0 rejected</li>");
-    expect(html.indexOf("Phase 1 Diagnosis approved")).toBeLessThan(html.indexOf('id="approved-heading"'));
+    expect(html).toContain('Approved by Reviewer · <time dateTime="2026-09-22T12:14:56.497Z">22 September 2026, 13:14 BST</time> · Version 1');
+    expect(html).toContain("9 diagnosis items · 7 accepted · 2 corrected · 0 rejected");
+    const nav = html.slice(html.indexOf('<nav class="tabs diagnosis-tabs" aria-label="Diagnosis views">'), html.indexOf("</nav>", html.indexOf("diagnosis-tabs")));
+    for (const [key, label] of [["overview", "Overview"], ["full", "Full Diagnosis"], ["gaps", "Evidence Gaps"], ["calculations", "Calculations"], ["audit", "Audit &amp; Provenance"]]) {
+      expect(nav).toContain(`href="?view=${key}"`);
+      expect(nav).toContain(`>${label}</a>`);
+    }
+    expect(nav.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(nav).toMatch(/href="\?view=overview" class="active" aria-current="page"/);
+    expect(render("audit")).toMatch(/href="\?view=audit" class="active" aria-current="page"/);
   });
 
-  it("renders the approved diagnosis before the reviewed items, gaps, calculations and provenance", () => {
-    const order = ['id="approved-heading"', 'data-section="items"', 'data-section="gaps"', 'data-section="calculations"', "Provenance (recorded by Baslon OS, read-only)"]
-      .map((marker) => html.indexOf(marker));
-    expect(order.every((position) => position >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
-    // Existing content is kept: semantics, decision count, gaps wording, calculations and read-only provenance.
-    expect(html).toContain("Approval accepts this diagnosis as the current analytical basis for the next strategic phase.");
-    expect(html).toContain("Decisions: 1 accepted · 1 corrected · 0 rejected");
-    expect(html).toContain("Missing data is not evidence of poor performance.");
-    expect(html).toContain("calculated, not founder-supplied evidence");
+  it("builds the Overview only from the approved artifact: glance counts and grouped statements", () => {
+    const overview = region(render());
+    expect(overview).toContain("9 reviewed findings");
+    for (const count of ["1 current position", "2 strengths", "1 constraint", "1 risk", "1 opportunity", "2 limitations", "1 decision required"]) {
+      expect(overview).toContain(`<li>${count}</li>`);
+    }
+    // Every statement shown is an approved statement, verbatim; limitations are summarised, not listed.
+    for (const item of items) {
+      if (item.itemType === "limitation") expect(overview).not.toContain(item.statement);
+      else expect(overview).toContain(item.statement);
+    }
+    expect(overview).not.toContain("ORIGINAL AI statement");
   });
 
-  it("titles the items Reviewed diagnosis items, with read-only approved copy instead of the review-stage sentence", () => {
-    expect(html).toContain("Reviewed diagnosis items</h2>");
-    expect(html).not.toContain("Diagnosis items</h2>");
-    expect(html).not.toContain(reviewCopy);
-    expect(html).toContain("These are the final reviewed diagnosis items that form the approved Phase 1 diagnosis. Corrected items show the final approved values, with the original AI proposal retained below for audit.");
-    expect(html).not.toContain("<form");
-    expect(html).not.toContain('value="ACCEPTED"');
+  it("places each approved role in its business section", () => {
+    const overview = region(render());
+    expect(section(overview, "position")).toContain("The business positions itself for established service firms.");
+    expect(section(overview, "working")).toContain("A documented client outcome exists.");
+    expect(section(overview, "working")).toContain("Recurring revenue is present.");
+    const holding = section(overview, "holding-back");
+    expect(holding).toContain("Acquisition lacks predictability.");
+    expect(holding).toContain("Recurring revenue is concentrated.");
+    expect(holding).toContain('<span class="badge">Constraint</span>');
+    expect(holding).toContain('<span class="badge">Risk</span>');
+    expect(section(overview, "opportunities")).toContain("Enquiry capability may be valuable.");
+    expect(section(overview, "decisions")).toContain("A key strategic decision is which channel to build on.");
+    expect(overview).toContain("What’s working");
+    expect(overview).toContain("What’s holding growth back");
   });
 
-  it("keeps the review stage unchanged in PHASE1_AWAITING_REVIEW", () => {
-    expect(reviewHtml).toContain("Phase 1 Diagnosis</h1>");
-    expect(reviewHtml).not.toContain("Phase 1 Diagnosis — Approved");
-    expect(reviewHtml).toContain("Diagnosis items</h2>");
-    expect(reviewHtml).not.toContain("Reviewed diagnosis items");
-    expect(reviewHtml).toContain(reviewCopy);
-    expect(reviewHtml).toContain('value="ACCEPTED"');
-    expect(reviewHtml).toContain('value="CORRECTED"');
-    expect(reviewHtml).toContain('value="REJECTED"');
-    // Review-stage order is unchanged: provenance, gaps, calculations, then items.
-    const order = ["Provenance (recorded by Baslon OS, read-only)", 'data-section="gaps"', 'data-section="calculations"', 'data-section="items"'].map((marker) => reviewHtml.indexOf(marker));
-    expect(order).toEqual([...order].sort((left, right) => left - right));
+  it("summarises limitations and gaps on the Overview and keeps them fully available elsewhere", () => {
+    const overview = region(render());
+    expect(section(overview, "limitations-summary")).toContain("2 known limitations affect how confidently some findings can be interpreted.");
+    expect(section(overview, "limitations-summary")).toContain('href="?view=full#limitations"');
+    const gapsSummary = section(overview, "gaps-summary");
+    expect(gapsSummary).toContain("3 gaps remain unresolved.");
+    expect(gapsSummary).toContain("2 high · 1 medium");
+    expect(gapsSummary).toContain("Missing information is not evidence of poor performance.");
+    expect(gapsSummary).not.toContain("Costs untracked.");
+    const limitations = section(region(render("full")), "limitations");
+    expect(limitations).toContain("Profitability cannot be established.");
+    expect(limitations).toContain("Channel economics cannot be quantified.");
   });
 
-  it("keeps corrected-item audit and accepted-item presentation unchanged", () => {
-    const article = (ref: string) => { const start = html.indexOf(`aria-label="Diagnosis item ${ref}"`); return html.slice(start, html.indexOf("</article>", start)); };
-    expect(article("I001")).toContain("Decision: CORRECTED</strong> — Tighter wording");
-    expect(article("I001")).toMatch(/<section data-section="effective"[^>]*><h3>Final corrected statement\.<\/h3>/);
-    expect(article("I001")).toContain('<details class="original-item" data-section="original"><summary>Original AI diagnosis item (audit, read-only)</summary>');
-    expect(article("I001")).toContain("Pricing strategy needs a decision.");
-    expect(article("I002")).toContain("Decision: ACCEPTED</strong>");
-    expect(article("I002")).toMatch(/<section data-section="effective"[^>]*><h3>Revenue is approximately £240,000\.<\/h3>/);
-    expect(article("I002")).not.toContain('data-section="original"');
+  it("shows every approved item exactly once in Full Diagnosis, grouped, in approved order", () => {
+    const full = region(render("full"));
+    for (const item of items) expect(full.split(`<h3>${item.statement}</h3>`)).toHaveLength(2);
+    expect(articles(full)).toHaveLength(items.length);
+    const groups = ["position", "strengths", "constraints-risks", "opportunities", "limitations", "decisions"].map((id) => full.indexOf(`data-group="${id}"`));
+    expect(groups.every((position) => position >= 0)).toBe(true);
+    expect(groups).toEqual([...groups].sort((left, right) => left - right));
+    expect(full.indexOf("A documented client outcome exists.")).toBeLessThan(full.indexOf("Recurring revenue is present."));
+  });
+
+  it("keeps collapsed cards business-facing: badges and statement only, no rationale, limitations, handles or raw enums", () => {
+    for (const html of [region(render()), region(render("full"))]) {
+      for (const article of articles(html)) {
+        const visible = visiblePart(article);
+        expect(visible).toMatch(/<span class="badge">[^<]+<\/span>/);
+        expect(visible).toMatch(/<h3>[^<]+<\/h3>/);
+        expect(visible).not.toMatch(/rationale text|limitation text/);
+        expect(visible).not.toMatch(handle);
+        expect(text(visible)).not.toMatch(/evidence_backed|interpretive|hypothesis|ACCEPTED|CORRECTED|I00\d/);
+      }
+    }
+    const full = region(render("full"));
+    expect(full).toContain('<span class="badge">High importance</span>');
+    expect(full).toContain('<span class="badge">Medium importance</span>');
+    expect(full).toContain('<span class="badge decision-accepted">Accepted</span>');
+    expect(full).toContain('<span class="badge decision-corrected">Corrected</span>');
+  });
+
+  it("reveals reasoning and evidence through an accessible disclosure", () => {
+    const article = articles(region(render("full"))).find((chunk) => chunk.includes("Enquiry capability may be valuable."))!;
+    const toggle = article.match(/<button type="button" class="disclosure-toggle" aria-expanded="false" aria-controls="([^"]+)">View reasoning &amp; evidence<\/button>/);
+    expect(toggle).not.toBeNull();
+    const detail = article.slice(article.indexOf(`<div id="${toggle![1]}" class="disclosure-content" hidden="">`));
+    expect(detail).toContain("I006 rationale text.");
+    expect(detail).toContain("I006 limitation text.");
+    expect(detail).toContain("<dt>Grounding</dt><dd>Interpretive");
+    expect(detail).toContain("<dt>Interpretation confidence</dt><dd>Medium");
+    expect(detail).toContain("2 sources");
+    expect(detail).toContain(">View sources</button>");
+    expect(detail).toContain("<strong>Primary support</strong> · Claim: Claim one label <code>C001</code>");
+  });
+
+  it("shows corrected values as final and keeps the original AI proposal in Audit & Provenance only", () => {
+    const corrected = articles(region(render("full"))).find((chunk) => chunk.includes("A key strategic decision is which channel to build on."))!;
+    expect(visiblePart(corrected)).toContain('<span class="badge decision-corrected">Corrected</span>');
+    expect(corrected).toContain("Corrected — Frame as a decision");
+    expect(corrected).toContain('href="?view=audit"');
+    for (const view of ["overview", "full", "gaps", "calculations"] as const) expect(region(render(view))).not.toContain("ORIGINAL AI statement");
+    const audit = region(render("audit"));
+    expect(audit).toContain('data-section="original-ai"');
+    expect(audit).toContain("ORIGINAL AI statement for I009.");
+    expect(audit).toContain("ORIGINAL AI statement for I001.");
+  });
+
+  it("lists every carried-forward gap with only its recorded fields", () => {
+    const gapsView = region(render("gaps"));
+    expect(gapsView).toContain("3 known evidence gaps remain unresolved.");
+    expect(gapsView.match(/data-gap="/g)).toHaveLength(3);
+    for (const gap of gaps) {
+      expect(gapsView).toContain(gap.missingInformation);
+      expect(gapsView).toContain(`<strong>Why this matters:</strong> ${gap.decisionImpact}`);
+    }
+    expect(gapsView).toContain("<h3>Financial performance</h3>");
+    expect(gapsView).not.toMatch(handle);
+  });
+
+  it("leads calculations with the business value and keeps technical fields behind a disclosure", () => {
+    const calcView = region(render("calculations"));
+    expect(calcView.match(/data-calculation="/g)).toHaveLength(2);
+    expect(calcView).toContain('<p class="metric-value">£14,400 per year</p>');
+    expect(calcView).toContain('<p class="metric-value">£7,200 per year</p>');
+    expect(calcView).toContain('<span class="badge">Approximate</span><span class="badge">Derived value</span>');
+    expect(calcView).toContain("not realised annual revenue");
+    for (const card of calcView.split('<article class="record-card" data-calculation=').slice(1)) {
+      expect(visiblePart(card)).not.toMatch(handle);
+    }
+    expect(calcView).toContain("<code>D001</code>");
+    expect(formatCalculationValue({ valueNumeric: null, valuePrecision: "range", valueLower: "1000.0000", valueUpper: "1500.5000", unit: "GBP per month" })).toBe("£1,000–£1,500.5 per month");
+  });
+
+  it("keeps the current provenance, approval record and reference map in Audit & Provenance", () => {
+    const audit = region(render("audit"));
+    for (const value of ["11111111-2222-4333-8444-555555555555", "phase1_diagnosis_artifact_v1", "PHASE1_APPROVED", "run-1", "hash-abc", "content-hash-123",
+      "phase1_diagnosis_input_v1", "phase1_diagnosis_v1", "fake / model-x", "snapshot-4 (version 4)", "00000000-0000-4000-8000-000000000900"]) {
+      expect(audit).toContain(value);
+    }
+    for (const group of ["Approval record", "Snapshot provenance", "Diagnosis run", "Review history", "Reference map"]) expect(audit).toContain(`>${group}</button>`);
+    for (const code of ["C001", "E002", "G001", "G002", "G003", "D001", "D002"]) expect(audit).toContain(`<code>${code}</code>`);
+  });
+
+  it("keeps UUIDs, handles and raw grounding names out of the Overview", () => {
+    const overview = region(render());
+    expect(overview).not.toMatch(uuid);
+    expect(overview).not.toMatch(handle);
+    expect(text(overview)).not.toMatch(/evidence_backed|decision_required|limiting_gap|phase1_diagnosis|content-hash|hash-abc|I00\d/);
+  });
+
+  it("offers no review, approval or revision controls in the approved state", () => {
+    for (const view of views) {
+      const html = render(view);
+      expect(html).not.toContain("<form");
+      expect(html).not.toContain('type="submit"');
+      expect(html).not.toMatch(/Approve diagnosis|Request a revised diagnosis|Start review|value="ACCEPTED"/);
+      for (const button of html.match(/<button[^>]*>/g) ?? []) expect(button).toContain('type="button" class="disclosure-toggle"');
+    }
+  });
+
+  it("never changes diagnosis content when switching views", () => {
+    const before = structuredClone(approvedModel);
+    for (const view of views) render(view);
+    expect(approvedModel).toEqual(before);
+    const full = region(render("full"));
+    for (const item of items) expect(full).toContain(`<h3>${item.statement}</h3>`);
+    expect(parseDiagnosisView("full")).toBe("full");
+    expect(parseDiagnosisView("unknown")).toBe("overview");
+    expect(parseDiagnosisView(undefined)).toBe("overview");
   });
 
   it("formats approval times for people in UK time without changing the stored value", () => {
@@ -486,7 +650,7 @@ describe("Workflow-gated approved state (fail closed on mismatch)", () => {
     excludedItems: [],
   } };
   const render = (overrides: Partial<DiagnosisViewModel>) => renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model(overrides) }));
-  const approvedMarkers = ["Phase 1 Diagnosis — Approved", 'id="approved-summary-heading"', 'id="approved-heading"', "Reviewed diagnosis items", "Workflow: PHASE1 APPROVED"];
+  const approvedMarkers = ["Phase 1 Diagnosis — Approved", 'id="approved-summary-heading"', 'aria-label="Diagnosis views"', "<div data-view="];
 
   it("renders the approved UX only for PHASE1_APPROVED with an approved artifact", () => {
     const html = render({
