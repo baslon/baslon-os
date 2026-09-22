@@ -477,3 +477,75 @@ describe("Approved diagnosis presentation", () => {
     expect(formatApprovalTime("2026-12-01T09:05:00.000Z")).toBe("1 December 2026, 09:05 GMT");
   });
 });
+
+describe("Workflow-gated approved state (fail closed on mismatch)", () => {
+  const artifact: NonNullable<DiagnosisViewModel["approved"]> = { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content: {
+    semantics: "Approval accepts this diagnosis as the current analytical basis for the next strategic phase.",
+    decisions: { ACCEPTED: 2, CORRECTED: 0, REJECTED: 0 },
+    items: [{ itemRef: "I002", decision: "ACCEPTED", itemType: "position", statement: "Revenue is approximately £240,000.", grounding: "evidence_backed", materiality: "high" }],
+    excludedItems: [],
+  } };
+  const render = (overrides: Partial<DiagnosisViewModel>) => renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model(overrides) }));
+  const approvedMarkers = ["Phase 1 Diagnosis — Approved", 'id="approved-summary-heading"', 'id="approved-heading"', "Reviewed diagnosis items", "Workflow: PHASE1 APPROVED"];
+
+  it("renders the approved UX only for PHASE1_APPROVED with an approved artifact", () => {
+    const html = render({
+      workflowState: "PHASE1_APPROVED", approved: artifact,
+      session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" },
+      items: model().items.map((entry) => decide(entry, "ACCEPTED")),
+    });
+    for (const marker of approvedMarkers) expect(html).toContain(marker);
+    expect(html).not.toContain("data-integrity");
+    expect(html).not.toContain("<form");
+  });
+
+  it("fails closed for PHASE1_APPROVED without an approved artifact: integrity error only, nothing that looks approved", () => {
+    const html = render({ workflowState: "PHASE1_APPROVED", approved: null, session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" } });
+    expect(html).toContain('data-integrity="approved-without-artifact"');
+    expect(html).toContain("Integrity check failed.");
+    expect(html).toContain("no approved diagnosis exists for the current diagnosis run");
+    for (const marker of approvedMarkers) expect(html).not.toContain(marker);
+    expect(html).not.toContain("<article");
+    expect(html).not.toContain("Provenance (recorded by Baslon OS, read-only)");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("<button");
+  });
+
+  it("never shows approved UX for PHASE1_AWAITING_REVIEW with an approved artifact, and blocks every action", () => {
+    // Session left OPEN on purpose, to prove the mismatch alone suppresses decisions, approval and revision.
+    const html = render({ workflowState: "PHASE1_AWAITING_REVIEW", approved: artifact });
+    expect(html).toContain('data-integrity="artifact-without-approved-workflow"');
+    expect(html).toContain("the workflow is PHASE1 AWAITING REVIEW, not PHASE1 APPROVED");
+    for (const marker of approvedMarkers) expect(html).not.toContain(marker);
+    expect(html).toContain("Phase 1 Diagnosis</h1>");
+    expect(html).toContain("Diagnosis items</h2>");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("Approve diagnosis");
+    expect(html).not.toContain("Request a revised diagnosis");
+  });
+
+  it("blocks Run and Add Information for other workflow states when an approved artifact exists", () => {
+    const ready = render({ workflowState: "PHASE1_READY", approved: artifact, items: [], session: null });
+    expect(ready).toContain('data-integrity="artifact-without-approved-workflow"');
+    expect(ready).not.toContain("Run Phase 1 Diagnosis");
+    const revision = render({ workflowState: "REVISION_REQUIRED", approved: artifact });
+    expect(revision).toContain('data-integrity="artifact-without-approved-workflow"');
+    expect(revision).not.toContain('href="/businesses/business/information"');
+    for (const html of [ready, revision]) for (const marker of approvedMarkers) expect(html).not.toContain(marker);
+  });
+
+  it("leaves the consistent non-approved states unchanged", () => {
+    const review = render({});
+    expect(review).not.toContain("data-integrity");
+    expect(review).toContain('value="ACCEPTED"');
+    expect(review).toContain("Every field below is AI-proposed and will be recorded exactly as shown if you accept.");
+    expect(render({ workflowState: "PHASE1_READY", run: null, items: [], session: null })).toContain("Run Phase 1 Diagnosis");
+    const failed = render({ workflowState: "PHASE1_ANALYSING", run: { ...model().run!, status: "FAILED" }, items: [], session: null });
+    expect(failed).toContain("Retry diagnosis");
+    expect(failed).not.toContain("data-integrity");
+    const revision = render({ workflowState: "REVISION_REQUIRED" });
+    expect(revision).toContain('href="/businesses/business/information"');
+    expect(revision).not.toContain("data-integrity");
+  });
+});
