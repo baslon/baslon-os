@@ -82,13 +82,54 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 5. **Medium — customers and market:** reliable customer counts, revenue, lifetime value, retention and conversion metrics are not available by customer segment.
 6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
 
-**Phase 1 state: diagnosis generated and human review decisions recorded; approval NOT executed.**
-- **Generated:** 22 September 2026, with Product Owner approval, in exactly one attempt. Run `1a03e409-0f2e-4bb7-9de9-01be66c0f84f`: SUCCEEDED, bound to Snapshot 4, 14 items, 6 software calculations.
-- **Reviewed:** the Product Owner's review decisions were entered through the normal UI in session `db3f8a0a-…` (reviewer "David Demetrius"): **10 ACCEPTED / 4 CORRECTED / 0 REJECTED**. I001, I002, I006 and I014 were corrected. The session stays OPEN until approval, by design.
-- **Workflow:** `PHASE1_AWAITING_REVIEW`, version 20. 0 approved diagnoses and no `APPROVE_PHASE1`, `REQUEST_REVISION` or `REJECT_PHASE1`.
-- **M4-13: RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge, read-only, against the live reviewed diagnosis. The review page now shows the exact effective final items that approval would persist, and I001, I002, I006 and I014 display their corrected values.
-- **Phase 1 approval remains NOT executed.** The Business remains `PHASE1_AWAITING_REVIEW` v20. Approval requires separate Product Owner authorisation.
-- **Unchanged:** canonical data and Snapshot 4 (39/59/18/54, `bd0e75c5…`). The six validated gaps remain open.
+**Phase 1: APPROVED** (22 September 2026). The first live Phase 1 cycle ran end to end.
+
+| | |
+|---|---|
+| Workflow | **`PHASE1_APPROVED`**, version 21 |
+| Approved diagnosis | `a4e4f0e0-3544-4650-95ee-f13d31b36517`, `phase1_diagnosis_artifact_v1`, version 1 |
+| Diagnosis run | `1a03e409-0f2e-4bb7-9de9-01be66c0f84f` (SUCCEEDED; `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`) |
+| Human review | Session `db3f8a0a-0c5f-4926-a203-4be6abaae75e`, COMPLETED: **10 ACCEPTED / 4 CORRECTED / 0 REJECTED** (I001, I002, I006 and I014 corrected) |
+| Approved content | 14 items; 6 carried-forward evidence gaps; 6 deterministic calculations (`annualised_run_rate v1`) |
+| Snapshot | Snapshot 4 `da6e9a8e-1ae0-4436-ab67-429a7d33197b` (version 4; content hash `ada69463…`; fingerprint `bd0e75c5…`): **unchanged** |
+| Phase 2 | **NOT STARTED** |
+
+**First live cycle, as validated:**
+1. Snapshot 4 stayed immutable.
+2. The diagnosis succeeded in one attempt.
+3. The human review recorded 10/4/0.
+4. M4-13 was resolved before approval.
+5. One approved artifact was created.
+6. The session moved `OPEN → COMPLETED`.
+7. One `APPROVE_PHASE1` moved the workflow `PHASE1_AWAITING_REVIEW → PHASE1_APPROVED` (v20 → 21).
+8. All 14 approved items matched the effective pre-approval reviewed values field for field.
+9. Canonical Claims, Evidence, Metrics and relationships were unchanged.
+10. No Phase 2 action occurred.
+
+Current counts: approved_diagnoses 1; `APPROVE_PHASE1` 1; `REQUEST_REVISION` 0; `REJECT_PHASE1` 0.
+
+**What approval means.** Phase 1 approval accepts the reviewed diagnosis as the current analytical basis for the next strategic phase. It does not make any Claim true, resolve an evidence gap, convert an AI interpretation into canonical evidence, or approve any future recommendation. Specifically:
+- canonical truth remains the immutable, snapshot-bound Claim/Evidence/Metric set;
+- the approved diagnosis is a non-canonical analytical artifact;
+- corrected review values are the approved values, and original AI values remain audit history;
+- the six carried-forward gaps remain unresolved;
+- the calculations remain derived values, not founder-supplied facts.
+
+Approval does not validate the diagnosis conclusions as objective truth.
+
+**Phase 2 entry boundary** (descriptive; Phase 2 is not designed or authorised):
+- **Prerequisite:** workflow `PHASE1_APPROVED`. For this cycle that is v21.
+- **Analytical authority:** the approved artifact `a4e4f0e0-…` (`phase1_diagnosis_artifact_v1` v1), not raw model output, unreviewed items, mutable review state, rejected items or superseded values.
+- **Provenance:** any Phase 2 input keeps an explicit trail to `approvedDiagnosisId`, `diagnosisRunId`, `snapshotId`, `snapshotVersion` and `snapshotContentHash`.
+- **Gaps stay gaps:** the six gaps enter Phase 2 as limitations and unresolved information needs. They are never silently resolved, turned into negative facts, filled by model inference, or ignored when a recommendation depends on them. Missing data ≠ poor performance.
+- **Calculations stay derived:** they carry provenance and derived status. They are `annualised_run_rate v1` run-rates, not realised annual revenue.
+- **Diagnosis is not canonical evidence:** it is never reclassified as Claims. Neither interpretation confidence nor `strengthScore`, reliability, directness or recency becomes a truth weight. Nothing is written back to canonical evidence automatically.
+- **Staleness guard (intent):** Phase 2 must not proceed silently on a stale or superseded approved diagnosis. Its entry contract must prove the approved diagnosis is still the current approved basis. A newer snapshot plus a new Phase 1 approval would supersede this one.
+- **Human decisions stay human:** Phase 2 may propose; material strategic choices need defined human checkpoints before becoming approved state.
+
+**Not yet authorised:** a Phase 2 model call, Phase 2 analysis runs, strategy, recommendations, initiative ranking, objectives, roadmaps, implementation plans, any workflow move beyond `PHASE1_APPROVED`, recommendation approval, or any Phase 2 artifact.
+
+**M4-13 (approval review surface): RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge before approval. The review page shows the exact effective items that approval persists.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
 `CONTINUE_WITH_GAPS`, `GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE` and `APPROVE_PHASE1`
@@ -143,7 +184,7 @@ Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding; non-blocking for Snapshot 4 Phase 1 under the no-`v7` guardrail), B-31 (compound number words), B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
 is defined but not reachable) and B-33 (SQL migration line endings). B-19 is unchanged.
 
-Not started: M4-02B. Phase 1 approval has not been executed (see Phase 1 state above). The current Baslon Digital Business has not been archived.
+Not started: M4-02B and Phase 2 (see the Phase 2 entry boundary above). The current Baslon Digital Business has not been archived.
 
 ## Active Baslon Digital Business
 
