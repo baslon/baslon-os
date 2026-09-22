@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. M4-02B and any Phase 1 Diagnosis run have not started. Baslon Digital remains `PHASE1_READY` v18, and the first Baslon Digital diagnosis still requires separate Product Owner approval.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-04** (artifact-specific workflow preconditions) is **resolved**. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. M4-02B and any Phase 1 Diagnosis run have not started. Baslon Digital remains `PHASE1_READY` v18, and the first Baslon Digital diagnosis still requires separate Product Owner approval.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -476,13 +476,13 @@ Not resolved. M4-11 makes every persisted descriptive field visible and correcta
 
 ---
 
-## M4-04 — Milestone 4 artifact-specific workflow preconditions do not yet exist
+## M4-04 — Milestone 4 artifact-specific workflow preconditions
 
 **Origin:** Milestone 3D known limitation.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **RESOLVED — Milestone 4 (22 September 2026).** Concrete artifact-specific preconditions now guard the Milestone 4 advancement path. No Baslon Digital diagnosis has run.
 
-### Current state
-The transactional precondition mechanism is now safe, but no diagnosis artifacts exist yet.
+### Original state
+The transactional precondition mechanism was safe, but no diagnosis artifacts existed yet.
 
 ### Requirement
 Each Milestone 4 transition must register concrete artifact eligibility checks only after the relevant artifact schema/service exists.
@@ -497,6 +497,44 @@ Do not create placeholder diagnosis artifacts merely to satisfy the mechanism.
 
 ### Progress note (Milestone 4A, 18 September 2026)
 The first concrete precondition is registered: `continueWithGapsPrecondition` for `CONTINUE_WITH_GAPS`, as a default on every orchestrator. This remains open for the diagnosis transitions (`GENERATE_PHASE1` onwards), whose artifacts do not exist yet. Note that the precondition interface is read-only by type only, and each precondition must hold its own locks if the artifact it checks can change (see R-07).
+
+### Resolution
+The Milestone 3D / 4A limitation ("the mechanism exists, but no diagnosis-specific eligibility checks do") no longer applies. `defaultWorkflowTransitionPreconditions` (`src/repositories/workflow-preconditions.ts`) now registers a concrete check for every step of the Milestone 4 advancement path:
+
+- **`CONTINUE_WITH_GAPS`** (Milestone 4A): the recorded snapshot must be the latest, and the recorded run must be a successful `evidence_coherence` run of that snapshot and Business.
+- **`GENERATE_PHASE1`** (M4-05):
+  - the recorded snapshot must be the latest;
+  - it and the recorded Evidence Coherence run must match the Business's last `CONTINUE_WITH_GAPS`;
+  - the run must be a successful `evidence_coherence` run of that snapshot.
+
+  The state machine allows it only from `PHASE1_READY`.
+- **`MARK_ANALYSIS_COMPLETE` from `PHASE1_ANALYSING`** (M4-07): the recorded run must be a successful `phase1_diagnosis` run of the latest snapshot. A completed model call alone cannot advance the workflow, and a failed run stays at `PHASE1_ANALYSING`.
+- **`APPROVE_PHASE1`** (M4-07):
+  - the recorded approved-diagnosis record must exist for the Business;
+  - it must belong to the current diagnosis of the latest snapshot;
+  - its review must contain at least one final ACCEPTED or CORRECTED decision.
+
+  The deployed `approved_diagnosis_guard` trigger admits an approved record only for a COMPLETED review of a successful run with matching snapshot, versions and input hash. Approval is therefore protected by both the Orchestrator precondition and the database guards.
+
+Every check runs through the transaction-scoped Orchestrator mechanism established and validated in Milestone 3D / 4A (R-07). In one transaction, the mechanism:
+1. locks the active Business;
+2. locks the workflow;
+3. verifies the expected state and version;
+4. re-authorises the actor;
+5. evaluates the artifact precondition;
+6. writes the workflow update and transition history before commit.
+
+Artifact eligibility is therefore re-evaluated inside the transaction that commits the transition. Snapshot creation takes the same Business lock.
+
+**No placeholder artifacts.** None were created to satisfy this finding. The diagnosis preconditions were added only once the real diagnosis persistence and services existed (PR #13, with `0007` deployed and verified on live `baslon_os`).
+
+**Evidence:**
+- automated and PGlite / PostgreSQL 17 tests of each precondition, including direct Orchestrator calls that are refused;
+- synthetic integration tests of the full path;
+- bounded browser review and approval testing on `baslon_os_test`;
+- live deployment of the diagnosis schema and guards.
+
+A real Baslon Digital diagnosis is not needed to close this finding: it concerns the eligibility-enforcement architecture, not whether a particular Business has run a diagnosis. No further code or schema work is required.
 
 ---
 
@@ -1535,7 +1573,7 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [x] Define one exact snapshot-bound diagnosis input contract. Resolved by M4-05 (`phase1_diagnosis_input_v1`).
 - [x] Define diagnosis output as separate non-canonical analytical persistence. Resolved by M4-05 (migration `0007`, live on `baslon_os`).
 - [x] Define human diagnosis approval as a separate immutable record. Resolved by M4-07 (`approved_diagnoses`).
-- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions. *Implemented and deployed with the diagnosis contract (`GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`); the M4-04 status decision is separate.*
+- [x] Define transaction-scoped artifact preconditions for diagnosis transitions. Resolved by M4-04 (`CONTINUE_WITH_GAPS`, `GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`).
 - [x] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. Resolved by M4-06: precision is carried, preserved in calculations, and guarded.
 - [x] Ensure diagnosis does not use `strengthScore` as truth/evidence weight. Resolved by M4-06.
 - [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut. *The diagnosis input carries no question text, and diagnosis writes no canonical state; M4-03 itself stays open.*
