@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. M4-02B and Phase 1 Diagnosis have not started. Diagnosis remains blocked pending the diagnosis-contract items M4-05, M4-06 and M4-07.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. M4-02B and Phase 1 Diagnosis have not started. The diagnosis contract (M4-05, M4-06, M4-07) is implemented and awaiting Solution Architect review; no Baslon Digital diagnosis may run until it is merged and the Product Owner approves a run.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -503,7 +503,8 @@ The first concrete precondition is registered: `continueWithGapsPrecondition` fo
 ## M4-05 — Diagnosis must define a snapshot-bound contract
 
 **Origin:** Codex/Claude guardrails.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete.\
+**Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
 
 ### Requirement
 Milestone 4 must:
@@ -516,12 +517,32 @@ Milestone 4 must:
 - preserve same-Business references;
 - keep historical diagnoses immutable.
 
+### Implementation (awaiting review)
+- **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
+- **Snapshot binding:**
+  - an `analysis_runs` row (`phase1_diagnosis`) FK-bound to one immutable snapshot;
+  - `snapshotContentHash` and `gapSourceRunId` in immutable run provenance;
+  - a deterministic input hash, re-proved before any review decision or approval.
+- **Handles:** run-local C/E/M/G/D; no UUID reaches the model.
+- **Calculations:** software-owned (`diagnosis_calculations` + `diagnosis_calculation_sources`).
+- **Separate analytical state:** migration `0007_phase1_diagnosis` (additive), with same-run composite FKs and immutability triggers.
+- **Fail-closed validation:** handles, grounding and the missing-data guardrail.
+- **Rollout:** `0007` is applied to `baslon_os_test` only.
+
 ---
 
 ## M4-06 — Diagnosis must not treat AI-assigned qualifiers as human truth weights
 
 **Origin:** Codex/Claude review concern.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete. B-09 stays open.\
+**Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
+
+### Implementation (awaiting review)
+- **Not truth weights:** `strengthScore`, reliability, directness, recency and precision are never converted into truth weights. No code computes a confidence from them.
+- **`strengthScore`** passes through unchanged.
+- **Validation rejects** text that treats qualifiers, `strengthScore` or confidence as a truth weight or probability. It also rejects "exactly / precisely" on a non-exact source, and a range midpoint.
+- **Calculations preserve precision:** approximate stays approximate, ranges stay ranges, and `unspecified` is never upgraded. Derived values are labelled derived and are not founder-supplied Evidence.
+- **Diagnosis-local labels:** `interpretationConfidence` and materiality are defined for diagnosis only.
 
 ### Rule
 Do not interpret:
@@ -542,7 +563,28 @@ as Claim truth probability or proof weight unless an explicitly approved later m
 ## M4-07 — Diagnosis approval must be separate from canonical Evidence admission
 
 **Origin:** Cross-review architecture guardrail.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete.\
+**Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
+
+### Implementation (awaiting review)
+- **No canonical writes:** diagnosis writes only analytical tables, never Claims, Evidence, Metrics or relationships.
+- **Mandatory checkpoint:**
+  - a successful run stops at `PHASE1_AWAITING_REVIEW`;
+  - `GENERATE_PHASE1` and `APPROVE_PHASE1` are human-only and guarded by Orchestrator preconditions;
+  - a failed run stays at `PHASE1_ANALYSING`.
+- **Complete review surface:** every material field is shown, with a manifest test (the M4-11 lesson).
+- **ACCEPT / CORRECT / REJECT:** corrections may change every material field, including references and grounding, and must pass the same validation.
+- **Approval:**
+  - requires exactly one decision per item (application and trigger);
+  - requires at least one ACCEPTED or CORRECTED item. An all-rejected review cannot be approved; the reviewer uses Request Revision (UI, application, Orchestrator precondition and trigger);
+  - the immutable, versioned artifact is built server-side;
+  - REJECTED items are excluded, and carried-forward gaps are always included;
+  - the reviewer, decisions, corrections, timestamps, run, snapshot and versions are audited.
+- **v1 revision semantics:**
+  - after `REQUEST_REVISION`, a new diagnosis needs a newer snapshot;
+  - a revision never re-runs or reuses the diagnosis on the snapshot that produced it;
+  - `REVISION_REQUIRED` returns through ordinary Add Information (`ADD_EVIDENCE`) and the normal evidence and coherence path to `PHASE1_READY`;
+  - `REVISION_REQUIRED + GENERATE_PHASE1` was removed from the state machine.
 
 ### Rule
 Milestone 4 diagnosis/recommendation output must remain analytical state.
@@ -1334,6 +1376,16 @@ This does not reopen M4-02 or M4-10: the rule is aligned and enforced. The sampl
 
 ---
 
+## B-32 — `PHASE1_AWAITING_REVIEW + ADD_EVIDENCE` is defined but not reachable
+
+**Origin:** PR #13 revision-route verification, 21 September 2026.**Status:** **BACKLOG — non-blocking workflow observation**
+
+The state machine allows `PHASE1_AWAITING_REVIEW + ADD_EVIDENCE → EVIDENCE_PROCESSING`, but ordinary Add Information (`addInformationStates`) does not accept `PHASE1_AWAITING_REVIEW`, so no command can use the rule. This does not block review: a reviewer can decide the diagnosis or request a revision, and `REVISION_REQUIRED` accepts Add Information.
+
+Decide whether evidence may be added mid-review, which would leave the open review on an older snapshot, or remove the rule. Deliberately out of scope for PR #13.
+
+---
+
 # E. ACCEPTED DESIGN DECISIONS TO PRESERVE
 
 These were reviewed and should not be casually refactored away.
@@ -1417,14 +1469,14 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [x] Decide the `GAP_RESOLUTION_REQUIRED` path. Resolved by Milestone 4A: Add Information (with or without a question) or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`, with Add Information also available from `PHASE1_READY` (M4-01).
 - [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
 - [x] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11). Resolved: the complete canonical object is shown before Accept; older records are labelled at read time.
-- [ ] Define one exact snapshot-bound diagnosis input contract.
-- [ ] Define diagnosis output as separate non-canonical analytical persistence.
-- [ ] Define human diagnosis approval as a separate immutable record.
-- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions.
-- [ ] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. The diagnosis input contract must still carry them.
-- [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight.
-- [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut.
-- [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests.
+- [ ] Define one exact snapshot-bound diagnosis input contract. *Implemented (M4-05, `phase1_diagnosis_input_v1`); awaiting review.*
+- [ ] Define diagnosis output as separate non-canonical analytical persistence. *Implemented (M4-05, migration `0007`); awaiting review.*
+- [ ] Define human diagnosis approval as a separate immutable record. *Implemented (M4-07, `approved_diagnoses`); awaiting review.*
+- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions. *Implemented (`GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`); awaiting review.*
+- [ ] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. The diagnosis input contract must still carry them. *Implemented (M4-06): precision carried, preserved in calculations, and guarded; awaiting review.*
+- [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight. *Implemented (M4-06); awaiting review.*
+- [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut. *The diagnosis input carries no question text, and diagnosis writes no canonical state; M4-03 itself stays open.*
+- [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests. *The seven diagnosis tables are included and PostgreSQL-tested; awaiting review.*
 - [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
 - [x] Align written-number prompt/validator if the extractor contract changes during the milestone. Resolved by M4-02A (M4-10).
 - [ ] Do not implement production authentication/security work inside Milestone 4 unless explicitly scoped.

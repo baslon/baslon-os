@@ -1,0 +1,4655 @@
+{
+  "id": "634c81ee-baaa-4d4d-be26-a4344e6121e1",
+  "prevId": "2e8cb9ba-623b-49a7-af64-4883960435a2",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.analysis_finding_references": {
+      "name": "analysis_finding_references",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contradiction_id": {
+          "name": "contradiction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_gap_id": {
+          "name": "evidence_gap_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metric_id": {
+          "name": "metric_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "analysis_finding_reference_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_finding_references_business_idx": {
+          "name": "analysis_finding_references_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_contradiction_idx": {
+          "name": "analysis_finding_references_contradiction_idx",
+          "columns": [
+            {
+              "expression": "contradiction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_gap_idx": {
+          "name": "analysis_finding_references_gap_idx",
+          "columns": [
+            {
+              "expression": "evidence_gap_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_contradiction_claim_unique": {
+          "name": "analysis_finding_references_contradiction_claim_unique",
+          "columns": [
+            {
+              "expression": "contradiction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "claim_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"contradiction_id\" is not null and \"analysis_finding_references\".\"claim_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_contradiction_evidence_unique": {
+          "name": "analysis_finding_references_contradiction_evidence_unique",
+          "columns": [
+            {
+              "expression": "contradiction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"contradiction_id\" is not null and \"analysis_finding_references\".\"evidence_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_contradiction_metric_unique": {
+          "name": "analysis_finding_references_contradiction_metric_unique",
+          "columns": [
+            {
+              "expression": "contradiction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metric_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"contradiction_id\" is not null and \"analysis_finding_references\".\"metric_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_gap_claim_unique": {
+          "name": "analysis_finding_references_gap_claim_unique",
+          "columns": [
+            {
+              "expression": "evidence_gap_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "claim_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"evidence_gap_id\" is not null and \"analysis_finding_references\".\"claim_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_gap_evidence_unique": {
+          "name": "analysis_finding_references_gap_evidence_unique",
+          "columns": [
+            {
+              "expression": "evidence_gap_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"evidence_gap_id\" is not null and \"analysis_finding_references\".\"evidence_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_finding_references_gap_metric_unique": {
+          "name": "analysis_finding_references_gap_metric_unique",
+          "columns": [
+            {
+              "expression": "evidence_gap_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metric_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_finding_references\".\"evidence_gap_id\" is not null and \"analysis_finding_references\".\"metric_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_finding_references_business_id_businesses_id_fk": {
+          "name": "analysis_finding_references_business_id_businesses_id_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_references_contradiction_same_business_fk": {
+          "name": "analysis_finding_references_contradiction_same_business_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "contradictions",
+          "columnsFrom": [
+            "contradiction_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_references_gap_same_business_fk": {
+          "name": "analysis_finding_references_gap_same_business_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "evidence_gaps",
+          "columnsFrom": [
+            "evidence_gap_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_references_claim_same_business_fk": {
+          "name": "analysis_finding_references_claim_same_business_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "claims",
+          "columnsFrom": [
+            "claim_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_references_evidence_same_business_fk": {
+          "name": "analysis_finding_references_evidence_same_business_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_references_metric_same_business_fk": {
+          "name": "analysis_finding_references_metric_same_business_fk",
+          "tableFrom": "analysis_finding_references",
+          "tableTo": "metrics",
+          "columnsFrom": [
+            "metric_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "analysis_finding_references_one_finding_check": {
+          "name": "analysis_finding_references_one_finding_check",
+          "value": "\n    num_nonnulls(\"analysis_finding_references\".\"contradiction_id\", \"analysis_finding_references\".\"evidence_gap_id\") = 1\n  "
+        },
+        "analysis_finding_references_one_canonical_record_check": {
+          "name": "analysis_finding_references_one_canonical_record_check",
+          "value": "\n    num_nonnulls(\"analysis_finding_references\".\"claim_id\", \"analysis_finding_references\".\"evidence_id\", \"analysis_finding_references\".\"metric_id\") = 1\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.analysis_question_sources": {
+      "name": "analysis_question_sources",
+      "schema": "",
+      "columns": {
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_submission_id": {
+          "name": "source_submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_question_sources_business_idx": {
+          "name": "analysis_question_sources_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_question_sources_business_id_businesses_id_fk": {
+          "name": "analysis_question_sources_business_id_businesses_id_fk",
+          "tableFrom": "analysis_question_sources",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_question_sources_question_same_business_fk": {
+          "name": "analysis_question_sources_question_same_business_fk",
+          "tableFrom": "analysis_question_sources",
+          "tableTo": "analysis_questions",
+          "columnsFrom": [
+            "question_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_question_sources_submission_same_business_fk": {
+          "name": "analysis_question_sources_submission_same_business_fk",
+          "tableFrom": "analysis_question_sources",
+          "tableTo": "source_submissions",
+          "columnsFrom": [
+            "source_submission_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "analysis_question_sources_question_id_source_submission_id_pk": {
+          "name": "analysis_question_sources_question_id_source_submission_id_pk",
+          "columns": [
+            "question_id",
+            "source_submission_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.analysis_questions": {
+      "name": "analysis_questions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contradiction_id": {
+          "name": "contradiction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_gap_id": {
+          "name": "evidence_gap_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "question": {
+          "name": "question",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority_order": {
+          "name": "priority_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_questions_business_priority_idx": {
+          "name": "analysis_questions_business_priority_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_questions_business_id_businesses_id_fk": {
+          "name": "analysis_questions_business_id_businesses_id_fk",
+          "tableFrom": "analysis_questions",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_questions_contradiction_same_business_fk": {
+          "name": "analysis_questions_contradiction_same_business_fk",
+          "tableFrom": "analysis_questions",
+          "tableTo": "contradictions",
+          "columnsFrom": [
+            "contradiction_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_questions_gap_same_business_fk": {
+          "name": "analysis_questions_gap_same_business_fk",
+          "tableFrom": "analysis_questions",
+          "tableTo": "evidence_gaps",
+          "columnsFrom": [
+            "evidence_gap_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "analysis_questions_id_business_unique": {
+          "name": "analysis_questions_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "analysis_questions_one_finding_check": {
+          "name": "analysis_questions_one_finding_check",
+          "value": "\n    num_nonnulls(\"analysis_questions\".\"contradiction_id\", \"analysis_questions\".\"evidence_gap_id\") = 1\n  "
+        },
+        "analysis_questions_priority_order_check": {
+          "name": "analysis_questions_priority_order_check",
+          "value": "\"analysis_questions\".\"priority_order\" > 0"
+        },
+        "analysis_questions_required_text_check": {
+          "name": "analysis_questions_required_text_check",
+          "value": "length(btrim(\"analysis_questions\".\"question\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.analysis_runs": {
+      "name": "analysis_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "module": {
+          "name": "module",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_type": {
+          "name": "run_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_snapshot_id": {
+          "name": "input_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_projection_version": {
+          "name": "input_projection_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_payload": {
+          "name": "input_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_identifier": {
+          "name": "model_identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_configuration": {
+          "name": "model_configuration",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "analysis_run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUNNING'"
+        },
+        "raw_model_output": {
+          "name": "raw_model_output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "structured_output": {
+          "name": "structured_output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "validation_errors": {
+          "name": "validation_errors",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_runs_business_created_idx": {
+          "name": "analysis_runs_business_created_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_runs_snapshot_created_idx": {
+          "name": "analysis_runs_snapshot_created_idx",
+          "columns": [
+            {
+              "expression": "input_snapshot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_runs_equivalent_active_unique": {
+          "name": "analysis_runs_equivalent_active_unique",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "input_snapshot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "module",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "input_projection_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "prompt_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"analysis_runs\".\"status\" in ('RUNNING', 'SUCCEEDED')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_runs_business_id_businesses_id_fk": {
+          "name": "analysis_runs_business_id_businesses_id_fk",
+          "tableFrom": "analysis_runs",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "analysis_runs_snapshot_same_business_fk": {
+          "name": "analysis_runs_snapshot_same_business_fk",
+          "tableFrom": "analysis_runs",
+          "tableTo": "business_state_snapshots",
+          "columnsFrom": [
+            "input_snapshot_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "analysis_runs_id_business_unique": {
+          "name": "analysis_runs_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "analysis_runs_input_payload_object_check": {
+          "name": "analysis_runs_input_payload_object_check",
+          "value": "jsonb_typeof(\"analysis_runs\".\"input_payload\") = 'object'"
+        },
+        "analysis_runs_model_configuration_object_check": {
+          "name": "analysis_runs_model_configuration_object_check",
+          "value": "jsonb_typeof(\"analysis_runs\".\"model_configuration\") = 'object'"
+        },
+        "analysis_runs_validation_errors_array_check": {
+          "name": "analysis_runs_validation_errors_array_check",
+          "value": "jsonb_typeof(\"analysis_runs\".\"validation_errors\") = 'array'"
+        },
+        "analysis_runs_required_text_check": {
+          "name": "analysis_runs_required_text_check",
+          "value": "\n    length(btrim(\"analysis_runs\".\"module\")) > 0\n    and length(btrim(\"analysis_runs\".\"run_type\")) > 0\n    and length(btrim(\"analysis_runs\".\"input_projection_version\")) > 0\n    and length(btrim(\"analysis_runs\".\"input_hash\")) > 0\n    and length(btrim(\"analysis_runs\".\"prompt_version\")) > 0\n    and length(btrim(\"analysis_runs\".\"provider\")) > 0\n    and length(btrim(\"analysis_runs\".\"model_identifier\")) > 0\n  "
+        },
+        "analysis_runs_completion_check": {
+          "name": "analysis_runs_completion_check",
+          "value": "\n    (\"analysis_runs\".\"status\" = 'RUNNING' and \"analysis_runs\".\"completed_at\" is null)\n    or (\"analysis_runs\".\"status\" in ('SUCCEEDED', 'FAILED') and \"analysis_runs\".\"completed_at\" is not null)\n  "
+        },
+        "analysis_runs_structured_output_check": {
+          "name": "analysis_runs_structured_output_check",
+          "value": "\n    \"analysis_runs\".\"status\" <> 'SUCCEEDED' or \"analysis_runs\".\"structured_output\" is not null\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.approved_diagnoses": {
+      "name": "approved_diagnoses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_session_id": {
+          "name": "review_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_version": {
+          "name": "snapshot_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_projection_version": {
+          "name": "input_projection_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artifact_version": {
+          "name": "artifact_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "approved_content": {
+          "name": "approved_content",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "approved_diagnoses_business_id_businesses_id_fk": {
+          "name": "approved_diagnoses_business_id_businesses_id_fk",
+          "tableFrom": "approved_diagnoses",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "approved_diagnoses_session_same_run_fk": {
+          "name": "approved_diagnoses_session_same_run_fk",
+          "tableFrom": "approved_diagnoses",
+          "tableTo": "diagnosis_review_sessions",
+          "columnsFrom": [
+            "review_session_id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "approved_diagnoses_run_same_business_fk": {
+          "name": "approved_diagnoses_run_same_business_fk",
+          "tableFrom": "approved_diagnoses",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "approved_diagnoses_snapshot_same_business_fk": {
+          "name": "approved_diagnoses_snapshot_same_business_fk",
+          "tableFrom": "approved_diagnoses",
+          "tableTo": "business_state_snapshots",
+          "columnsFrom": [
+            "snapshot_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "approved_diagnoses_run_unique": {
+          "name": "approved_diagnoses_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_run_id"
+          ]
+        },
+        "approved_diagnoses_session_unique": {
+          "name": "approved_diagnoses_session_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "review_session_id"
+          ]
+        },
+        "approved_diagnoses_business_version_unique": {
+          "name": "approved_diagnoses_business_version_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "business_id",
+            "version"
+          ]
+        },
+        "approved_diagnoses_id_business_unique": {
+          "name": "approved_diagnoses_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "approved_diagnoses_version_check": {
+          "name": "approved_diagnoses_version_check",
+          "value": "\"approved_diagnoses\".\"version\" > 0 and \"approved_diagnoses\".\"snapshot_version\" > 0"
+        },
+        "approved_diagnoses_content_object_check": {
+          "name": "approved_diagnoses_content_object_check",
+          "value": "jsonb_typeof(\"approved_diagnoses\".\"approved_content\") = 'object'"
+        },
+        "approved_diagnoses_required_text_check": {
+          "name": "approved_diagnoses_required_text_check",
+          "value": "\n    length(btrim(\"approved_diagnoses\".\"approved_by\")) > 0 and length(btrim(\"approved_diagnoses\".\"artifact_version\")) > 0\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.business_profiles": {
+      "name": "business_profiles",
+      "schema": "",
+      "columns": {
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "profile_data": {
+          "name": "profile_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "business_profiles_business_id_businesses_id_fk": {
+          "name": "business_profiles_business_id_businesses_id_fk",
+          "tableFrom": "business_profiles",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.business_state_snapshots": {
+      "name": "business_state_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_data": {
+          "name": "snapshot_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_from_analysis_run_id": {
+          "name": "created_from_analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "business_state_snapshots_business_id_businesses_id_fk": {
+          "name": "business_state_snapshots_business_id_businesses_id_fk",
+          "tableFrom": "business_state_snapshots",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "business_state_snapshots_business_version_unique": {
+          "name": "business_state_snapshots_business_version_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "business_id",
+            "version"
+          ]
+        },
+        "business_state_snapshots_id_business_unique": {
+          "name": "business_state_snapshots_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "business_state_snapshots_version_check": {
+          "name": "business_state_snapshots_version_check",
+          "value": "\"business_state_snapshots\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.businesses": {
+      "name": "businesses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legal_name": {
+          "name": "legal_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "website_url": {
+          "name": "website_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sector": {
+          "name": "sector",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "primary_geography": {
+          "name": "primary_geography",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "businesses_status_idx": {
+          "name": "businesses_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.claim_evidence": {
+      "name": "claim_evidence",
+      "schema": "",
+      "columns": {
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "relationship_type": {
+          "name": "relationship_type",
+          "type": "claim_evidence_relationship",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strength_score": {
+          "name": "strength_score",
+          "type": "numeric(5, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "claim_evidence_business_id_businesses_id_fk": {
+          "name": "claim_evidence_business_id_businesses_id_fk",
+          "tableFrom": "claim_evidence",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "claim_evidence_claim_same_business_fk": {
+          "name": "claim_evidence_claim_same_business_fk",
+          "tableFrom": "claim_evidence",
+          "tableTo": "claims",
+          "columnsFrom": [
+            "claim_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "claim_evidence_evidence_same_business_fk": {
+          "name": "claim_evidence_evidence_same_business_fk",
+          "tableFrom": "claim_evidence",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "claim_evidence_claim_id_evidence_id_relationship_type_pk": {
+          "name": "claim_evidence_claim_id_evidence_id_relationship_type_pk",
+          "columns": [
+            "claim_id",
+            "evidence_id",
+            "relationship_type"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "claim_evidence_strength_check": {
+          "name": "claim_evidence_strength_check",
+          "value": "\"claim_evidence\".\"strength_score\" is null or (\"claim_evidence\".\"strength_score\" >= 0 and \"claim_evidence\".\"strength_score\" <= 1)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.claims": {
+      "name": "claims",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement": {
+          "name": "statement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_type": {
+          "name": "claim_type",
+          "type": "claim_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_area": {
+          "name": "subject_area",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "confidence_level": {
+          "name": "confidence_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence_score": {
+          "name": "confidence_score",
+          "type": "numeric(5, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence_basis": {
+          "name": "confidence_basis",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "superseded_by_claim_id": {
+          "name": "superseded_by_claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "claims_business_idx": {
+          "name": "claims_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "claims_business_id_businesses_id_fk": {
+          "name": "claims_business_id_businesses_id_fk",
+          "tableFrom": "claims",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "claims_superseded_same_business_fk": {
+          "name": "claims_superseded_same_business_fk",
+          "tableFrom": "claims",
+          "tableTo": "claims",
+          "columnsFrom": [
+            "superseded_by_claim_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "claims_id_business_unique": {
+          "name": "claims_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "claims_confidence_score_check": {
+          "name": "claims_confidence_score_check",
+          "value": "\"claims\".\"confidence_score\" is null or (\"claims\".\"confidence_score\" >= 0 and \"claims\".\"confidence_score\" <= 1)"
+        },
+        "claims_fact_admission_audit_check": {
+          "name": "claims_fact_admission_audit_check",
+          "value": "\n    \"claims\".\"claim_type\" <> 'fact' or (\n      \"claims\".\"confidence_basis\" @> '{\"factAdmission\":{\"actorType\":\"human\"}}'::jsonb\n      and jsonb_typeof(\"claims\".\"confidence_basis\" #> '{factAdmission,supportingEvidenceIds}') = 'array'\n      and jsonb_array_length(\"claims\".\"confidence_basis\" #> '{factAdmission,supportingEvidenceIds}') > 0\n    )\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.contradictions": {
+      "name": "contradictions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "area": {
+          "name": "area",
+          "type": "evidence_quality_area",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement": {
+          "name": "statement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rationale": {
+          "name": "rationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "materiality": {
+          "name": "materiality",
+          "type": "finding_materiality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority_rank": {
+          "name": "priority_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contradictions_run_priority_idx": {
+          "name": "contradictions_run_priority_idx",
+          "columns": [
+            {
+              "expression": "analysis_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority_rank",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "contradictions_business_created_idx": {
+          "name": "contradictions_business_created_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "contradictions_business_id_businesses_id_fk": {
+          "name": "contradictions_business_id_businesses_id_fk",
+          "tableFrom": "contradictions",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "contradictions_run_same_business_fk": {
+          "name": "contradictions_run_same_business_fk",
+          "tableFrom": "contradictions",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "contradictions_id_business_unique": {
+          "name": "contradictions_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "contradictions_priority_rank_check": {
+          "name": "contradictions_priority_rank_check",
+          "value": "\"contradictions\".\"priority_rank\" > 0"
+        },
+        "contradictions_required_text_check": {
+          "name": "contradictions_required_text_check",
+          "value": "\n    length(btrim(\"contradictions\".\"statement\")) > 0 and length(btrim(\"contradictions\".\"rationale\")) > 0\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_calculation_sources": {
+      "name": "diagnosis_calculation_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "diagnosis_calculation_id": {
+          "name": "diagnosis_calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metric_id": {
+          "name": "metric_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagnosis_calculation_sources_calculation_idx": {
+          "name": "diagnosis_calculation_sources_calculation_idx",
+          "columns": [
+            {
+              "expression": "diagnosis_calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_calculation_sources_metric_unique": {
+          "name": "diagnosis_calculation_sources_metric_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metric_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_calculation_sources\".\"metric_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_calculation_sources_evidence_unique": {
+          "name": "diagnosis_calculation_sources_evidence_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_calculation_sources\".\"evidence_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "diagnosis_calculation_sources_business_id_businesses_id_fk": {
+          "name": "diagnosis_calculation_sources_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_calculation_sources",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_calculation_sources_calculation_same_business_fk": {
+          "name": "diagnosis_calculation_sources_calculation_same_business_fk",
+          "tableFrom": "diagnosis_calculation_sources",
+          "tableTo": "diagnosis_calculations",
+          "columnsFrom": [
+            "diagnosis_calculation_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_calculation_sources_metric_same_business_fk": {
+          "name": "diagnosis_calculation_sources_metric_same_business_fk",
+          "tableFrom": "diagnosis_calculation_sources",
+          "tableTo": "metrics",
+          "columnsFrom": [
+            "metric_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_calculation_sources_evidence_same_business_fk": {
+          "name": "diagnosis_calculation_sources_evidence_same_business_fk",
+          "tableFrom": "diagnosis_calculation_sources",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_calculation_sources_one_source_check": {
+          "name": "diagnosis_calculation_sources_one_source_check",
+          "value": "\n    num_nonnulls(\"diagnosis_calculation_sources\".\"metric_id\", \"diagnosis_calculation_sources\".\"evidence_id\") = 1\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_calculations": {
+      "name": "diagnosis_calculations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calculation_ref": {
+          "name": "calculation_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rule_key": {
+          "name": "rule_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rule_version": {
+          "name": "rule_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formula": {
+          "name": "formula",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_numeric": {
+          "name": "value_numeric",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_precision": {
+          "name": "value_precision",
+          "type": "numeric_precision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_lower": {
+          "name": "value_lower",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_upper": {
+          "name": "value_upper",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "diagnosis_calculations_business_id_businesses_id_fk": {
+          "name": "diagnosis_calculations_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_calculations",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_calculations_run_same_business_fk": {
+          "name": "diagnosis_calculations_run_same_business_fk",
+          "tableFrom": "diagnosis_calculations",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "diagnosis_calculations_id_business_unique": {
+          "name": "diagnosis_calculations_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        },
+        "diagnosis_calculations_id_business_run_unique": {
+          "name": "diagnosis_calculations_id_business_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ]
+        },
+        "diagnosis_calculations_run_ref_unique": {
+          "name": "diagnosis_calculations_run_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_run_id",
+            "calculation_ref"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_calculations_ref_check": {
+          "name": "diagnosis_calculations_ref_check",
+          "value": "\"diagnosis_calculations\".\"calculation_ref\" ~ '^D(?:[0-9]{3}|[1-9][0-9]{3,})$'"
+        },
+        "diagnosis_calculations_required_text_check": {
+          "name": "diagnosis_calculations_required_text_check",
+          "value": "\n    length(btrim(\"diagnosis_calculations\".\"rule_key\")) > 0 and length(btrim(\"diagnosis_calculations\".\"rule_version\")) > 0\n    and length(btrim(\"diagnosis_calculations\".\"label\")) > 0 and length(btrim(\"diagnosis_calculations\".\"formula\")) > 0\n    and length(btrim(\"diagnosis_calculations\".\"unit\")) > 0\n  "
+        },
+        "diagnosis_calculations_value_check": {
+          "name": "diagnosis_calculations_value_check",
+          "value": "\n    (\"diagnosis_calculations\".\"value_precision\" = 'range'\n      and \"diagnosis_calculations\".\"value_lower\" is not null and \"diagnosis_calculations\".\"value_upper\" is not null\n      and \"diagnosis_calculations\".\"value_lower\" <= \"diagnosis_calculations\".\"value_upper\" and \"diagnosis_calculations\".\"value_numeric\" is null)\n    or (\"diagnosis_calculations\".\"value_precision\" in ('exact', 'approximate', 'estimate', 'unspecified')\n      and \"diagnosis_calculations\".\"value_numeric\" is not null and \"diagnosis_calculations\".\"value_lower\" is null and \"diagnosis_calculations\".\"value_upper\" is null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_item_references": {
+      "name": "diagnosis_item_references",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "diagnosis_item_id": {
+          "name": "diagnosis_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "diagnosis_reference_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metric_id": {
+          "name": "metric_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_gap_id": {
+          "name": "evidence_gap_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diagnosis_calculation_id": {
+          "name": "diagnosis_calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagnosis_item_references_item_idx": {
+          "name": "diagnosis_item_references_item_idx",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_item_references_claim_unique": {
+          "name": "diagnosis_item_references_claim_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "claim_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_item_references\".\"claim_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_item_references_evidence_unique": {
+          "name": "diagnosis_item_references_evidence_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_item_references\".\"evidence_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_item_references_metric_unique": {
+          "name": "diagnosis_item_references_metric_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metric_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_item_references\".\"metric_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_item_references_gap_unique": {
+          "name": "diagnosis_item_references_gap_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_gap_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_item_references\".\"evidence_gap_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnosis_item_references_calculation_unique": {
+          "name": "diagnosis_item_references_calculation_unique",
+          "columns": [
+            {
+              "expression": "diagnosis_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "diagnosis_calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"diagnosis_item_references\".\"diagnosis_calculation_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "diagnosis_item_references_business_id_businesses_id_fk": {
+          "name": "diagnosis_item_references_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_item_same_run_fk": {
+          "name": "diagnosis_item_references_item_same_run_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "diagnosis_items",
+          "columnsFrom": [
+            "diagnosis_item_id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_calculation_same_run_fk": {
+          "name": "diagnosis_item_references_calculation_same_run_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "diagnosis_calculations",
+          "columnsFrom": [
+            "diagnosis_calculation_id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_claim_same_business_fk": {
+          "name": "diagnosis_item_references_claim_same_business_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "claims",
+          "columnsFrom": [
+            "claim_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_evidence_same_business_fk": {
+          "name": "diagnosis_item_references_evidence_same_business_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_metric_same_business_fk": {
+          "name": "diagnosis_item_references_metric_same_business_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "metrics",
+          "columnsFrom": [
+            "metric_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_references_gap_same_business_fk": {
+          "name": "diagnosis_item_references_gap_same_business_fk",
+          "tableFrom": "diagnosis_item_references",
+          "tableTo": "evidence_gaps",
+          "columnsFrom": [
+            "evidence_gap_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_item_references_one_target_check": {
+          "name": "diagnosis_item_references_one_target_check",
+          "value": "\n    num_nonnulls(\"diagnosis_item_references\".\"claim_id\", \"diagnosis_item_references\".\"evidence_id\", \"diagnosis_item_references\".\"metric_id\", \"diagnosis_item_references\".\"evidence_gap_id\", \"diagnosis_item_references\".\"diagnosis_calculation_id\") = 1\n  "
+        },
+        "diagnosis_item_references_gap_role_check": {
+          "name": "diagnosis_item_references_gap_role_check",
+          "value": "\n    (\"diagnosis_item_references\".\"role\" = 'limiting_gap') = (\"diagnosis_item_references\".\"evidence_gap_id\" is not null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_item_reviews": {
+      "name": "diagnosis_item_reviews",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_session_id": {
+          "name": "review_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "diagnosis_item_id": {
+          "name": "diagnosis_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "evidence_review_decision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "corrected_payload": {
+          "name": "corrected_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagnosis_item_reviews_session_idx": {
+          "name": "diagnosis_item_reviews_session_idx",
+          "columns": [
+            {
+              "expression": "review_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "diagnosis_item_reviews_business_id_businesses_id_fk": {
+          "name": "diagnosis_item_reviews_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_item_reviews",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_reviews_session_same_run_fk": {
+          "name": "diagnosis_item_reviews_session_same_run_fk",
+          "tableFrom": "diagnosis_item_reviews",
+          "tableTo": "diagnosis_review_sessions",
+          "columnsFrom": [
+            "review_session_id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_item_reviews_item_same_run_fk": {
+          "name": "diagnosis_item_reviews_item_same_run_fk",
+          "tableFrom": "diagnosis_item_reviews",
+          "tableTo": "diagnosis_items",
+          "columnsFrom": [
+            "diagnosis_item_id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "diagnosis_item_reviews_item_unique": {
+          "name": "diagnosis_item_reviews_item_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "diagnosis_item_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_item_reviews_decision_check": {
+          "name": "diagnosis_item_reviews_decision_check",
+          "value": "\"diagnosis_item_reviews\".\"decision\" in ('ACCEPTED', 'CORRECTED', 'REJECTED')"
+        },
+        "diagnosis_item_reviews_corrected_payload_check": {
+          "name": "diagnosis_item_reviews_corrected_payload_check",
+          "value": "\n    (\"diagnosis_item_reviews\".\"decision\" = 'CORRECTED' and \"diagnosis_item_reviews\".\"corrected_payload\" is not null\n      and jsonb_typeof(\"diagnosis_item_reviews\".\"corrected_payload\") = 'object')\n    or (\"diagnosis_item_reviews\".\"decision\" <> 'CORRECTED' and \"diagnosis_item_reviews\".\"corrected_payload\" is null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_items": {
+      "name": "diagnosis_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_ref": {
+          "name": "item_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_type": {
+          "name": "item_type",
+          "type": "diagnosis_item_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement": {
+          "name": "statement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rationale": {
+          "name": "rationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grounding": {
+          "name": "grounding",
+          "type": "diagnosis_grounding",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "materiality": {
+          "name": "materiality",
+          "type": "finding_materiality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "interpretation_confidence": {
+          "name": "interpretation_confidence",
+          "type": "diagnosis_interpretation_confidence",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "limitations": {
+          "name": "limitations",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "diagnosis_items_business_id_businesses_id_fk": {
+          "name": "diagnosis_items_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_items",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_items_run_same_business_fk": {
+          "name": "diagnosis_items_run_same_business_fk",
+          "tableFrom": "diagnosis_items",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "diagnosis_items_id_business_unique": {
+          "name": "diagnosis_items_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        },
+        "diagnosis_items_id_business_run_unique": {
+          "name": "diagnosis_items_id_business_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ]
+        },
+        "diagnosis_items_run_ref_unique": {
+          "name": "diagnosis_items_run_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_run_id",
+            "item_ref"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_items_ref_check": {
+          "name": "diagnosis_items_ref_check",
+          "value": "\"diagnosis_items\".\"item_ref\" ~ '^I(?:[0-9]{3}|[1-9][0-9]{3,})$'"
+        },
+        "diagnosis_items_required_text_check": {
+          "name": "diagnosis_items_required_text_check",
+          "value": "\n    length(btrim(\"diagnosis_items\".\"statement\")) > 0 and length(btrim(\"diagnosis_items\".\"rationale\")) > 0\n    and (\"diagnosis_items\".\"limitations\" is null or length(btrim(\"diagnosis_items\".\"limitations\")) > 0)\n  "
+        },
+        "diagnosis_items_interpretation_limitations_check": {
+          "name": "diagnosis_items_interpretation_limitations_check",
+          "value": "\n    \"diagnosis_items\".\"grounding\" not in ('interpretive', 'hypothesis') or \"diagnosis_items\".\"limitations\" is not null\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.diagnosis_review_sessions": {
+      "name": "diagnosis_review_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewer_id": {
+          "name": "reviewer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "diagnosis_review_session_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "diagnosis_review_sessions_business_id_businesses_id_fk": {
+          "name": "diagnosis_review_sessions_business_id_businesses_id_fk",
+          "tableFrom": "diagnosis_review_sessions",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "diagnosis_review_sessions_run_same_business_fk": {
+          "name": "diagnosis_review_sessions_run_same_business_fk",
+          "tableFrom": "diagnosis_review_sessions",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "diagnosis_review_sessions_run_unique": {
+          "name": "diagnosis_review_sessions_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_run_id"
+          ]
+        },
+        "diagnosis_review_sessions_id_business_unique": {
+          "name": "diagnosis_review_sessions_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        },
+        "diagnosis_review_sessions_id_business_run_unique": {
+          "name": "diagnosis_review_sessions_id_business_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id",
+            "analysis_run_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "diagnosis_review_sessions_reviewer_check": {
+          "name": "diagnosis_review_sessions_reviewer_check",
+          "value": "length(btrim(\"diagnosis_review_sessions\".\"reviewer_id\")) > 0"
+        },
+        "diagnosis_review_sessions_completion_check": {
+          "name": "diagnosis_review_sessions_completion_check",
+          "value": "\n    (\"diagnosis_review_sessions\".\"status\" = 'OPEN' and \"diagnosis_review_sessions\".\"completed_at\" is null)\n    or (\"diagnosis_review_sessions\".\"status\" = 'COMPLETED' and \"diagnosis_review_sessions\".\"completed_at\" is not null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.evidence": {
+      "name": "evidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_type": {
+          "name": "evidence_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement": {
+          "name": "statement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_numeric": {
+          "name": "value_numeric",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_precision": {
+          "name": "value_precision",
+          "type": "numeric_precision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unspecified'"
+        },
+        "value_lower": {
+          "name": "value_lower",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_upper": {
+          "name": "value_upper",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_text": {
+          "name": "value_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_reference": {
+          "name": "source_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_metadata": {
+          "name": "source_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "reliability_level": {
+          "name": "reliability_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reliability_score": {
+          "name": "reliability_score",
+          "type": "numeric(5, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "directness_level": {
+          "name": "directness_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recency_level": {
+          "name": "recency_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_payload": {
+          "name": "raw_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "materiality": {
+          "name": "materiality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "evidence_business_idx": {
+          "name": "evidence_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_business_id_businesses_id_fk": {
+          "name": "evidence_business_id_businesses_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_id_business_unique": {
+          "name": "evidence_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "evidence_period_check": {
+          "name": "evidence_period_check",
+          "value": "\"evidence\".\"period_end\" is null or \"evidence\".\"period_start\" is null or \"evidence\".\"period_end\" >= \"evidence\".\"period_start\""
+        },
+        "evidence_reliability_score_check": {
+          "name": "evidence_reliability_score_check",
+          "value": "\"evidence\".\"reliability_score\" is null or (\"evidence\".\"reliability_score\" >= 0 and \"evidence\".\"reliability_score\" <= 1)"
+        },
+        "evidence_value_precision_check": {
+          "name": "evidence_value_precision_check",
+          "value": "\n    (\"evidence\".\"value_precision\" = 'range'\n      and \"evidence\".\"value_lower\" is not null and \"evidence\".\"value_upper\" is not null\n      and \"evidence\".\"value_lower\" <= \"evidence\".\"value_upper\" and \"evidence\".\"value_numeric\" is null)\n    or (\"evidence\".\"value_precision\" in ('exact', 'approximate', 'estimate')\n      and \"evidence\".\"value_numeric\" is not null and \"evidence\".\"value_lower\" is null and \"evidence\".\"value_upper\" is null)\n    or (\"evidence\".\"value_precision\" = 'unspecified'\n      and \"evidence\".\"value_lower\" is null and \"evidence\".\"value_upper\" is null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.evidence_extraction_runs": {
+      "name": "evidence_extraction_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_submission_id": {
+          "name": "source_submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_intake_text": {
+          "name": "raw_intake_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_reference": {
+          "name": "source_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_metadata": {
+          "name": "source_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_configuration": {
+          "name": "model_configuration",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "evidence_extraction_run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUNNING'"
+        },
+        "raw_model_output": {
+          "name": "raw_model_output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "validation_errors": {
+          "name": "validation_errors",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "evidence_extraction_runs_business_idx": {
+          "name": "evidence_extraction_runs_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "evidence_extraction_runs_source_submission_idx": {
+          "name": "evidence_extraction_runs_source_submission_idx",
+          "columns": [
+            {
+              "expression": "source_submission_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_extraction_runs_business_id_businesses_id_fk": {
+          "name": "evidence_extraction_runs_business_id_businesses_id_fk",
+          "tableFrom": "evidence_extraction_runs",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_extraction_runs_source_submission_same_business_fk": {
+          "name": "evidence_extraction_runs_source_submission_same_business_fk",
+          "tableFrom": "evidence_extraction_runs",
+          "tableTo": "source_submissions",
+          "columnsFrom": [
+            "source_submission_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_extraction_runs_id_business_unique": {
+          "name": "evidence_extraction_runs_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.evidence_gaps": {
+      "name": "evidence_gaps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "area": {
+          "name": "area",
+          "type": "evidence_quality_area",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "missing_information": {
+          "name": "missing_information",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision_impact": {
+          "name": "decision_impact",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "materiality": {
+          "name": "materiality",
+          "type": "finding_materiality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority_rank": {
+          "name": "priority_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "evidence_gaps_run_priority_idx": {
+          "name": "evidence_gaps_run_priority_idx",
+          "columns": [
+            {
+              "expression": "analysis_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority_rank",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "evidence_gaps_business_created_idx": {
+          "name": "evidence_gaps_business_created_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_gaps_business_id_businesses_id_fk": {
+          "name": "evidence_gaps_business_id_businesses_id_fk",
+          "tableFrom": "evidence_gaps",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_gaps_run_same_business_fk": {
+          "name": "evidence_gaps_run_same_business_fk",
+          "tableFrom": "evidence_gaps",
+          "tableTo": "analysis_runs",
+          "columnsFrom": [
+            "analysis_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_gaps_id_business_unique": {
+          "name": "evidence_gaps_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "evidence_gaps_priority_rank_check": {
+          "name": "evidence_gaps_priority_rank_check",
+          "value": "\"evidence_gaps\".\"priority_rank\" > 0"
+        },
+        "evidence_gaps_required_text_check": {
+          "name": "evidence_gaps_required_text_check",
+          "value": "\n    length(btrim(\"evidence_gaps\".\"missing_information\")) > 0\n    and length(btrim(\"evidence_gaps\".\"decision_impact\")) > 0\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.evidence_proposals": {
+      "name": "evidence_proposals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "extraction_run_id": {
+          "name": "extraction_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposal_ref": {
+          "name": "proposal_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposal_type": {
+          "name": "proposal_type",
+          "type": "evidence_proposal_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "structured_payload": {
+          "name": "structured_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "evidence_proposals_business_idx": {
+          "name": "evidence_proposals_business_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_proposals_business_id_businesses_id_fk": {
+          "name": "evidence_proposals_business_id_businesses_id_fk",
+          "tableFrom": "evidence_proposals",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_proposals_run_same_business_fk": {
+          "name": "evidence_proposals_run_same_business_fk",
+          "tableFrom": "evidence_proposals",
+          "tableTo": "evidence_extraction_runs",
+          "columnsFrom": [
+            "extraction_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_proposals_run_ref_unique": {
+          "name": "evidence_proposals_run_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "extraction_run_id",
+            "proposal_ref"
+          ]
+        },
+        "evidence_proposals_id_business_run_unique": {
+          "name": "evidence_proposals_id_business_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id",
+            "extraction_run_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.evidence_review_sessions": {
+      "name": "evidence_review_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extraction_run_id": {
+          "name": "extraction_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewer_id": {
+          "name": "reviewer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "evidence_review_session_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "resulting_snapshot_id": {
+          "name": "resulting_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "evidence_review_sessions_business_id_businesses_id_fk": {
+          "name": "evidence_review_sessions_business_id_businesses_id_fk",
+          "tableFrom": "evidence_review_sessions",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_review_sessions_run_same_business_fk": {
+          "name": "evidence_review_sessions_run_same_business_fk",
+          "tableFrom": "evidence_review_sessions",
+          "tableTo": "evidence_extraction_runs",
+          "columnsFrom": [
+            "extraction_run_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_review_sessions_snapshot_same_business_fk": {
+          "name": "evidence_review_sessions_snapshot_same_business_fk",
+          "tableFrom": "evidence_review_sessions",
+          "tableTo": "business_state_snapshots",
+          "columnsFrom": [
+            "resulting_snapshot_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_review_sessions_run_unique": {
+          "name": "evidence_review_sessions_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "extraction_run_id"
+          ]
+        },
+        "evidence_review_sessions_id_business_run_unique": {
+          "name": "evidence_review_sessions_id_business_run_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id",
+            "extraction_run_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.metrics": {
+      "name": "metrics",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metric_key": {
+          "name": "metric_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metric_label": {
+          "name": "metric_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "numeric_value": {
+          "name": "numeric_value",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numeric_precision": {
+          "name": "numeric_precision",
+          "type": "numeric_precision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unspecified'"
+        },
+        "numeric_lower": {
+          "name": "numeric_lower",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numeric_upper": {
+          "name": "numeric_upper",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dimension_data": {
+          "name": "dimension_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "source_evidence_id": {
+          "name": "source_evidence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "metrics_business_key_idx": {
+          "name": "metrics_business_key_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metric_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "metrics_business_id_businesses_id_fk": {
+          "name": "metrics_business_id_businesses_id_fk",
+          "tableFrom": "metrics",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "metrics_source_evidence_same_business_fk": {
+          "name": "metrics_source_evidence_same_business_fk",
+          "tableFrom": "metrics",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "source_evidence_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "metrics_id_business_unique": {
+          "name": "metrics_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "metrics_period_check": {
+          "name": "metrics_period_check",
+          "value": "\"metrics\".\"period_end\" is null or \"metrics\".\"period_start\" is null or \"metrics\".\"period_end\" >= \"metrics\".\"period_start\""
+        },
+        "metrics_numeric_precision_check": {
+          "name": "metrics_numeric_precision_check",
+          "value": "\n    (\"metrics\".\"numeric_precision\" = 'range'\n      and \"metrics\".\"numeric_lower\" is not null and \"metrics\".\"numeric_upper\" is not null\n      and \"metrics\".\"numeric_lower\" <= \"metrics\".\"numeric_upper\" and \"metrics\".\"numeric_value\" is null)\n    or (\"metrics\".\"numeric_precision\" in ('exact', 'approximate', 'estimate', 'unspecified')\n      and \"metrics\".\"numeric_value\" is not null and \"metrics\".\"numeric_lower\" is null and \"metrics\".\"numeric_upper\" is null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.proposal_reviews": {
+      "name": "proposal_reviews",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "review_session_id": {
+          "name": "review_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposal_id": {
+          "name": "proposal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extraction_run_id": {
+          "name": "extraction_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "evidence_review_decision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_payload": {
+          "name": "reviewed_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_entity_type": {
+          "name": "canonical_entity_type",
+          "type": "review_canonical_entity_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_entity_id": {
+          "name": "canonical_entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_reference": {
+          "name": "canonical_reference",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "proposal_reviews_session_idx": {
+          "name": "proposal_reviews_session_idx",
+          "columns": [
+            {
+              "expression": "review_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "proposal_reviews_business_id_businesses_id_fk": {
+          "name": "proposal_reviews_business_id_businesses_id_fk",
+          "tableFrom": "proposal_reviews",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "proposal_reviews_session_same_business_run_fk": {
+          "name": "proposal_reviews_session_same_business_run_fk",
+          "tableFrom": "proposal_reviews",
+          "tableTo": "evidence_review_sessions",
+          "columnsFrom": [
+            "review_session_id",
+            "business_id",
+            "extraction_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "extraction_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "proposal_reviews_proposal_same_business_run_fk": {
+          "name": "proposal_reviews_proposal_same_business_run_fk",
+          "tableFrom": "proposal_reviews",
+          "tableTo": "evidence_proposals",
+          "columnsFrom": [
+            "proposal_id",
+            "business_id",
+            "extraction_run_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id",
+            "extraction_run_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "proposal_reviews_proposal_unique": {
+          "name": "proposal_reviews_proposal_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "proposal_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "proposal_reviews_corrected_payload_check": {
+          "name": "proposal_reviews_corrected_payload_check",
+          "value": "\n    (\"proposal_reviews\".\"decision\" = 'CORRECTED' and \"proposal_reviews\".\"reviewed_payload\" is not null)\n    or (\"proposal_reviews\".\"decision\" <> 'CORRECTED' and \"proposal_reviews\".\"reviewed_payload\" is null)\n  "
+        },
+        "proposal_reviews_noncanonical_decision_check": {
+          "name": "proposal_reviews_noncanonical_decision_check",
+          "value": "\n    \"proposal_reviews\".\"decision\" not in ('REJECTED', 'UNRESOLVED')\n    or (\"proposal_reviews\".\"canonical_entity_type\" is null and \"proposal_reviews\".\"canonical_entity_id\" is null)\n  "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.source_submission_attachments": {
+      "name": "source_submission_attachments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_submission_id": {
+          "name": "source_submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_filename": {
+          "name": "original_filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "byte_size": {
+          "name": "byte_size",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "source_submission_attachments_submission_idx": {
+          "name": "source_submission_attachments_submission_idx",
+          "columns": [
+            {
+              "expression": "source_submission_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "source_submission_attachments_business_id_businesses_id_fk": {
+          "name": "source_submission_attachments_business_id_businesses_id_fk",
+          "tableFrom": "source_submission_attachments",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "source_submission_attachments_same_business_fk": {
+          "name": "source_submission_attachments_same_business_fk",
+          "tableFrom": "source_submission_attachments",
+          "tableTo": "source_submissions",
+          "columnsFrom": [
+            "source_submission_id",
+            "business_id"
+          ],
+          "columnsTo": [
+            "id",
+            "business_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "source_submission_attachments_byte_size_check": {
+          "name": "source_submission_attachments_byte_size_check",
+          "value": "\"source_submission_attachments\".\"byte_size\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.source_submissions": {
+      "name": "source_submissions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_text": {
+          "name": "raw_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_reference": {
+          "name": "source_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_occurred_at": {
+          "name": "source_occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "source_submissions_business_submitted_idx": {
+          "name": "source_submissions_business_submitted_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "submitted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "source_submissions_business_id_businesses_id_fk": {
+          "name": "source_submissions_business_id_businesses_id_fk",
+          "tableFrom": "source_submissions",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "source_submissions_id_business_unique": {
+          "name": "source_submissions_id_business_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.strategy_workflows": {
+      "name": "strategy_workflows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "workflow_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NEW'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "strategy_workflows_business_id_businesses_id_fk": {
+          "name": "strategy_workflows_business_id_businesses_id_fk",
+          "tableFrom": "strategy_workflows",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "strategy_workflows_business_id_unique": {
+          "name": "strategy_workflows_business_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "business_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.workflow_transitions": {
+      "name": "workflow_transitions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workflow_id": {
+          "name": "workflow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_state": {
+          "name": "from_state",
+          "type": "workflow_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_state": {
+          "name": "to_state",
+          "type": "workflow_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "workflow_event",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "actor_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "workflow_transitions_workflow_idx": {
+          "name": "workflow_transitions_workflow_idx",
+          "columns": [
+            {
+              "expression": "workflow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "workflow_transitions_workflow_id_strategy_workflows_id_fk": {
+          "name": "workflow_transitions_workflow_id_strategy_workflows_id_fk",
+          "tableFrom": "workflow_transitions",
+          "tableTo": "strategy_workflows",
+          "columnsFrom": [
+            "workflow_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.actor_type": {
+      "name": "actor_type",
+      "schema": "public",
+      "values": [
+        "human",
+        "system",
+        "ai"
+      ]
+    },
+    "public.analysis_finding_reference_role": {
+      "name": "analysis_finding_reference_role",
+      "schema": "public",
+      "values": [
+        "primary",
+        "conflicting",
+        "context"
+      ]
+    },
+    "public.analysis_run_status": {
+      "name": "analysis_run_status",
+      "schema": "public",
+      "values": [
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "public.claim_type": {
+      "name": "claim_type",
+      "schema": "public",
+      "values": [
+        "fact",
+        "observation",
+        "management_belief",
+        "hypothesis",
+        "ai_inference",
+        "unknown",
+        "decision"
+      ]
+    },
+    "public.diagnosis_grounding": {
+      "name": "diagnosis_grounding",
+      "schema": "public",
+      "values": [
+        "evidence_backed",
+        "calculated",
+        "interpretive",
+        "hypothesis"
+      ]
+    },
+    "public.diagnosis_interpretation_confidence": {
+      "name": "diagnosis_interpretation_confidence",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "public.diagnosis_item_type": {
+      "name": "diagnosis_item_type",
+      "schema": "public",
+      "values": [
+        "position",
+        "strength",
+        "constraint",
+        "risk",
+        "opportunity",
+        "limitation",
+        "decision_required"
+      ]
+    },
+    "public.diagnosis_reference_role": {
+      "name": "diagnosis_reference_role",
+      "schema": "public",
+      "values": [
+        "primary",
+        "context",
+        "limiting_gap"
+      ]
+    },
+    "public.diagnosis_review_session_status": {
+      "name": "diagnosis_review_session_status",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "COMPLETED"
+      ]
+    },
+    "public.evidence_extraction_run_status": {
+      "name": "evidence_extraction_run_status",
+      "schema": "public",
+      "values": [
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "public.evidence_proposal_type": {
+      "name": "evidence_proposal_type",
+      "schema": "public",
+      "values": [
+        "claim",
+        "evidence",
+        "metric",
+        "claim_evidence"
+      ]
+    },
+    "public.evidence_quality_area": {
+      "name": "evidence_quality_area",
+      "schema": "public",
+      "values": [
+        "business_and_offer",
+        "customers_and_market",
+        "marketing_and_acquisition",
+        "sales_and_conversion",
+        "delivery_and_capacity",
+        "financial_performance",
+        "goals_and_constraints"
+      ]
+    },
+    "public.evidence_review_decision": {
+      "name": "evidence_review_decision",
+      "schema": "public",
+      "values": [
+        "ACCEPTED",
+        "CORRECTED",
+        "REJECTED",
+        "UNRESOLVED"
+      ]
+    },
+    "public.evidence_review_session_status": {
+      "name": "evidence_review_session_status",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "COMPLETED"
+      ]
+    },
+    "public.finding_materiality": {
+      "name": "finding_materiality",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "public.numeric_precision": {
+      "name": "numeric_precision",
+      "schema": "public",
+      "values": [
+        "exact",
+        "approximate",
+        "estimate",
+        "range",
+        "unspecified"
+      ]
+    },
+    "public.claim_evidence_relationship": {
+      "name": "claim_evidence_relationship",
+      "schema": "public",
+      "values": [
+        "supports",
+        "contradicts",
+        "context"
+      ]
+    },
+    "public.review_canonical_entity_type": {
+      "name": "review_canonical_entity_type",
+      "schema": "public",
+      "values": [
+        "claim",
+        "evidence",
+        "metric",
+        "claim_evidence"
+      ]
+    },
+    "public.workflow_event": {
+      "name": "workflow_event",
+      "schema": "public",
+      "values": [
+        "START_INTAKE",
+        "SUBMIT_INTAKE",
+        "ADD_EVIDENCE",
+        "MARK_UNKNOWN",
+        "CONTINUE_WITH_GAPS",
+        "GENERATE_PHASE1",
+        "APPROVE_PHASE1",
+        "REQUEST_REVISION",
+        "REJECT_PHASE1",
+        "PROCESS_EVIDENCE",
+        "RUN_GAP_ANALYSIS",
+        "MARK_ANALYSIS_COMPLETE"
+      ]
+    },
+    "public.workflow_state": {
+      "name": "workflow_state",
+      "schema": "public",
+      "values": [
+        "NEW",
+        "INTAKE_IN_PROGRESS",
+        "INTAKE_READY",
+        "EVIDENCE_PROCESSING",
+        "EVIDENCE_READY",
+        "GAP_ANALYSIS",
+        "GAP_RESOLUTION_REQUIRED",
+        "PHASE1_READY",
+        "PHASE1_ANALYSING",
+        "PHASE1_AWAITING_REVIEW",
+        "REVISION_REQUIRED",
+        "PHASE1_APPROVED"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

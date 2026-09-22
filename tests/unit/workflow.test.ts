@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptsAddInformation, resolveTransition } from "@/domain/workflow";
+import { acceptsAddInformation, resolveTransition, transitionRules } from "@/domain/workflow";
 import {
   continueWithGapsPrecondition,
   defaultWorkflowTransitionPreconditions,
@@ -30,8 +30,16 @@ describe("workflow rules", () => {
       .toBe("EVIDENCE_PROCESSING");
     expect(resolveTransition("PHASE1_AWAITING_REVIEW", "REQUEST_REVISION", "human"))
       .toBe("REVISION_REQUIRED");
-    expect(resolveTransition("REVISION_REQUIRED", "GENERATE_PHASE1", "human"))
-      .toBe("PHASE1_ANALYSING");
+  });
+
+  it("returns a revision to the evidence loop, never straight to a same-snapshot diagnosis (v1)", () => {
+    expect(() => resolveTransition("REVISION_REQUIRED", "GENERATE_PHASE1", "human"))
+      .toThrow("Invalid workflow transition: REVISION_REQUIRED + GENERATE_PHASE1");
+    expect(resolveTransition("REVISION_REQUIRED", "ADD_EVIDENCE", "human")).toBe("EVIDENCE_PROCESSING");
+    expect(acceptsAddInformation("REVISION_REQUIRED")).toBe(true);
+    // A fresh diagnosis starts only from PHASE1_READY.
+    expect(transitionRules.filter((rule) => rule.event === "GENERATE_PHASE1").map((rule) => rule.from))
+      .toEqual(["PHASE1_READY"]);
   });
 
   it("lets only a human continue with known gaps into PHASE1_READY", () => {

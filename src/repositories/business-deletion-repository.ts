@@ -22,6 +22,13 @@ import {
   strategyWorkflows,
   contradictions,
   workflowTransitions,
+  approvedDiagnoses,
+  diagnosisCalculations,
+  diagnosisCalculationSources,
+  diagnosisItemReferences,
+  diagnosisItemReviews,
+  diagnosisItems,
+  diagnosisReviewSessions,
 } from "@/db/schema";
 import {
   BusinessDeletionError,
@@ -71,6 +78,15 @@ export class BusinessDeletionRepository {
         .where(eq(strategyWorkflows.businessId, business.id));
       const workflowIds = workflowRows.map((workflow) => workflow.id);
 
+      // Phase 1 Diagnosis graph, children first.
+      await tx.delete(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, business.id));
+      await tx.delete(diagnosisItemReviews).where(eq(diagnosisItemReviews.businessId, business.id));
+      await tx.delete(diagnosisReviewSessions).where(eq(diagnosisReviewSessions.businessId, business.id));
+      await tx.delete(diagnosisItemReferences).where(eq(diagnosisItemReferences.businessId, business.id));
+      await tx.delete(diagnosisCalculationSources)
+        .where(eq(diagnosisCalculationSources.businessId, business.id));
+      await tx.delete(diagnosisItems).where(eq(diagnosisItems.businessId, business.id));
+      await tx.delete(diagnosisCalculations).where(eq(diagnosisCalculations.businessId, business.id));
       await tx.delete(analysisQuestionSources)
         .where(eq(analysisQuestionSources.businessId, business.id));
       await tx.delete(analysisQuestions).where(eq(analysisQuestions.businessId, business.id));
@@ -100,6 +116,13 @@ export class BusinessDeletionRepository {
       await tx.delete(businessProfiles).where(eq(businessProfiles.businessId, business.id));
 
       const directTables = [
+        approvedDiagnoses,
+        diagnosisItemReviews,
+        diagnosisReviewSessions,
+        diagnosisItemReferences,
+        diagnosisCalculationSources,
+        diagnosisItems,
+        diagnosisCalculations,
         analysisQuestionSources,
         analysisQuestions,
         analysisFindingReferences,

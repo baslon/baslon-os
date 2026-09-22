@@ -61,17 +61,18 @@ export const transitionRules: readonly Rule[] = [
   { from: "PHASE1_AWAITING_REVIEW", event: "REQUEST_REVISION", to: "REVISION_REQUIRED" },
   { from: "PHASE1_AWAITING_REVIEW", event: "REJECT_PHASE1", to: "REVISION_REQUIRED" },
   { from: "PHASE1_AWAITING_REVIEW", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
-  { from: "REVISION_REQUIRED", event: "GENERATE_PHASE1", to: "PHASE1_ANALYSING" },
   { from: "REVISION_REQUIRED", event: "ADD_EVIDENCE", to: "EVIDENCE_PROCESSING" },
 ] as const;
 
 /**
  * States from which ordinary (unprompted) Add Information is accepted.
  * PHASE1_READY is included so a Business that continued with known gaps can
- * still add evidence before Phase 1 diagnosis exists.
+ * still add evidence before Phase 1 diagnosis exists. REVISION_REQUIRED is
+ * included because, under the Phase 1 v1 revision semantics, a revised
+ * diagnosis needs a newer snapshot, and new evidence is the only way to get one.
  */
 export const addInformationStates: readonly WorkflowState[] = [
-  "EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED", "PHASE1_READY",
+  "EVIDENCE_READY", "GAP_RESOLUTION_REQUIRED", "PHASE1_READY", "REVISION_REQUIRED",
 ];
 
 export function acceptsAddInformation(state: string | undefined): boolean {

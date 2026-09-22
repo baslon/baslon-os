@@ -9,7 +9,9 @@ import {
   getInitialIntakeService,
   getEvidenceCoherenceService,
   getGapResolutionService,
+  getPhase1DiagnosisService,
 } from "@/foundation";
+import { parseReferenceLines } from "@/domain/phase1-diagnosis-review-card";
 import { deriveHumanAuthority } from "@/domain/server-authority";
 import {
   evidenceExtractionFailureTarget,
@@ -276,6 +278,93 @@ export async function analyseEvidenceAction(formData: FormData) {
     await getEvidenceCoherenceService().analyseCurrentSnapshot({ businessId });
   } catch {
     target += "?error=1";
+  }
+  redirect(target);
+}
+
+function diagnosisTarget(businessId: string, error?: unknown) {
+  const base = `/businesses/${businessId}/diagnosis`;
+  return error === undefined ? base : `${base}?error=${encodeURIComponent(errorMessage(error))}`;
+}
+
+/** Human-initiated Phase 1 Diagnosis of the latest snapshot. */
+export async function generateDiagnosisAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = diagnosisTarget(businessId);
+  try {
+    await getPhase1DiagnosisService().generate({ businessId });
+  } catch (error) {
+    target = diagnosisTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function startDiagnosisReviewAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = diagnosisTarget(businessId);
+  try {
+    await getPhase1DiagnosisService().startReview({
+      businessId,
+      runId: text(formData, "runId"),
+      reviewerId: text(formData, "reviewerId"),
+    });
+  } catch (error) {
+    target = diagnosisTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function reviewDiagnosisItemAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  const decision = text(formData, "decision");
+  let target = diagnosisTarget(businessId);
+  try {
+    await getPhase1DiagnosisService().reviewItem({
+      businessId,
+      reviewSessionId: text(formData, "reviewSessionId"),
+      reviewerId: text(formData, "reviewerId"),
+      diagnosisItemId: text(formData, "diagnosisItemId"),
+      decision,
+      correctedPayload: decision === "CORRECTED" ? {
+        itemType: text(formData, "itemType"),
+        statement: text(formData, "statement"),
+        rationale: text(formData, "rationale"),
+        grounding: text(formData, "grounding"),
+        materiality: text(formData, "materiality"),
+        interpretationConfidence: nullableText(formData, "interpretationConfidence"),
+        limitations: nullableText(formData, "limitations"),
+        references: parseReferenceLines(text(formData, "references")),
+      } : undefined,
+      reason: optionalText(formData, "reason"),
+    });
+  } catch (error) {
+    target = diagnosisTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function approveDiagnosisAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = diagnosisTarget(businessId);
+  try {
+    await getPhase1DiagnosisService().approve({
+      businessId,
+      reviewSessionId: text(formData, "reviewSessionId"),
+      reviewerId: text(formData, "reviewerId"),
+    });
+  } catch (error) {
+    target = diagnosisTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function requestDiagnosisRevisionAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = diagnosisTarget(businessId);
+  try {
+    await getPhase1DiagnosisService().requestRevision({ businessId, reason: optionalText(formData, "reason") });
+  } catch (error) {
+    target = diagnosisTarget(businessId, error);
   }
   redirect(target);
 }

@@ -78,6 +78,7 @@ export function BusinessWorkspace({ model }: { model: WorkspaceModel }) {
     {!archived ? <>
       <section className="secondary-actions" aria-label="Business actions">
         <Link className="button-link secondary-link" href={`/businesses/${model.business.id}/evidence-quality`}>Evidence Quality</Link>
+        <Link className="button-link secondary-link" href={`/businesses/${model.business.id}/diagnosis`}>Phase 1 Diagnosis</Link>
         {model.canAddInformation ? <Link className="button-link secondary-link" href={`/businesses/${model.business.id}/information`}>Add Information</Link> : null}
         {model.activeReviewHref ? <Link className="button-link" href={model.activeReviewHref}>Continue Evidence Review</Link> : null}
       </section>
