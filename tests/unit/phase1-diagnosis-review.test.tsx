@@ -13,7 +13,7 @@ import {
   parseReferenceLines,
 } from "@/domain/phase1-diagnosis-review-card";
 import type { DiagnosisDisplayItem, DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
-import { Phase1Diagnosis } from "../../app/phase1-diagnosis";
+import { Phase1Diagnosis, formatApprovalTime } from "../../app/phase1-diagnosis";
 
 const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll("\"", "&quot;");
 
@@ -392,5 +392,88 @@ describe("Final reviewed item surface (M4-13)", () => {
     expect(renderToStaticMarkup(createElement(Phase1Diagnosis, { model: allRejected }))).not.toContain(statement);
     const completed = model({ ...reviewed, workflowState: "PHASE1_APPROVED", session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" } });
     expect(renderToStaticMarkup(createElement(Phase1Diagnosis, { model: completed }))).not.toContain(statement);
+  });
+});
+
+describe("Approved diagnosis presentation", () => {
+  const corrected = { ...generated(model().items[0]), statement: "Final corrected statement.", grounding: "hypothesis", limitations: "Corrected limitation." };
+  const approvedModel = model({
+    workflowState: "PHASE1_APPROVED",
+    session: { id: "session-1", reviewerId: "Reviewer", status: "COMPLETED" },
+    items: [decide(model().items[0], "CORRECTED", corrected, "Tighter wording"), decide(model().items[1], "ACCEPTED")],
+    approved: { id: "approved-1", version: 1, approvedBy: "Reviewer", approvedAt: "2026-09-22T12:14:56.497Z", content: {
+      semantics: "Approval accepts this diagnosis as the current analytical basis for the next strategic phase.",
+      decisions: { ACCEPTED: 1, CORRECTED: 1, REJECTED: 0 },
+      items: [
+        { itemRef: "I001", decision: "CORRECTED", itemType: "decision_required", statement: "Final corrected statement.", grounding: "hypothesis", materiality: "medium" },
+        { itemRef: "I002", decision: "ACCEPTED", itemType: "position", statement: "Revenue is approximately £240,000.", grounding: "evidence_backed", materiality: "high" },
+      ],
+      excludedItems: [],
+    } },
+  });
+  const html = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: approvedModel }));
+  const reviewHtml = renderToStaticMarkup(createElement(Phase1Diagnosis, { model: model() }));
+  const reviewCopy = "Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with.";
+
+  it("makes the approved state obvious at the top", () => {
+    expect(html).toContain("Phase 1 Diagnosis — Approved</h1>");
+    expect(html).toContain("Phase 1 Diagnosis approved</h2>");
+    expect(html).toContain("Workflow: PHASE1 APPROVED");
+    expect(html).toContain('Approved by Reviewer on <time dateTime="2026-09-22T12:14:56.497Z">22 September 2026, 13:14 BST</time>');
+    expect(html).toContain("<li>Version 1</li>");
+    expect(html).toContain("<li>2 diagnosis items</li>");
+    expect(html).toContain("<li>1 accepted · 1 corrected · 0 rejected</li>");
+    expect(html.indexOf("Phase 1 Diagnosis approved")).toBeLessThan(html.indexOf('id="approved-heading"'));
+  });
+
+  it("renders the approved diagnosis before the reviewed items, gaps, calculations and provenance", () => {
+    const order = ['id="approved-heading"', 'data-section="items"', 'data-section="gaps"', 'data-section="calculations"', "Provenance (recorded by Baslon OS, read-only)"]
+      .map((marker) => html.indexOf(marker));
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+    // Existing content is kept: semantics, decision count, gaps wording, calculations and read-only provenance.
+    expect(html).toContain("Approval accepts this diagnosis as the current analytical basis for the next strategic phase.");
+    expect(html).toContain("Decisions: 1 accepted · 1 corrected · 0 rejected");
+    expect(html).toContain("Missing data is not evidence of poor performance.");
+    expect(html).toContain("calculated, not founder-supplied evidence");
+  });
+
+  it("titles the items Reviewed diagnosis items, with read-only approved copy instead of the review-stage sentence", () => {
+    expect(html).toContain("Reviewed diagnosis items</h2>");
+    expect(html).not.toContain("Diagnosis items</h2>");
+    expect(html).not.toContain(reviewCopy);
+    expect(html).toContain("These are the final reviewed diagnosis items that form the approved Phase 1 diagnosis. Corrected items show the final approved values, with the original AI proposal retained below for audit.");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain('value="ACCEPTED"');
+  });
+
+  it("keeps the review stage unchanged in PHASE1_AWAITING_REVIEW", () => {
+    expect(reviewHtml).toContain("Phase 1 Diagnosis</h1>");
+    expect(reviewHtml).not.toContain("Phase 1 Diagnosis — Approved");
+    expect(reviewHtml).toContain("Diagnosis items</h2>");
+    expect(reviewHtml).not.toContain("Reviewed diagnosis items");
+    expect(reviewHtml).toContain(reviewCopy);
+    expect(reviewHtml).toContain('value="ACCEPTED"');
+    expect(reviewHtml).toContain('value="CORRECTED"');
+    expect(reviewHtml).toContain('value="REJECTED"');
+    // Review-stage order is unchanged: provenance, gaps, calculations, then items.
+    const order = ["Provenance (recorded by Baslon OS, read-only)", 'data-section="gaps"', 'data-section="calculations"', 'data-section="items"'].map((marker) => reviewHtml.indexOf(marker));
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+  });
+
+  it("keeps corrected-item audit and accepted-item presentation unchanged", () => {
+    const article = (ref: string) => { const start = html.indexOf(`aria-label="Diagnosis item ${ref}"`); return html.slice(start, html.indexOf("</article>", start)); };
+    expect(article("I001")).toContain("Decision: CORRECTED</strong> — Tighter wording");
+    expect(article("I001")).toMatch(/<section data-section="effective"[^>]*><h3>Final corrected statement\.<\/h3>/);
+    expect(article("I001")).toContain('<details class="original-item" data-section="original"><summary>Original AI diagnosis item (audit, read-only)</summary>');
+    expect(article("I001")).toContain("Pricing strategy needs a decision.");
+    expect(article("I002")).toContain("Decision: ACCEPTED</strong>");
+    expect(article("I002")).toMatch(/<section data-section="effective"[^>]*><h3>Revenue is approximately £240,000\.<\/h3>/);
+    expect(article("I002")).not.toContain('data-section="original"');
+  });
+
+  it("formats approval times for people in UK time without changing the stored value", () => {
+    expect(formatApprovalTime("2026-09-22T12:14:56.497Z")).toBe("22 September 2026, 13:14 BST");
+    expect(formatApprovalTime("2026-12-01T09:05:00.000Z")).toBe("1 December 2026, 09:05 GMT");
   });
 });

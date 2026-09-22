@@ -162,18 +162,53 @@ function Provenance({ model }: { model: DiagnosisViewModel }) {
   </details>;
 }
 
+type ApprovedContent = {
+  semantics?: string;
+  decisions?: Record<string, number>;
+  items?: Array<{ itemRef: string; decision: string; itemType: string; statement: string; grounding: string; materiality: string }>;
+  excludedItems?: Array<{ itemRef: string; reason: string | null }>;
+};
+
+/**
+ * A stored UTC timestamp shown for people, in UK time (the product's launch
+ * market). The stored value is unchanged and kept in the element's dateTime.
+ */
+export function formatApprovalTime(iso: string): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short",
+  }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} ${parts.timeZoneName}`;
+}
+
+function ApprovalTime({ iso }: { iso: string }) {
+  return <time dateTime={iso}>{formatApprovalTime(iso)}</time>;
+}
+
+/** Approved state: make the outcome obvious before any supporting detail. */
+function ApprovedSummary({ model }: { model: DiagnosisViewModel }) {
+  const approved = model.approved!;
+  const content = approved.content as ApprovedContent;
+  const decisions = content.decisions ?? {};
+  return <section className="status-panel" aria-labelledby="approved-summary-heading">
+    <p className="eyebrow">Workflow: {label(model.workflowState)}</p>
+    <h2 id="approved-summary-heading">Phase 1 Diagnosis approved</h2>
+    <ul className="summary-list">
+      <li>Approved by {approved.approvedBy} on <ApprovalTime iso={approved.approvedAt} /></li>
+      <li>Version {approved.version}</li>
+      <li>{(content.items ?? []).length} diagnosis items</li>
+      <li>{decisions.ACCEPTED ?? 0} accepted · {decisions.CORRECTED ?? 0} corrected · {decisions.REJECTED ?? 0} rejected</li>
+    </ul>
+  </section>;
+}
+
 function Approved({ model }: { model: DiagnosisViewModel }) {
   const approved = model.approved!;
-  const content = approved.content as {
-    semantics?: string;
-    decisions?: Record<string, number>;
-    items?: Array<{ itemRef: string; decision: string; itemType: string; statement: string; grounding: string; materiality: string }>;
-    excludedItems?: Array<{ itemRef: string; reason: string | null }>;
-  };
+  const content = approved.content as ApprovedContent;
   return <section className="panel" aria-labelledby="approved-heading">
     <p className="eyebrow">Approved diagnosis · version {approved.version}</p>
     <h2 id="approved-heading">Approved analytical basis for the next strategic phase</h2>
-    <p>Approved by {approved.approvedBy} at {approved.approvedAt}.</p>
+    <p>Approved by {approved.approvedBy} at <ApprovalTime iso={approved.approvedAt} />.</p>
     <p className="note">{content.semantics}</p>
     <p className="muted">Decisions: {Object.entries(content.decisions ?? {}).map(([key, value]) => `${value} ${key.toLowerCase()}`).join(" · ")}</p>
     <ol>{(content.items ?? []).map((item) => <li key={item.itemRef}><strong>{label(item.itemType)}</strong> ({label(item.grounding)}, {item.materiality} materiality, {item.decision.toLowerCase()}): {item.statement}</li>)}</ol>
@@ -191,10 +226,32 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
   const reviewing = model.workflowState === "PHASE1_AWAITING_REVIEW" && run?.status === "SUCCEEDED";
   const allDecided = model.items.length > 0 && model.items.every((item) => item.decision);
   const anySurviving = model.items.some((item) => item.decision?.decision === "ACCEPTED" || item.decision?.decision === "CORRECTED");
+  // Once approved, lead with the outcome; supporting detail follows (presentation only).
+  const approvedState = model.approved !== null;
+
+  const provenance = run ? <Provenance model={model} /> : null;
+  const gaps = model.gaps.length ? <section data-section="gaps"><h2>Known evidence gaps carried forward</h2><p className="muted">These remain open. Missing data is not evidence of poor performance.</p>
+    <ul>{model.gaps.map((gap) => <li key={gap.handle}><code>{gap.handle}</code> · {gap.materiality} materiality · {label(gap.area)}: {gap.missingInformation}</li>)}</ul></section> : null;
+  const calculations = model.calculations.length ? <section data-section="calculations"><h2>Software calculations</h2><p className="muted">Derived by software from canonical Metrics. They are calculated, not founder-supplied evidence.</p>
+    <ul>{model.calculations.map((calculation) => <li key={calculation.handle}><code>{calculation.handle}</code> · {calculation.label}: {numeric(calculation)} · Formula: {calculation.formula} · Sources: {calculation.sources.join(", ")} · Rule {calculation.ruleKey} {calculation.ruleVersion}</li>)}</ul></section> : null;
+  const items = model.items.length ? <section data-section="items">
+    <h2>{approvedState ? "Reviewed diagnosis items" : "Diagnosis items"}</h2>
+    <p className="note">{approvedState
+      ? "These are the final reviewed diagnosis items that form the approved Phase 1 diagnosis. Corrected items show the final approved values, with the original AI proposal retained below for audit."
+      : "Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with."}</p>
+    {reviewing && !model.session && !archived ? <form action={startDiagnosisReviewAction} className="panel">
+      <input type="hidden" name="businessId" value={business.id} />
+      <input type="hidden" name="runId" value={run!.id} />
+      <label>Your name or identifier<input name="reviewerId" required /></label>
+      <button type="submit">Start review</button>
+    </form> : null}
+    <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} />)}</div>
+  </section> : null;
+
   return <main>
     <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${business.id}`}>{business.name}</Link> <span aria-hidden="true">/</span> Phase 1 Diagnosis</nav>
     <p className="context-name">{business.name}</p>
-    <h1 className="task-title">Phase 1 Diagnosis</h1>
+    <h1 className="task-title">{approvedState ? "Phase 1 Diagnosis — Approved" : "Phase 1 Diagnosis"}</h1>
     <p className="lede">An AI analysis of one immutable evidence snapshot. It is analytical, not canonical: it never changes Claims, Evidence or Metrics, and nothing advances until a person reviews every item and approves.</p>
     {error ? <p className="error" role="alert">{error}</p> : null}
     {archived ? <div className="notice"><strong>Archived — read-only</strong></div> : null}
@@ -216,25 +273,19 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
     {!canGenerate && !run && !archived ? <section className="empty-state"><h2>Phase 1 Diagnosis is not available yet</h2><p>Continue with the latest snapshot&apos;s known gaps first.</p></section> : null}
     {run?.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Diagnosis in progress</p><h2>Analysing snapshot {model.snapshot?.version}</h2></section> : null}
 
-    {run ? <Provenance model={model} /> : null}
-
-    {model.gaps.length ? <section><h2>Known evidence gaps carried forward</h2><p className="muted">These remain open. Missing data is not evidence of poor performance.</p>
-      <ul>{model.gaps.map((gap) => <li key={gap.handle}><code>{gap.handle}</code> · {gap.materiality} materiality · {label(gap.area)}: {gap.missingInformation}</li>)}</ul></section> : null}
-    {model.calculations.length ? <section><h2>Software calculations</h2><p className="muted">Derived by software from canonical Metrics. They are calculated, not founder-supplied evidence.</p>
-      <ul>{model.calculations.map((calculation) => <li key={calculation.handle}><code>{calculation.handle}</code> · {calculation.label}: {numeric(calculation)} · Formula: {calculation.formula} · Sources: {calculation.sources.join(", ")} · Rule {calculation.ruleKey} {calculation.ruleVersion}</li>)}</ul></section> : null}
-
-    {model.approved ? <Approved model={model} /> : null}
-
-    {model.items.length ? <section><h2>Diagnosis items</h2>
-      <p className="note">Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with.</p>
-      {reviewing && !model.session && !archived ? <form action={startDiagnosisReviewAction} className="panel">
-        <input type="hidden" name="businessId" value={business.id} />
-        <input type="hidden" name="runId" value={run!.id} />
-        <label>Your name or identifier<input name="reviewerId" required /></label>
-        <button type="submit">Start review</button>
-      </form> : null}
-      <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} />)}</div>
-    </section> : null}
+    {approvedState ? <>
+      <ApprovedSummary model={model} />
+      <Approved model={model} />
+      {items}
+      {gaps}
+      {calculations}
+      {provenance}
+    </> : <>
+      {provenance}
+      {gaps}
+      {calculations}
+      {items}
+    </>}
 
     {reviewing && model.session?.status === "OPEN" && !archived ? <section className="panel" aria-labelledby="approve-heading">
       <h2 id="approve-heading">Approve the diagnosis</h2>
