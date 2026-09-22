@@ -42,6 +42,7 @@ import {
   diagnosisService,
   handleOf,
   phase1ReadyBusiness as readyBusiness,
+  REVENUE_STATEMENT,
   validDiagnosis,
 } from "../fixtures/phase1-diagnosis-fixture";
 
@@ -400,6 +401,75 @@ describe("Phase 1 Diagnosis application flow (synthetic data only)", () => {
       // Diagnosis itself never changed canonical state; only Evidence Review did.
       expect(await canonicalFingerprint(businessId)).toBe(canonicalAfterEvidence);
       expect(await database.select().from(businessStateSnapshots).where(eq(businessStateSnapshots.businessId, businessId))).toHaveLength(2);
+    });
+  });
+
+  describe("effective reviewed item (M4-13)", () => {
+    it("shows the page exactly what approval persists: generated for ACCEPTED, corrected for CORRECTED, nothing for REJECTED", async () => {
+      const fixture = await phase1ReadyBusiness("Diagnosis effective item");
+      const businessId = fixture.business.id;
+      const model = new FakeDiagnosisModel(validDiagnosis);
+      const diagnosis = service(model, fixture.orchestrator);
+      const { run } = await diagnosis.generate({ businessId });
+      const items = (await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, run.id)))
+        .toSorted((left, right) => left.itemRef.localeCompare(right.itemRef));
+      const session = await diagnosis.startReview({ businessId, runId: run.id, reviewerId: "Reviewer" });
+      const base = { businessId, reviewSessionId: session.id, reviewerId: "Reviewer" };
+      const input = model.inputs[0];
+      // I002 corrected in grounding, confidence, limitations and references.
+      const corrected = {
+        ...validDiagnosis(input).items[1],
+        grounding: "hypothesis",
+        interpretationConfidence: "low",
+        limitations: "Corrected limitation: cost and profit data are untracked.",
+        references: [
+          { entityType: "evidence", ref: handleOf(input, REVENUE_STATEMENT), role: "context" },
+          { entityType: "gap", ref: "G001", role: "limiting_gap" },
+        ],
+      };
+      await diagnosis.reviewItem({ ...base, diagnosisItemId: items[0].id, decision: "ACCEPTED" });
+      await diagnosis.reviewItem({ ...base, diagnosisItemId: items[1].id, decision: "CORRECTED", correctedPayload: corrected, reason: "Tighter limitation" });
+      await diagnosis.reviewItem({ ...base, diagnosisItemId: items[2].id, decision: "REJECTED", reason: "Not needed" });
+
+      // Correction revalidation is preserved: an unresolvable reference is still refused.
+      const other = await phase1ReadyBusiness("Diagnosis effective item invalid correction");
+      const otherDiagnosis = service(new FakeDiagnosisModel(validDiagnosis), other.orchestrator);
+      const { run: otherRun } = await otherDiagnosis.generate({ businessId: other.business.id });
+      const [otherItem] = (await database.select().from(diagnosisItems).where(eq(diagnosisItems.analysisRunId, otherRun.id)))
+        .toSorted((left, right) => left.itemRef.localeCompare(right.itemRef));
+      const otherSession = await otherDiagnosis.startReview({ businessId: other.business.id, runId: otherRun.id, reviewerId: "Reviewer" });
+      await expect(otherDiagnosis.reviewItem({
+        businessId: other.business.id, reviewSessionId: otherSession.id, reviewerId: "Reviewer", diagnosisItemId: otherItem.id,
+        decision: "CORRECTED", correctedPayload: { ...corrected, references: [{ entityType: "gap", ref: "G009", role: "limiting_gap" }] },
+      })).rejects.toThrow();
+
+      const view = (await diagnosis.get(businessId))!;
+      const [accepted, correctedView, rejected] = view.items;
+      expect(accepted.effective).toMatchObject({ statement: items[0].statement, grounding: items[0].grounding, limitations: items[0].limitations });
+      expect(correctedView.effective).toMatchObject({
+        statement: corrected.statement, grounding: "hypothesis", interpretationConfidence: "low", limitations: corrected.limitations,
+        references: [
+          { handle: handleOf(input, REVENUE_STATEMENT), entityType: "evidence", role: "context", label: REVENUE_STATEMENT },
+          { handle: "G001", entityType: "gap", role: "limiting_gap", label: "Costs and profit are untracked." },
+        ],
+      });
+      // The original generated item is untouched and still available for audit.
+      expect(correctedView.grounding).toBe("interpretive");
+      expect(correctedView.limitations).toBe(items[1].limitations);
+      expect(rejected.effective).toBeNull();
+
+      // Approve, then prove the page's effective items equal the server-built artifact field for field.
+      const approved = await diagnosis.approve(base);
+      const artifactItems = (approved.approvedContent as { items: Array<Record<string, unknown>> }).items;
+      expect(artifactItems.map((entry) => entry.itemRef)).toEqual(["I001", "I002"]);
+      for (const [viewItem, artifactItem] of [[accepted, artifactItems[0]], [correctedView, artifactItems[1]]] as const) {
+        const { references, ...fields } = viewItem.effective!;
+        expect(artifactItem).toMatchObject(fields);
+        expect((artifactItem.references as Array<Record<string, unknown>>).map(({ handle, entityType, role, label }) => ({ handle, entityType, role, label })))
+          .toEqual(references);
+      }
+      expect(artifactItems[1]).toMatchObject({ grounding: "hypothesis", limitations: corrected.limitations, interpretationConfidence: "low" });
+      expect((approved.approvedContent as { excludedItems: Array<{ itemRef: string }> }).excludedItems.map((entry) => entry.itemRef)).toEqual(["I003"]);
     });
   });
 

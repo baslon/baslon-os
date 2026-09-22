@@ -12,6 +12,7 @@ import {
 import { ANNUALISED_RUN_RATE_RULE } from "@/domain/phase1-diagnosis-calculations";
 import {
   buildApprovedDiagnosisArtifact,
+  effectiveDiagnosisItem,
   persistedReferenceTarget,
 } from "@/domain/phase1-diagnosis-artifact";
 import {
@@ -415,6 +416,8 @@ export class Phase1DiagnosisService {
     }));
     model.items = items.map((item) => {
       const review = reviews.find((entry) => entry.diagnosisItemId === item.id);
+      // The same effective-item function the approved artifact uses (M4-13).
+      const effective = review ? effectiveDiagnosisItem(item, review, rebuilt.references) : null;
       return {
         id: item.id,
         itemRef: item.itemRef,
@@ -431,6 +434,10 @@ export class Phase1DiagnosisService {
           return { handle: entry?.[0] ?? "unknown", entityType: target.entityType, role: reference.role, label: entry?.[1].label ?? "" };
         }),
         decision: review ? { decision: review.decision, reason: review.reason, correctedPayload: review.correctedPayload } : null,
+        effective: effective ? {
+          ...effective,
+          references: effective.references.map(({ handle, entityType, role, label }) => ({ handle, entityType, role, label })),
+        } : null,
       };
     });
     model.session = session ? { id: session.id, reviewerId: session.reviewerId, status: session.status } : null;
@@ -441,6 +448,18 @@ export class Phase1DiagnosisService {
     return model;
   }
 }
+
+/** The eight material fields of a diagnosis item, with references resolved for display. */
+export type DiagnosisDisplayItem = {
+  itemType: string;
+  statement: string;
+  rationale: string;
+  grounding: string;
+  materiality: string;
+  interpretationConfidence: string | null;
+  limitations: string | null;
+  references: Array<{ handle: string; entityType: string; role: string; label: string }>;
+};
 
 export type DiagnosisViewModel = {
   business: { id: string; name: string; status: string };
@@ -476,6 +495,8 @@ export type DiagnosisViewModel = {
     limitations: string | null;
     references: Array<{ handle: string; entityType: string; role: string; label: string }>;
     decision: { decision: string; reason: string | null; correctedPayload: Record<string, unknown> | null } | null;
+    /** What approval will persist for this item; null while undecided or when REJECTED. */
+    effective: DiagnosisDisplayItem | null;
   }>;
   session: { id: string; reviewerId: string; status: string } | null;
   approved: { id: string; version: number; approvedBy: string; approvedAt: string; content: Record<string, unknown> } | null;

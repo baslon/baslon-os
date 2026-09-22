@@ -82,11 +82,12 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 5. **Medium — customers and market:** reliable customer counts, revenue, lifetime value, retention and conversion metrics are not available by customer segment.
 6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
 
-**Phase 1 boundary: Baslon Digital remains `PHASE1_READY` v18. Phase 1 Diagnosis has not started.**
-The resolution of M4-04 / M4-05 / M4-06 / M4-07 means the diagnosis contract, deployment and
-human-approval architecture are complete. It does **not** authorise a diagnosis run. The
-first Baslon Digital Phase 1 Diagnosis still requires separate Product Owner approval.
-The six validated gaps above remain open.
+**Phase 1 state: diagnosis generated and human review decisions recorded; approval NOT executed.**
+- **Generated:** 22 September 2026, with Product Owner approval, in exactly one attempt. Run `1a03e409-0f2e-4bb7-9de9-01be66c0f84f`: SUCCEEDED, bound to Snapshot 4, 14 items, 6 software calculations.
+- **Reviewed:** the Product Owner's review decisions were entered through the normal UI in session `db3f8a0a-…` (reviewer "David Demetrius"): **10 ACCEPTED / 4 CORRECTED / 0 REJECTED**. I001, I002, I006 and I014 were corrected. The session stays OPEN until approval, by design.
+- **Workflow:** `PHASE1_AWAITING_REVIEW`, version 20. 0 approved diagnoses and no `APPROVE_PHASE1`, `REQUEST_REVISION` or `REJECT_PHASE1`.
+- **M4-13 blocks approval** until the review-surface fix is reviewed, merged and verified. The page did not show the complete corrected values. The fix is implemented on `claude/milestone-4`, awaiting Solution Architect review.
+- **Unchanged:** canonical data and Snapshot 4 (39/59/18/54, `bd0e75c5…`). The six validated gaps remain open.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
 `CONTINUE_WITH_GAPS`, `GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE` and `APPROVE_PHASE1`
@@ -111,7 +112,7 @@ deployment together, not on the merge alone.
   - All 7 tables had 0 rows, and there were 0 `phase1_diagnosis` runs.
   - Permanent Delete coverage was verified by tests, without deleting a live Business.
   - Live application compatibility was verified with read-only page loads.
-- **Baslon Digital unchanged:** rebuild `a658df7e-…` is `PHASE1_READY` v18 on Snapshot 4 `da6e9a8e-…` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`), with 39 Claims, 59 Evidence, 18 Metrics and 54 relationships (row fingerprints identical before and after migration). There are 0 `GENERATE_PHASE1` transitions.
+- **Baslon Digital unchanged:** rebuild `a658df7e-…` is `PHASE1_READY` v18 on Snapshot 4 `da6e9a8e-…` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`), with 39 Claims, 59 Evidence, 18 Metrics and 54 relationships (row fingerprints identical before and after migration). There were 0 `GENERATE_PHASE1` transitions at migration time.
 - **Repository baseline** after the status PR #14: `57ad36e`.
 
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
@@ -141,7 +142,7 @@ Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
 grounding; non-blocking for Snapshot 4 Phase 1 under the no-`v7` guardrail), B-31 (compound number words), B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
 is defined but not reachable) and B-33 (SQL migration line endings). B-19 is unchanged.
 
-Not started: M4-02B and any Phase 1 Diagnosis run (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
+Not started: M4-02B. Phase 1 approval has not been executed (see Phase 1 state above). The current Baslon Digital Business has not been archived.
 
 ## Active Baslon Digital Business
 
