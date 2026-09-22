@@ -74,6 +74,67 @@ export function handleIndex(references: DiagnosisReferenceMap): Map<string, stri
   return new Map([...references].map(([handle, reference]) => [`${reference.entityType}:${reference.id}`, handle]));
 }
 
+export type EffectiveDiagnosisReference = {
+  entityType: DiagnosisEntityType;
+  handle: string;
+  role: string;
+  id: string;
+  label: string;
+};
+
+/** The material values a decided item contributes to an approved diagnosis. */
+export type EffectiveDiagnosisItem = {
+  itemType: string;
+  statement: string;
+  rationale: string;
+  grounding: string;
+  materiality: string;
+  interpretationConfidence: string | null;
+  limitations: string | null;
+  references: EffectiveDiagnosisReference[];
+};
+
+/**
+ * The effective reviewed item (M4-13): what approval will persist for one
+ * decided item. ACCEPTED is the immutable generated item; CORRECTED is the
+ * complete corrected payload, revalidated against the run's references;
+ * REJECTED contributes nothing (null). The approved-artifact builder and the
+ * review page both use this, so a reviewer sees exactly what they approve.
+ */
+export function effectiveDiagnosisItem(
+  item: PersistedItem,
+  review: Pick<PersistedReview, "decision" | "correctedPayload">,
+  references: DiagnosisReferenceMap,
+): EffectiveDiagnosisItem | null {
+  if (review.decision === "REJECTED") return null;
+  if (review.decision === "CORRECTED") {
+    const corrected = parseDiagnosisItem(review.correctedPayload);
+    const { issues, resolved } = validateDiagnosisItem(corrected, references, `corrected ${item.itemRef}`);
+    if (issues.length) throw new Phase1DiagnosisContractError(issues);
+    return {
+      ...resolved,
+      references: resolved.references.map(({ entityType, ref, role, id, label }) => ({ entityType, handle: ref, role, id, label })),
+    };
+  }
+  if (review.decision !== "ACCEPTED") throw new Error(`Diagnosis item ${item.itemRef} has no valid decision`);
+  const handles = handleIndex(references);
+  return {
+    itemType: item.itemType,
+    statement: item.statement,
+    rationale: item.rationale,
+    grounding: item.grounding,
+    materiality: item.materiality,
+    interpretationConfidence: item.interpretationConfidence,
+    limitations: item.limitations,
+    references: item.references.map((reference) => {
+      const target = persistedReferenceTarget(reference);
+      const handle = handles.get(`${target.entityType}:${target.id}`);
+      if (!handle) throw new Error(`Persisted ${target.entityType} ${target.id} is not in this diagnosis input`);
+      return { entityType: target.entityType, handle, role: reference.role, id: target.id, label: references.get(handle)!.label };
+    }),
+  };
+}
+
 /**
  * Builds the frozen approved-diagnosis artifact, server-side, from immutable
  * items, validated decisions, deterministic calculations and resolved
@@ -122,42 +183,12 @@ export function buildApprovedDiagnosisArtifact(input: {
     }
     const decision = review.decision as DiagnosisReviewDecision;
     counts[decision] += 1;
-    if (decision === "REJECTED") {
+    const effective = effectiveDiagnosisItem(item, review, input.references);
+    if (!effective) {
       excluded.push({ itemRef: item.itemRef, diagnosisItemId: item.id, decision, reason: review.reason });
       continue;
     }
-    if (decision === "CORRECTED") {
-      const corrected = parseDiagnosisItem(review.correctedPayload);
-      const { issues, resolved } = validateDiagnosisItem(corrected, input.references, `corrected ${item.itemRef}`);
-      if (issues.length) throw new Phase1DiagnosisContractError(issues);
-      items.push({
-        itemRef: item.itemRef,
-        diagnosisItemId: item.id,
-        decision,
-        reason: review.reason,
-        ...resolved,
-        references: resolved.references.map(({ entityType, ref, role, id, label }) => ({ entityType, handle: ref, role, id, label })),
-      });
-      continue;
-    }
-    items.push({
-      itemRef: item.itemRef,
-      diagnosisItemId: item.id,
-      decision,
-      reason: review.reason,
-      itemType: item.itemType,
-      statement: item.statement,
-      rationale: item.rationale,
-      grounding: item.grounding,
-      materiality: item.materiality,
-      interpretationConfidence: item.interpretationConfidence,
-      limitations: item.limitations,
-      references: item.references.map((reference) => {
-        const target = persistedReferenceTarget(reference);
-        const handle = handleFor(target.entityType, target.id);
-        return { entityType: target.entityType, handle, role: reference.role, id: target.id, label: input.references.get(handle)!.label };
-      }),
-    });
+    items.push({ itemRef: item.itemRef, diagnosisItemId: item.id, decision, reason: review.reason, ...effective });
   }
 
   if (!items.length) throw new Error("An approved diagnosis must contain at least one accepted or corrected item");

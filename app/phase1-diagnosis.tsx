@@ -18,7 +18,7 @@ import {
   diagnosisReviewFields,
   formatReferenceLines,
 } from "@/domain/phase1-diagnosis-review-card";
-import type { DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
+import type { DiagnosisDisplayItem, DiagnosisViewModel } from "@/services/phase1-diagnosis-service";
 
 type Item = DiagnosisViewModel["items"][number];
 
@@ -31,8 +31,8 @@ function numeric(calculation: DiagnosisViewModel["calculations"][number]) {
   return `${value} ${calculation.unit} (precision: ${calculation.valuePrecision})`;
 }
 
-/** Renders one material field exactly as persisted. */
-function FieldValue({ item, field }: { item: Item; field: (typeof diagnosisReviewFields)[number]["field"] }) {
+/** Renders one material field exactly as given: the generated item or the effective reviewed item. */
+function FieldValue({ item, field }: { item: DiagnosisDisplayItem; field: (typeof diagnosisReviewFields)[number]["field"] }) {
   if (field === "references") {
     return item.references.length
       ? <ul className="reference-list">{item.references.map((reference) => <li key={`${reference.handle}-${reference.role}`}>
@@ -96,18 +96,50 @@ function DecisionForms({ model, item }: { model: DiagnosisViewModel; item: Item 
   </div>;
 }
 
+function Fields({ item }: { item: DiagnosisDisplayItem }) {
+  return <dl className="review-record-details">
+    {diagnosisReviewFields.map(({ field, label: fieldLabel }) => <div key={field} data-field={field}>
+      <dt>{fieldLabel}</dt><dd><FieldValue item={item} field={field} /></dd>
+    </div>)}
+  </dl>;
+}
+
+/**
+ * Once decided, the card leads with the effective reviewed item: exactly what
+ * approval will persist (M4-13). A corrected or rejected item keeps its
+ * original AI proposal only in a labelled, collapsed audit section.
+ */
 function ItemCard({ model, item }: { model: DiagnosisViewModel; item: Item }) {
   const canDecide = model.session?.status === "OPEN" && !item.decision && model.business.status !== "archived";
+  const decision = item.decision?.decision;
+  const reason = item.decision?.reason ? ` — ${item.decision.reason}` : "";
+  const original = <details className="original-item" data-section="original">
+    <summary>Original AI diagnosis item (audit, read-only)</summary>
+    <Fields item={item} />
+  </details>;
   return <article className="record-card" aria-label={`Diagnosis item ${item.itemRef}`}>
-    <p className="eyebrow">{item.itemRef} · AI-proposed diagnosis item</p>
-    <h3>{item.statement}</h3>
-    <dl className="review-record-details">
-      {diagnosisReviewFields.map(({ field, label: fieldLabel }) => <div key={field} data-field={field}>
-        <dt>{fieldLabel}</dt><dd><FieldValue item={item} field={field} /></dd>
-      </div>)}
-    </dl>
-    {item.decision ? <p className="notice"><strong>Decision: {item.decision.decision}</strong>{item.decision.reason ? ` — ${item.decision.reason}` : ""}
-      {item.decision.correctedPayload ? <span className="muted"> Corrected values: {String(item.decision.correctedPayload.statement ?? "")}</span> : null}</p> : null}
+    {!decision ? <>
+      <p className="eyebrow">{item.itemRef} · AI-proposed diagnosis item</p>
+      <h3>{item.statement}</h3>
+      <Fields item={item} />
+    </> : null}
+    {decision === "ACCEPTED" || decision === "CORRECTED" ? <>
+      <p className="eyebrow">{item.itemRef} · Final reviewed diagnosis item</p>
+      <p className="notice"><strong>Decision: {decision}</strong>{reason}
+        <span className="muted">{decision === "ACCEPTED"
+          ? " The generated item is accepted unchanged."
+          : " The corrected values below replace the AI proposal."}</span></p>
+      <section data-section="effective" aria-label={`Final reviewed item ${item.itemRef}`}>
+        <h3>{item.effective!.statement}</h3>
+        <Fields item={item.effective!} />
+      </section>
+      {decision === "CORRECTED" ? original : null}
+    </> : null}
+    {decision === "REJECTED" ? <>
+      <p className="eyebrow">{item.itemRef} · Rejected diagnosis item</p>
+      <p className="notice"><strong>Decision: REJECTED</strong>{reason} This item will not be included in the approved diagnosis.</p>
+      {original}
+    </> : null}
     {canDecide ? <DecisionForms model={model} item={item} /> : null}
   </article>;
 }
@@ -211,6 +243,7 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
         ? <p className="notice" role="status">Every item was rejected, so this diagnosis cannot be approved. Request a revised diagnosis below.</p>
         : allDecided
         ? <form action={approveDiagnosisAction}>
+          <p className="notice" role="note"><strong>You are approving the final reviewed diagnosis shown above.</strong> Corrected items use the corrected values displayed here; rejected items will not be included.</p>
           <input type="hidden" name="businessId" value={business.id} />
           <input type="hidden" name="reviewSessionId" value={model.session.id} />
           <input type="hidden" name="reviewerId" value={model.session.reviewerId} />
