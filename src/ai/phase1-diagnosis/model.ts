@@ -3,6 +3,8 @@ import type { Phase1DiagnosisModelInput } from "@/ai/phase1-diagnosis/contracts"
 export type Phase1DiagnosisModelConfiguration = {
   provider: string;
   model: string;
+  /** The prompt and output contract this model is actually called with; recorded on the run. */
+  promptVersion: string;
   metadata: Record<string, unknown>;
 };
 

@@ -1,6 +1,10 @@
-export const PHASE1_DIAGNOSIS_PROMPT_VERSION = "phase1_diagnosis_v1";
+export const PHASE1_DIAGNOSIS_PROMPT_V1 = "phase1_diagnosis_v1";
+export const PHASE1_DIAGNOSIS_PROMPT_V2 = "phase1_diagnosis_v2";
 
-export const phase1DiagnosisPrompt = `You produce a Phase 1 business diagnosis from one immutable canonical evidence snapshot.
+/** The prompt new diagnosis runs use. Older versions stay readable through version dispatch. */
+export const PHASE1_DIAGNOSIS_PROMPT_VERSION = PHASE1_DIAGNOSIS_PROMPT_V2;
+
+export const phase1DiagnosisPromptV1 = `You produce a Phase 1 business diagnosis from one immutable canonical evidence snapshot.
 
 Analyse only the supplied projection: its Claims, Evidence, Metrics and relationships, the validated evidence gaps, and the software calculations. Do not use outside knowledge about the business. Never invent facts. Your output is an analytical proposal for human review. It is not canonical truth and it does not approve itself.
 
@@ -30,3 +34,8 @@ Numbers. Do not perform arithmetic: use the supplied calculations, which are der
 Qualifiers. Claim/Evidence strengthScore is only confidence that a relationship type is semantically appropriate. Reliability, directness and recency describe evidence and may explain a limitation. None of these is a probability that anything is true or a proof weight. Never combine, average or convert them into a score, probability or confidence.
 
 Materiality (low, medium or high) is whether the issue could materially affect the business or its strategy. It is not truth. interpretationConfidence (low, medium or high, or null) is your confidence in the interpretation only; it is not a probability that anything is true. Keep statements, rationales and limitations concise.`;
+
+/** v2 keeps every v1 rule unchanged and adds the headline label. */
+export const phase1DiagnosisPromptV2 = `${phase1DiagnosisPromptV1}
+
+Headline. Give every item a headline: a short label, in plain business language, for that item's statement, ideally 5 to 12 words and never more than 120 characters, on one line. The headline is only a label. It must be fully supported by the item's own statement and describe the same finding. It must not introduce any fact, cause or number that is not in the statement, must not recommend an action, must not rank, score or prioritise, and must not sound more certain than the statement. For example, for "Profitability cannot be established from the current snapshot", "Profitability cannot yet be established" is correct; "The business is unprofitable" and "Fix profitability first" are not.`;

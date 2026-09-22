@@ -57,6 +57,13 @@
       "when": 1790009081783,
       "tag": "0007_phase1_diagnosis",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790095272199,
+      "tag": "0008_diagnosis_headlines",
+      "breakpoints": true
     }
   ]
 }

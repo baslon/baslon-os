@@ -9,6 +9,7 @@ import {
   getInitialIntakeService,
   getEvidenceCoherenceService,
   getGapResolutionService,
+  getDiagnosisHeadlineService,
   getPhase1DiagnosisService,
 } from "@/foundation";
 import { parseReferenceLines } from "@/domain/phase1-diagnosis-review-card";
@@ -326,6 +327,8 @@ export async function reviewDiagnosisItemAction(formData: FormData) {
       diagnosisItemId: text(formData, "diagnosisItemId"),
       decision,
       correctedPayload: decision === "CORRECTED" ? {
+        // v2 runs review a headline as a material field; v1 runs have none.
+        ...(formData.has("headline") ? { headline: text(formData, "headline") } : {}),
         itemType: text(formData, "itemType"),
         statement: text(formData, "statement"),
         rationale: text(formData, "rationale"),
@@ -365,6 +368,78 @@ export async function requestDiagnosisRevisionAction(formData: FormData) {
     await getPhase1DiagnosisService().requestRevision({ businessId, reason: optionalText(formData, "reason") });
   } catch (error) {
     target = diagnosisTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+function headlinesTarget(businessId: string, error?: unknown) {
+  const base = `/businesses/${businessId}/diagnosis/headlines`;
+  return error === undefined ? base : `${base}?error=${encodeURIComponent(errorMessage(error))}`;
+}
+
+/** Human-initiated: proposes one headline for every approved diagnosis item. */
+export async function proposeDiagnosisHeadlinesAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = headlinesTarget(businessId);
+  try {
+    await getDiagnosisHeadlineService().propose({
+      businessId,
+      approvedDiagnosisId: text(formData, "approvedDiagnosisId"),
+      retryOfFailedRunId: optionalText(formData, "retryOfFailedRunId"),
+    });
+  } catch (error) {
+    target = headlinesTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function startDiagnosisHeadlineReviewAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = headlinesTarget(businessId);
+  try {
+    await getDiagnosisHeadlineService().startReview({
+      businessId,
+      approvedDiagnosisId: text(formData, "approvedDiagnosisId"),
+      proposalRunId: text(formData, "proposalRunId"),
+      reviewerId: text(formData, "reviewerId"),
+    });
+  } catch (error) {
+    target = headlinesTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function reviewDiagnosisHeadlineAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  const decision = text(formData, "decision");
+  let target = headlinesTarget(businessId);
+  try {
+    await getDiagnosisHeadlineService().reviewHeadline({
+      businessId,
+      reviewSessionId: text(formData, "reviewSessionId"),
+      reviewerId: text(formData, "reviewerId"),
+      diagnosisItemId: text(formData, "diagnosisItemId"),
+      decision,
+      correctedHeadline: decision === "CORRECTED" ? text(formData, "correctedHeadline") : undefined,
+      reason: optionalText(formData, "reason"),
+    });
+  } catch (error) {
+    target = headlinesTarget(businessId, error);
+  }
+  redirect(target);
+}
+
+export async function approveDiagnosisHeadlineSetAction(formData: FormData) {
+  const businessId = text(formData, "businessId");
+  let target = headlinesTarget(businessId);
+  try {
+    await getDiagnosisHeadlineService().approve({
+      businessId,
+      reviewSessionId: text(formData, "reviewSessionId"),
+      reviewerId: text(formData, "reviewerId"),
+    });
+  } catch (error) {
+    target = headlinesTarget(businessId, error);
   }
   redirect(target);
 }

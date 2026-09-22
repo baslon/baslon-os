@@ -23,8 +23,13 @@ import {
   contradictions,
   workflowTransitions,
   approvedDiagnoses,
+  approvedDiagnosisHeadlines,
+  approvedDiagnosisHeadlineSets,
   diagnosisCalculations,
   diagnosisCalculationSources,
+  diagnosisHeadlineProposals,
+  diagnosisHeadlineReviews,
+  diagnosisHeadlineReviewSessions,
   diagnosisItemReferences,
   diagnosisItemReviews,
   diagnosisItems,
@@ -78,7 +83,13 @@ export class BusinessDeletionRepository {
         .where(eq(strategyWorkflows.businessId, business.id));
       const workflowIds = workflowRows.map((workflow) => workflow.id);
 
-      // Phase 1 Diagnosis graph, children first.
+      // Phase 1 Diagnosis graph, children first. Companion headlines reference the
+      // approved diagnosis and its items, so they go before both.
+      await tx.delete(approvedDiagnosisHeadlines).where(eq(approvedDiagnosisHeadlines.businessId, business.id));
+      await tx.delete(approvedDiagnosisHeadlineSets).where(eq(approvedDiagnosisHeadlineSets.businessId, business.id));
+      await tx.delete(diagnosisHeadlineReviews).where(eq(diagnosisHeadlineReviews.businessId, business.id));
+      await tx.delete(diagnosisHeadlineReviewSessions).where(eq(diagnosisHeadlineReviewSessions.businessId, business.id));
+      await tx.delete(diagnosisHeadlineProposals).where(eq(diagnosisHeadlineProposals.businessId, business.id));
       await tx.delete(approvedDiagnoses).where(eq(approvedDiagnoses.businessId, business.id));
       await tx.delete(diagnosisItemReviews).where(eq(diagnosisItemReviews.businessId, business.id));
       await tx.delete(diagnosisReviewSessions).where(eq(diagnosisReviewSessions.businessId, business.id));
@@ -116,6 +127,11 @@ export class BusinessDeletionRepository {
       await tx.delete(businessProfiles).where(eq(businessProfiles.businessId, business.id));
 
       const directTables = [
+        approvedDiagnosisHeadlines,
+        approvedDiagnosisHeadlineSets,
+        diagnosisHeadlineReviews,
+        diagnosisHeadlineReviewSessions,
+        diagnosisHeadlineProposals,
         approvedDiagnoses,
         diagnosisItemReviews,
         diagnosisReviewSessions,

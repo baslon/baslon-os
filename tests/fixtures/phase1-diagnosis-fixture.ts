@@ -1,6 +1,14 @@
 import type { Database } from "@/db/client";
 import type { Phase1DiagnosisModel } from "@/ai/phase1-diagnosis/model";
-import type { Phase1DiagnosisModelInput, Phase1DiagnosisOutput } from "@/ai/phase1-diagnosis/contracts";
+import type {
+  Phase1DiagnosisModelInput,
+  Phase1DiagnosisOutput,
+  Phase1DiagnosisOutputV2,
+} from "@/ai/phase1-diagnosis/contracts";
+import {
+  PHASE1_DIAGNOSIS_PROMPT_V1,
+  PHASE1_DIAGNOSIS_PROMPT_V2,
+} from "@/ai/phase1-diagnosis/prompt";
 import { EvidenceCoherenceRepository } from "@/repositories/evidence-coherence-repository";
 import { FoundationRepository } from "@/repositories/foundation-repository";
 import { Phase1DiagnosisRepository } from "@/repositories/phase1-diagnosis-repository";
@@ -16,8 +24,14 @@ export const PROFIT_GAP_STATEMENT = "Reliable profit figures are unavailable.";
 export class FakeDiagnosisModel implements Phase1DiagnosisModel {
   calls = 0;
   inputs: Phase1DiagnosisModelInput[] = [];
-  constructor(private readonly factory: (input: Phase1DiagnosisModelInput) => unknown) {}
-  getConfiguration() { return { provider: "fake", model: "diagnosis-test", metadata: { deterministic: true } }; }
+  /** The prompt version the model answers under; the run records it and dispatch follows it. */
+  constructor(
+    private readonly factory: (input: Phase1DiagnosisModelInput) => unknown,
+    private readonly promptVersion: string = PHASE1_DIAGNOSIS_PROMPT_V1,
+  ) {}
+  getConfiguration() {
+    return { provider: "fake", model: "diagnosis-test", promptVersion: this.promptVersion, metadata: { deterministic: true } };
+  }
   async analyse(input: Phase1DiagnosisModelInput) {
     this.calls += 1;
     this.inputs.push(structuredClone(input));
@@ -71,6 +85,20 @@ export function validDiagnosis(input: Phase1DiagnosisModelInput): Phase1Diagnosi
       },
     ],
   };
+}
+
+/** The same diagnosis under `phase1_diagnosis_v2`: every item carries a headline. */
+export function validDiagnosisV2(input: Phase1DiagnosisModelInput): Phase1DiagnosisOutputV2 {
+  const headlines = [
+    "Revenue is approximately £240,000 a year",
+    "Profitability cannot yet be established",
+    "Recurring revenue runs at approximately £14,400 a year",
+  ];
+  return { items: validDiagnosis(input).items.map((item, index) => ({ headline: headlines[index], ...item })) };
+}
+
+export function diagnosisModelV2(factory: (input: Phase1DiagnosisModelInput) => unknown = validDiagnosisV2) {
+  return new FakeDiagnosisModel(factory, PHASE1_DIAGNOSIS_PROMPT_V2);
 }
 
 /** Synthetic Business taken through evidence, coherence and CONTINUE_WITH_GAPS to PHASE1_READY. */

@@ -16,6 +16,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   analysisFindingReferenceRoles,
@@ -624,6 +625,18 @@ export const proposalReviews = pgTable("proposal_reviews", {
   `),
 ]);
 
+/**
+ * Structural headline rules (see `@/domain/diagnosis-headline`): trimmed,
+ * non-blank, at most 120 characters, one line, not punctuation only. The
+ * number-subset rule needs the statement and stays in application validation.
+ */
+function headlineCheck(column: AnyPgColumn, nullable: boolean) {
+  return sql`${nullable ? sql`${column} is null or ` : sql``}(
+    length(btrim(${column})) > 0 and ${column} = btrim(${column}) and char_length(${column}) <= 120
+    and ${column} !~ '[\\r\\n]' and ${column} ~ '[[:alnum:]]'
+  )`;
+}
+
 // Phase 1 Diagnosis (M4-05 / M4-06 / M4-07): analytical state, never canonical.
 // Every table is Business-owned and immutable once written (triggers in 0007).
 
@@ -713,6 +726,8 @@ export const diagnosisItems = pgTable("diagnosis_items", {
   materiality: findingMateriality("materiality").notNull(),
   interpretationConfidence: diagnosisInterpretationConfidence("interpretation_confidence"),
   limitations: text("limitations"),
+  /** `phase1_diagnosis_v2` only (required there, by trigger); always null on v1 rows. Never backfilled. */
+  headline: text("headline"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("diagnosis_items_id_business_unique").on(table.id, table.businessId),
@@ -731,6 +746,7 @@ export const diagnosisItems = pgTable("diagnosis_items", {
   check("diagnosis_items_interpretation_limitations_check", sql`
     ${table.grounding} not in ('interpretive', 'hypothesis') or ${table.limitations} is not null
   `),
+  check("diagnosis_items_headline_check", headlineCheck(table.headline, true)),
 ]);
 
 export const diagnosisItemReferences = pgTable("diagnosis_item_references", {
@@ -873,6 +889,9 @@ export const approvedDiagnoses = pgTable("approved_diagnoses", {
   unique("approved_diagnoses_session_unique").on(table.reviewSessionId),
   unique("approved_diagnoses_business_version_unique").on(table.businessId, table.version),
   unique("approved_diagnoses_id_business_unique").on(table.id, table.businessId),
+  // Composite targets for companion headline tables: same Business, same run, exact version.
+  unique("approved_diagnoses_id_business_run_unique").on(table.id, table.businessId, table.analysisRunId),
+  unique("approved_diagnoses_binding_unique").on(table.id, table.businessId, table.analysisRunId, table.version),
   // Same-run backstop: the approval's session reviewed this exact run.
   foreignKey({
     columns: [table.reviewSessionId, table.businessId, table.analysisRunId],
@@ -894,6 +913,215 @@ export const approvedDiagnoses = pgTable("approved_diagnoses", {
   check("approved_diagnoses_required_text_check", sql`
     length(btrim(${table.approvedBy})) > 0 and length(btrim(${table.artifactVersion})) > 0
   `),
+]);
+
+// Companion headlines for an already-approved diagnosis (Diagnosis Item Headline
+// extension). They label an immutable approved diagnosis and never rewrite it.
+// Every table is Business-owned, bound to its exact approved diagnosis and run
+// by composite keys, and immutable once written (triggers in 0008).
+
+/** One AI-proposed headline per effective item, written with its `diagnosis_headlines` run. */
+export const diagnosisHeadlineProposals = pgTable("diagnosis_headline_proposals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  analysisRunId: uuid("analysis_run_id").notNull(),
+  approvedDiagnosisId: uuid("approved_diagnosis_id").notNull(),
+  diagnosisRunId: uuid("diagnosis_run_id").notNull(),
+  diagnosisItemId: uuid("diagnosis_item_id").notNull(),
+  itemRef: text("item_ref").notNull(),
+  headline: text("headline").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("diagnosis_headline_proposals_run_item_unique").on(table.analysisRunId, table.diagnosisItemId),
+  unique("diagnosis_headline_proposals_binding_unique")
+    .on(table.id, table.businessId, table.analysisRunId, table.diagnosisItemId),
+  foreignKey({
+    columns: [table.analysisRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "diagnosis_headline_proposals_run_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.approvedDiagnosisId, table.businessId, table.diagnosisRunId],
+    foreignColumns: [approvedDiagnoses.id, approvedDiagnoses.businessId, approvedDiagnoses.analysisRunId],
+    name: "diagnosis_headline_proposals_approved_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.diagnosisItemId, table.businessId, table.diagnosisRunId],
+    foreignColumns: [diagnosisItems.id, diagnosisItems.businessId, diagnosisItems.analysisRunId],
+    name: "diagnosis_headline_proposals_item_same_run_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_headline_proposals_ref_check", sql`${table.itemRef} ~ '^I(?:[0-9]{3}|[1-9][0-9]{3,})$'`),
+  check("diagnosis_headline_proposals_headline_check", headlineCheck(table.headline, false)),
+]);
+
+/** A human headline-only review of one proposal run, for one headline-set version. */
+export const diagnosisHeadlineReviewSessions = pgTable("diagnosis_headline_review_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  approvedDiagnosisId: uuid("approved_diagnosis_id").notNull(),
+  diagnosisRunId: uuid("diagnosis_run_id").notNull(),
+  proposalRunId: uuid("proposal_run_id").notNull(),
+  setVersion: integer("set_version").notNull(),
+  reviewerId: text("reviewer_id").notNull(),
+  status: diagnosisReviewSessionStatus("status").default("OPEN").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  unique("diagnosis_headline_review_sessions_version_unique").on(table.approvedDiagnosisId, table.setVersion),
+  unique("diagnosis_headline_review_sessions_binding_unique")
+    .on(table.id, table.businessId, table.approvedDiagnosisId, table.diagnosisRunId, table.proposalRunId),
+  uniqueIndex("diagnosis_headline_review_sessions_one_open_unique").on(table.approvedDiagnosisId)
+    .where(sql`${table.status} = 'OPEN'`),
+  foreignKey({
+    columns: [table.approvedDiagnosisId, table.businessId, table.diagnosisRunId],
+    foreignColumns: [approvedDiagnoses.id, approvedDiagnoses.businessId, approvedDiagnoses.analysisRunId],
+    name: "diagnosis_headline_review_sessions_approved_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.proposalRunId, table.businessId],
+    foreignColumns: [analysisRuns.id, analysisRuns.businessId],
+    name: "diagnosis_headline_review_sessions_run_same_business_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_headline_review_sessions_version_check", sql`${table.setVersion} > 0`),
+  check("diagnosis_headline_review_sessions_reviewer_check", sql`length(btrim(${table.reviewerId})) > 0`),
+  check("diagnosis_headline_review_sessions_completion_check", sql`
+    (${table.status} = 'OPEN' and ${table.completedAt} is null)
+    or (${table.status} = 'COMPLETED' and ${table.completedAt} is not null)
+  `),
+]);
+
+/** One ACCEPTED or CORRECTED headline decision per effective item. There is no headline REJECT. */
+export const diagnosisHeadlineReviews = pgTable("diagnosis_headline_reviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  approvedDiagnosisId: uuid("approved_diagnosis_id").notNull(),
+  diagnosisRunId: uuid("diagnosis_run_id").notNull(),
+  proposalRunId: uuid("proposal_run_id").notNull(),
+  diagnosisItemId: uuid("diagnosis_item_id").notNull(),
+  proposalId: uuid("proposal_id").notNull(),
+  decision: evidenceReviewDecision("decision").notNull(),
+  correctedHeadline: text("corrected_headline"),
+  reason: text("reason"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("diagnosis_headline_reviews_session_item_unique").on(table.reviewSessionId, table.diagnosisItemId),
+  unique("diagnosis_headline_reviews_binding_unique")
+    .on(table.id, table.businessId, table.reviewSessionId, table.diagnosisItemId),
+  foreignKey({
+    columns: [table.reviewSessionId, table.businessId, table.approvedDiagnosisId, table.diagnosisRunId, table.proposalRunId],
+    foreignColumns: [
+      diagnosisHeadlineReviewSessions.id,
+      diagnosisHeadlineReviewSessions.businessId,
+      diagnosisHeadlineReviewSessions.approvedDiagnosisId,
+      diagnosisHeadlineReviewSessions.diagnosisRunId,
+      diagnosisHeadlineReviewSessions.proposalRunId,
+    ],
+    name: "diagnosis_headline_reviews_session_same_binding_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.proposalId, table.businessId, table.proposalRunId, table.diagnosisItemId],
+    foreignColumns: [
+      diagnosisHeadlineProposals.id,
+      diagnosisHeadlineProposals.businessId,
+      diagnosisHeadlineProposals.analysisRunId,
+      diagnosisHeadlineProposals.diagnosisItemId,
+    ],
+    name: "diagnosis_headline_reviews_proposal_same_run_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.diagnosisItemId, table.businessId, table.diagnosisRunId],
+    foreignColumns: [diagnosisItems.id, diagnosisItems.businessId, diagnosisItems.analysisRunId],
+    name: "diagnosis_headline_reviews_item_same_run_fk",
+  }).onDelete("restrict"),
+  check("diagnosis_headline_reviews_decision_check", sql`${table.decision} in ('ACCEPTED', 'CORRECTED')`),
+  check("diagnosis_headline_reviews_corrected_check", sql`
+    (${table.decision} = 'CORRECTED') = (${table.correctedHeadline} is not null)
+  `),
+  check("diagnosis_headline_reviews_corrected_headline_check", headlineCheck(table.correctedHeadline, true)),
+  check("diagnosis_headline_reviews_reason_check", sql`${table.reason} is null or length(btrim(${table.reason})) > 0`),
+]);
+
+/** An immutable, human-approved companion headline set. The latest approved version is current. */
+export const approvedDiagnosisHeadlineSets = pgTable("approved_diagnosis_headline_sets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  approvedDiagnosisId: uuid("approved_diagnosis_id").notNull(),
+  approvedDiagnosisVersion: integer("approved_diagnosis_version").notNull(),
+  diagnosisRunId: uuid("diagnosis_run_id").notNull(),
+  proposalRunId: uuid("proposal_run_id").notNull(),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  version: integer("version").notNull(),
+  approvedBy: text("approved_by").notNull(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("approved_diagnosis_headline_sets_version_unique").on(table.approvedDiagnosisId, table.version),
+  unique("approved_diagnosis_headline_sets_session_unique").on(table.reviewSessionId),
+  unique("approved_diagnosis_headline_sets_binding_unique")
+    .on(table.id, table.businessId, table.approvedDiagnosisId, table.diagnosisRunId, table.reviewSessionId),
+  foreignKey({
+    columns: [table.approvedDiagnosisId, table.businessId, table.diagnosisRunId, table.approvedDiagnosisVersion],
+    foreignColumns: [approvedDiagnoses.id, approvedDiagnoses.businessId, approvedDiagnoses.analysisRunId, approvedDiagnoses.version],
+    name: "approved_diagnosis_headline_sets_approved_exact_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.reviewSessionId, table.businessId, table.approvedDiagnosisId, table.diagnosisRunId, table.proposalRunId],
+    foreignColumns: [
+      diagnosisHeadlineReviewSessions.id,
+      diagnosisHeadlineReviewSessions.businessId,
+      diagnosisHeadlineReviewSessions.approvedDiagnosisId,
+      diagnosisHeadlineReviewSessions.diagnosisRunId,
+      diagnosisHeadlineReviewSessions.proposalRunId,
+    ],
+    name: "approved_diagnosis_headline_sets_session_same_binding_fk",
+  }).onDelete("restrict"),
+  check("approved_diagnosis_headline_sets_version_check", sql`${table.version} > 0 and ${table.approvedDiagnosisVersion} > 0`),
+  check("approved_diagnosis_headline_sets_approver_check", sql`length(btrim(${table.approvedBy})) > 0`),
+]);
+
+/** One final reviewed headline per effective item of an approved headline set. */
+export const approvedDiagnosisHeadlines = pgTable("approved_diagnosis_headlines", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "restrict" }),
+  headlineSetId: uuid("headline_set_id").notNull(),
+  approvedDiagnosisId: uuid("approved_diagnosis_id").notNull(),
+  diagnosisRunId: uuid("diagnosis_run_id").notNull(),
+  reviewSessionId: uuid("review_session_id").notNull(),
+  diagnosisItemId: uuid("diagnosis_item_id").notNull(),
+  reviewId: uuid("review_id").notNull(),
+  itemRef: text("item_ref").notNull(),
+  headline: text("headline").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("approved_diagnosis_headlines_set_item_unique").on(table.headlineSetId, table.diagnosisItemId),
+  foreignKey({
+    columns: [table.headlineSetId, table.businessId, table.approvedDiagnosisId, table.diagnosisRunId, table.reviewSessionId],
+    foreignColumns: [
+      approvedDiagnosisHeadlineSets.id,
+      approvedDiagnosisHeadlineSets.businessId,
+      approvedDiagnosisHeadlineSets.approvedDiagnosisId,
+      approvedDiagnosisHeadlineSets.diagnosisRunId,
+      approvedDiagnosisHeadlineSets.reviewSessionId,
+    ],
+    name: "approved_diagnosis_headlines_set_same_binding_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.reviewId, table.businessId, table.reviewSessionId, table.diagnosisItemId],
+    foreignColumns: [
+      diagnosisHeadlineReviews.id,
+      diagnosisHeadlineReviews.businessId,
+      diagnosisHeadlineReviews.reviewSessionId,
+      diagnosisHeadlineReviews.diagnosisItemId,
+    ],
+    name: "approved_diagnosis_headlines_review_same_session_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.diagnosisItemId, table.businessId, table.diagnosisRunId],
+    foreignColumns: [diagnosisItems.id, diagnosisItems.businessId, diagnosisItems.analysisRunId],
+    name: "approved_diagnosis_headlines_item_same_run_fk",
+  }).onDelete("restrict"),
+  check("approved_diagnosis_headlines_ref_check", sql`${table.itemRef} ~ '^I(?:[0-9]{3}|[1-9][0-9]{3,})$'`),
+  check("approved_diagnosis_headlines_headline_check", headlineCheck(table.headline, false)),
 ]);
 
 export const strategyWorkflows = pgTable("strategy_workflows", {

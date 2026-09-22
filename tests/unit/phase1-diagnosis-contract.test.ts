@@ -4,12 +4,13 @@ import {
   phase1DiagnosisOutputSchema,
 } from "@/ai/phase1-diagnosis/contracts";
 import {
+  PHASE1_DIAGNOSIS_PROMPT_V1,
   PHASE1_DIAGNOSIS_PROMPT_VERSION,
-  phase1DiagnosisPrompt,
+  phase1DiagnosisPromptV1,
 } from "@/ai/phase1-diagnosis/prompt";
 import { buildEvidenceCoherenceModelInput } from "@/domain/evidence-coherence-projection";
 import {
-  PHASE1_DIAGNOSIS_ARTIFACT_VERSION,
+  PHASE1_DIAGNOSIS_ARTIFACT_V1,
   PHASE1_DIAGNOSIS_INPUT_VERSION,
   type CarriedForwardGap,
   type DiagnosisItemDraft,
@@ -25,6 +26,9 @@ import {
   validateDiagnosisItem,
   validatePhase1DiagnosisOutput,
 } from "@/domain/phase1-diagnosis-validation";
+import { diagnosisContractForPrompt } from "@/domain/phase1-diagnosis-versions";
+
+const v1 = diagnosisContractForPrompt(PHASE1_DIAGNOSIS_PROMPT_V1);
 
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const businessId = "d1000000-0000-4000-8000-000000000001";
@@ -199,10 +203,10 @@ describe("Run-local handle resolution", () => {
   it("rejects model output that reproduces a canonical UUID, and rejects the whole output for one bad item", () => {
     const { references } = built();
     const output = { items: [item(), item({ references: [{ entityType: "evidence", ref: profitGapId, role: "primary" }] })] };
-    expect(() => validatePhase1DiagnosisOutput(output, references)).toThrow();
-    expect(() => validatePhase1DiagnosisOutput({ items: [item(), item({ references: [] })] }, references))
+    expect(() => validatePhase1DiagnosisOutput(output, references, v1)).toThrow();
+    expect(() => validatePhase1DiagnosisOutput({ items: [item(), item({ references: [] })] }, references, v1))
       .toThrow(Phase1DiagnosisContractError);
-    expect(validatePhase1DiagnosisOutput({ items: [item()] }, references)[0].references[0]).toMatchObject({ id: ids.revenue, ref: "E001" });
+    expect(validatePhase1DiagnosisOutput({ items: [item()] }, references, v1)[0].references[0]).toMatchObject({ id: ids.revenue, ref: "E001" });
   });
 });
 
@@ -250,17 +254,19 @@ describe("Qualifier and precision semantics (M4-06)", () => {
 
 describe("Output contract and prompt versions", () => {
   it("is strict, handle-only and versioned", () => {
-    expect(PHASE1_DIAGNOSIS_PROMPT_VERSION).toBe("phase1_diagnosis_v1");
-    expect(PHASE1_DIAGNOSIS_ARTIFACT_VERSION).toBe("phase1_diagnosis_artifact_v1");
+    // New runs use v2; v1 stays exactly as it was, and both remain readable.
+    expect(PHASE1_DIAGNOSIS_PROMPT_VERSION).toBe("phase1_diagnosis_v2");
+    expect(PHASE1_DIAGNOSIS_PROMPT_V1).toBe("phase1_diagnosis_v1");
+    expect(PHASE1_DIAGNOSIS_ARTIFACT_V1).toBe("phase1_diagnosis_artifact_v1");
     const schema = JSON.stringify(phase1DiagnosisJsonSchema);
     expect(schema).not.toContain("uuid");
     expect(schema).toContain("^[CEMGD](?:[0-9]{3}|[1-9][0-9]{3,})$");
     expect(schema).not.toContain("priorityRank");
     expect(() => phase1DiagnosisOutputSchema.parse({ items: [] })).toThrow();
     expect(() => phase1DiagnosisOutputSchema.parse({ items: [{ ...item(), truthProbability: 0.9 }] })).toThrow();
-    expect(phase1DiagnosisPrompt).toContain("Missing data is not evidence of poor performance");
-    expect(phase1DiagnosisPrompt).toContain("Never replace a range with its midpoint");
-    expect(phase1DiagnosisPrompt).toContain("strengthScore is only confidence that a relationship type is semantically appropriate");
-    expect(phase1DiagnosisPrompt).toContain("Do not perform arithmetic");
+    expect(phase1DiagnosisPromptV1).toContain("Missing data is not evidence of poor performance");
+    expect(phase1DiagnosisPromptV1).toContain("Never replace a range with its midpoint");
+    expect(phase1DiagnosisPromptV1).toContain("strengthScore is only confidence that a relationship type is semantically appropriate");
+    expect(phase1DiagnosisPromptV1).toContain("Do not perform arithmetic");
   });
 });

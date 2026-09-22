@@ -10,9 +10,11 @@ import type { NumericPrecision } from "@/domain/numeric-precision";
  */
 export const PHASE1_DIAGNOSIS_MODULE = "phase1_diagnosis";
 export const PHASE1_DIAGNOSIS_RUN_TYPE = "snapshot_diagnosis";
+/** The input projection is unchanged by v2, so both prompt versions use it. */
 export const PHASE1_DIAGNOSIS_INPUT_VERSION = "phase1_diagnosis_input_v1";
-/** Schema version of the frozen `approved_diagnoses.approved_content` artifact. */
-export const PHASE1_DIAGNOSIS_ARTIFACT_VERSION = "phase1_diagnosis_artifact_v1";
+/** Schema versions of the frozen `approved_diagnoses.approved_content` artifact. */
+export const PHASE1_DIAGNOSIS_ARTIFACT_V1 = "phase1_diagnosis_artifact_v1";
+export const PHASE1_DIAGNOSIS_ARTIFACT_V2 = "phase1_diagnosis_artifact_v2";
 
 /**
  * v1 revision semantics: a diagnosis sent for revision is never re-run or
@@ -81,8 +83,12 @@ export const diagnosisLabelDefinitions = {
   interpretationConfidence: "Confidence in the analytical interpretation only. It is not the probability that anything is true.",
 } as const;
 
-/** One diagnosis item as proposed (or corrected), with references still local handles. */
+/**
+ * One diagnosis item as proposed (or corrected), with references still local
+ * handles. `headline` exists only on `phase1_diagnosis_v2` items.
+ */
 export type DiagnosisItemDraft = {
+  headline?: string;
   itemType: DiagnosisItemType;
   statement: string;
   rationale: string;

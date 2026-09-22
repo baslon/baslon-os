@@ -15,6 +15,8 @@ export const diagnosisHandlePrefixes = {
 } as const satisfies Record<DiagnosisEntityType, string>;
 
 export const PHASE1_DIAGNOSIS_HANDLE_PATTERN = "^[CEMGD](?:[0-9]{3}|[1-9][0-9]{3,})$";
+/** Run-local diagnosis item handles (I001 ...), matching the `diagnosis_items` check. */
+export const DIAGNOSIS_ITEM_REF_PATTERN = "^I(?:[0-9]{3}|[1-9][0-9]{3,})$";
 const handlePattern = new RegExp(PHASE1_DIAGNOSIS_HANDLE_PATTERN);
 
 const namespaces = new Map<string, DiagnosisEntityType>(
