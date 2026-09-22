@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. M4-02B and Phase 1 Diagnosis have not started. The diagnosis contract (M4-05, M4-06, M4-07) is implemented and awaiting Solution Architect review; no Baslon Digital diagnosis may run until it is merged and the Product Owner approves a run.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. M4-02B and any Phase 1 Diagnosis run have not started. Baslon Digital remains `PHASE1_READY` v18, and the first Baslon Digital diagnosis still requires separate Product Owner approval.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -503,7 +503,7 @@ The first concrete precondition is registered: `continueWithGapsPrecondition` fo
 ## M4-05 — Diagnosis must define a snapshot-bound contract
 
 **Origin:** Codex/Claude guardrails.  
-**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete.\
+**Status:** **RESOLVED — Phase 1 Diagnosis contract (merged 22 September 2026, PR #13 `ca63e4f`; commits `6c59857`, `7d6a540`, `183c41b`), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified the same day.** Resolved on the combined architecture decision, implementation, validation and live-deployment evidence below, not on the merge alone. No Baslon Digital diagnosis has run.\
 **Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
 
 ### Requirement
@@ -517,7 +517,7 @@ Milestone 4 must:
 - preserve same-Business references;
 - keep historical diagnoses immutable.
 
-### Implementation (awaiting review)
+### Implementation
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
 - **Snapshot binding:**
   - an `analysis_runs` row (`phase1_diagnosis`) FK-bound to one immutable snapshot;
@@ -527,22 +527,64 @@ Milestone 4 must:
 - **Calculations:** software-owned (`diagnosis_calculations` + `diagnosis_calculation_sources`).
 - **Separate analytical state:** migration `0007_phase1_diagnosis` (additive), with same-run composite FKs and immutability triggers.
 - **Fail-closed validation:** handles, grounding and the missing-data guardrail.
-- **Rollout:** `0007` is applied to `baslon_os_test` only.
+- **Rollout:** `0007` is applied to `baslon_os_test` and, with Product Owner approval on 22 September 2026, live `baslon_os`.
+
+### Resolution basis
+The deployed contract provides:
+- exact immutable-snapshot binding;
+- a deterministic, versioned input projection and input hash;
+- snapshot-local C/E/M/G/D references, with no model-authored canonical UUIDs;
+- analytical diagnosis state kept separate from canonical truth;
+- fail-closed grounding and reference validation;
+- immutable historical diagnosis records;
+- deterministic, software-owned calculations where supported;
+- no canonical mutation by diagnosis.
+
+### Resolution evidence (22 September 2026)
+Shared by M4-05, M4-06 and M4-07:
+
+1. Architecture Decision, then implementation.
+2. Migration-gate review, with Solution Architect amendments.
+3. Automated tests passed: 286 unit/PGlite and 109 PostgreSQL 17 tests.
+4. Synthetic integration validation passed, including the full revision loop through a newer snapshot.
+5. Bounded live-model validation on synthetic data passed.
+6. Browser review-flow smoke tests on `baslon_os_test` passed.
+7. Two Solution Architect pre-merge amendments: a surviving item for approval, and v1 revision semantics.
+8. PR #13 merged (`ca63e4f`).
+9. `0007_phase1_diagnosis` applied to live `baslon_os` exactly once with `drizzle-kit migrate`:
+   - all 5 diagnosis enums and all 7 tables verified;
+   - FK, CHECK and trigger integrity verified; the schema dump matches `baslon_os_test` line for line;
+   - all 7 tables had 0 rows and there were 0 `phase1_diagnosis` runs.
+10. Permanent Delete covers all 7 tables in FK-safe order, verified by PostgreSQL tests. No live Business was deleted.
+11. Live application compatibility verified with read-only page loads.
+12. The Baslon Digital rebuild is unchanged: `PHASE1_READY` v18, Snapshot 4 `bd0e75c5…`, canonical 39 / 59 / 18 / 54 with identical row fingerprints, and no `GENERATE_PHASE1`.
+
+See `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`.
 
 ---
 
 ## M4-06 — Diagnosis must not treat AI-assigned qualifiers as human truth weights
 
 **Origin:** Codex/Claude review concern.  
-**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete. B-09 stays open.\
+**Status:** **RESOLVED — Phase 1 Diagnosis contract (merged 22 September 2026, PR #13 `ca63e4f`; commits `6c59857`, `7d6a540`, `183c41b`), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified the same day.** Resolved on the combined architecture decision, implementation, validation and live-deployment evidence below, not on the merge alone. No Baslon Digital diagnosis has run. B-09 stays open.\
 **Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
 
-### Implementation (awaiting review)
+### Implementation
 - **Not truth weights:** `strengthScore`, reliability, directness, recency and precision are never converted into truth weights. No code computes a confidence from them.
 - **`strengthScore`** passes through unchanged.
 - **Validation rejects** text that treats qualifiers, `strengthScore` or confidence as a truth weight or probability. It also rejects "exactly / precisely" on a non-exact source, and a range midpoint.
 - **Calculations preserve precision:** approximate stays approximate, ranges stay ranges, and `unspecified` is never upgraded. Derived values are labelled derived and are not founder-supplied Evidence.
 - **Diagnosis-local labels:** `interpretationConfidence` and materiality are defined for diagnosis only.
+
+### Resolution basis
+- `strengthScore` remains semantic-link confidence only.
+- Reliability, directness, recency and precision are never converted into automatic truth weights.
+- Precision classes are preserved: ranges stay ranges, approximate values stay approximate, and no midpoint is substituted by default.
+- Derived and calculated values stay explicitly derived and never become founder-supplied Evidence.
+- Interpretation confidence is diagnosis-local, not a canonical truth probability.
+- B-09 (qualifier vocabulary) remains separately open.
+
+Resolution evidence: see M4-05.
 
 ### Rule
 Do not interpret:
@@ -563,10 +605,10 @@ as Claim truth probability or proof weight unless an explicitly approved later m
 ## M4-07 — Diagnosis approval must be separate from canonical Evidence admission
 
 **Origin:** Cross-review architecture guardrail.  
-**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** Not RESOLVED until merge, post-merge verification and bounded validation are complete.\
+**Status:** **RESOLVED — Phase 1 Diagnosis contract (merged 22 September 2026, PR #13 `ca63e4f`; commits `6c59857`, `7d6a540`, `183c41b`), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified the same day.** Resolved on the combined architecture decision, implementation, validation and live-deployment evidence below, not on the merge alone. No Baslon Digital diagnosis has run.\
 **Governing decision:** `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`; implementation: `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`
 
-### Implementation (awaiting review)
+### Implementation
 - **No canonical writes:** diagnosis writes only analytical tables, never Claims, Evidence, Metrics or relationships.
 - **Mandatory checkpoint:**
   - a successful run stops at `PHASE1_AWAITING_REVIEW`;
@@ -585,6 +627,16 @@ as Claim truth probability or proof weight unless an explicitly approved later m
   - a revision never re-runs or reuses the diagnosis on the snapshot that produced it;
   - `REVISION_REQUIRED` returns through ordinary Add Information (`ADD_EVIDENCE`) and the normal evidence and coherence path to `PHASE1_READY`;
   - `REVISION_REQUIRED + GENERATE_PHASE1` was removed from the state machine.
+
+### Resolution basis
+- A successful diagnosis stops at the human review checkpoint.
+- Every material persisted field is reviewable.
+- ACCEPT / CORRECT / REJECT exist, and human corrections are revalidated.
+- An all-rejected diagnosis cannot be approved; approval needs at least one ACCEPTED or CORRECTED item.
+- Approved records are generated server-side, immutable and auditable.
+- Revision returns through the evidence loop to a newer snapshot. Same-snapshot re-diagnosis after `REQUEST_REVISION` is prohibited in v1.
+
+Resolution evidence: see M4-05.
 
 ### Rule
 Milestone 4 diagnosis/recommendation output must remain analytical state.
@@ -1386,6 +1438,17 @@ Decide whether evidence may be added mid-review, which would leave the open revi
 
 ---
 
+## B-33 — SQL migrations are checked out with platform line endings
+
+**Origin:** Live `0007_phase1_diagnosis` migration, 22 September 2026.\
+**Status:** **BACKLOG — non-blocking hygiene**
+
+`core.autocrlf` checks SQL migrations out with CRLF on Windows. Live `baslon_os` therefore records CRLF hashes for `0006` and `0007`, which differ from the LF hashes on `baslon_os_test`, and the `0007` function bodies on live contain carriage returns.
+
+There is no behavioural impact: every CR sits outside string literals, and the schema matches `baslon_os_test` once CRs are removed. Add a repository `.gitattributes` rule such as `*.sql text eol=lf` so future migrations are checked out and journaled consistently across Windows and test environments. Do not rewrite the existing journal rows.
+
+---
+
 # E. ACCEPTED DESIGN DECISIONS TO PRESERVE
 
 These were reviewed and should not be casually refactored away.
@@ -1469,14 +1532,14 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [x] Decide the `GAP_RESOLUTION_REQUIRED` path. Resolved by Milestone 4A: Add Information (with or without a question) or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`, with Add Information also available from `PHASE1_READY` (M4-01).
 - [x] Block initial-intake resubmission while an initial review is open. Resolved 18 September 2026 (B-03).
 - [x] Show, or explicitly treat as AI-assigned, the qualifiers committed on Accept (M4-11). Resolved: the complete canonical object is shown before Accept; older records are labelled at read time.
-- [ ] Define one exact snapshot-bound diagnosis input contract. *Implemented (M4-05, `phase1_diagnosis_input_v1`); awaiting review.*
-- [ ] Define diagnosis output as separate non-canonical analytical persistence. *Implemented (M4-05, migration `0007`); awaiting review.*
-- [ ] Define human diagnosis approval as a separate immutable record. *Implemented (M4-07, `approved_diagnoses`); awaiting review.*
-- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions. *Implemented (`GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`); awaiting review.*
-- [ ] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. The diagnosis input contract must still carry them. *Implemented (M4-06): precision carried, preserved in calculations, and guarded; awaiting review.*
-- [ ] Ensure diagnosis does not use `strengthScore` as truth/evidence weight. *Implemented (M4-06); awaiting review.*
+- [x] Define one exact snapshot-bound diagnosis input contract. Resolved by M4-05 (`phase1_diagnosis_input_v1`).
+- [x] Define diagnosis output as separate non-canonical analytical persistence. Resolved by M4-05 (migration `0007`, live on `baslon_os`).
+- [x] Define human diagnosis approval as a separate immutable record. Resolved by M4-07 (`approved_diagnoses`).
+- [ ] Define transaction-scoped artifact preconditions for diagnosis transitions. *Implemented and deployed with the diagnosis contract (`GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`); the M4-04 status decision is separate.*
+- [x] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. Resolved by M4-06: precision is carried, preserved in calculations, and guarded.
+- [x] Ensure diagnosis does not use `strengthScore` as truth/evidence weight. Resolved by M4-06.
 - [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut. *The diagnosis input carries no question text, and diagnosis writes no canonical state; M4-03 itself stays open.*
-- [ ] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests. *The seven diagnosis tables are included and PostgreSQL-tested; awaiting review.*
+- [x] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests. The seven diagnosis tables are included and PostgreSQL-tested; coverage re-verified after the live `0007` migration.
 - [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
 - [x] Align written-number prompt/validator if the extractor contract changes during the milestone. Resolved by M4-02A (M4-10).
 - [ ] Do not implement production authentication/security work inside Milestone 4 unless explicitly scoped.
