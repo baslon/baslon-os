@@ -1156,16 +1156,22 @@ Production still needs to assess:
 ## P-13 — Backups, restore tests and migration rollback/runbook
 
 **Origin:** Codex production-readiness assessment; Claude production debt.  
-**Status:** **DEFERRED — PRODUCTION (BLOCKER)**
+**Status:** **RESOLVED (minimum operational baseline) — 22 September 2026**
 
-Define and test:
+### Original risk
+Live `baslon_os` had no established backup or restore procedure and no verified restore point. This was exposed when migration `0008_diagnosis_headlines` was applied to live without a restore point existing beforehand.
 
-- backup schedule;
-- restore procedure;
-- restore drill;
-- migration deployment;
-- rollback/forward-fix procedure;
-- incident handling.
+### Resolution
+`docs/operations/postgres-backup-restore-runbook.md` defines the minimum procedure: when a backup is required before a material live write; how to dump (`pg_dump --format=custom`), checksum, store outside the repository with owner-only access and inspect with `pg_restore --list`; how to verify a restore in a disposable database and then drop it; the emergency-recovery principle that a production restore is a deliberate Product Owner decision; security rules; and a minimum retention policy.
+
+A verified restore point now exists. On 22 September 2026 a full logical backup of live `baslon_os` at migration baseline 9 was taken, checksummed (SHA-256 recorded in the runbook), inspected, and **restored into a disposable database**. The restored copy's read-only fingerprint was identical to production line for line: migration count 9, `PHASE1_APPROVED` v21, approved diagnosis `a4e4f0e0-…` with content hash `0f9fe3b044a49bc626891edea44f08fe`, review 10 ACCEPTED / 4 CORRECTED / 0 REJECTED, 14 diagnosis items and 68 references, Claims 39 / Evidence 59 / Metrics 18 / Claim–Evidence 54 with matching fingerprints, Snapshot 4 `da6e9a8e-…` at `bd0e75c5c0c8662dba0edb60b35d5e3b`, the four corrected payload hashes unchanged, and all five headline tables empty. The disposable database was then dropped; `baslon_os` and `baslon_os_test` were untouched.
+
+### Still open
+Scheduling, offsite or encrypted storage, incident handling and a formal rollback/forward-fix policy for a failed migration remain undefined. What exists is the minimum that makes a live change recoverable: a tested procedure and a verified restore point. Revisit before Design Partner data is in production.
+
+**Runbook:** `docs/operations/postgres-backup-restore-runbook.md`  
+**Backup verification:** PASSED (dump, checksum, structural inspection)  
+**Restore verification:** PASSED (isolated restore, fingerprint match, disposable database destroyed)
 
 ---
 
@@ -1711,7 +1717,7 @@ Baslon OS must not be described as public-production-ready until, at minimum:
 - [ ] Raw errors are not placed in URLs.
 - [ ] PostgreSQL pool/query/transaction timeouts are explicitly configured.
 - [ ] AI execution/recovery strategy is appropriate to deployment runtime.
-- [ ] Backups and restore drills exist.
+- [x] Backups and restore drills exist (P-13 minimum baseline; see docs/operations/postgres-backup-restore-runbook.md).
 - [ ] Migration/deployment rollback/forward-fix runbooks exist.
 - [ ] Privacy/retention/deletion obligations are defined.
 - [ ] Security headers/CSRF posture are explicitly reviewed.
