@@ -109,8 +109,8 @@ function Fields({ item }: { item: DiagnosisDisplayItem }) {
  * approval will persist (M4-13). A corrected or rejected item keeps its
  * original AI proposal only in a labelled, collapsed audit section.
  */
-function ItemCard({ model, item }: { model: DiagnosisViewModel; item: Item }) {
-  const canDecide = model.session?.status === "OPEN" && !item.decision && model.business.status !== "archived";
+function ItemCard({ model, item, readOnly }: { model: DiagnosisViewModel; item: Item; readOnly: boolean }) {
+  const canDecide = model.session?.status === "OPEN" && !item.decision && !readOnly;
   const decision = item.decision?.decision;
   const reason = item.decision?.reason ? ` — ${item.decision.reason}` : "";
   const original = <details className="original-item" data-section="original">
@@ -162,18 +162,53 @@ function Provenance({ model }: { model: DiagnosisViewModel }) {
   </details>;
 }
 
+type ApprovedContent = {
+  semantics?: string;
+  decisions?: Record<string, number>;
+  items?: Array<{ itemRef: string; decision: string; itemType: string; statement: string; grounding: string; materiality: string }>;
+  excludedItems?: Array<{ itemRef: string; reason: string | null }>;
+};
+
+/**
+ * A stored UTC timestamp shown for people, in UK time (the product's launch
+ * market). The stored value is unchanged and kept in the element's dateTime.
+ */
+export function formatApprovalTime(iso: string): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short",
+  }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} ${parts.timeZoneName}`;
+}
+
+function ApprovalTime({ iso }: { iso: string }) {
+  return <time dateTime={iso}>{formatApprovalTime(iso)}</time>;
+}
+
+/** Approved state: make the outcome obvious before any supporting detail. */
+function ApprovedSummary({ model }: { model: DiagnosisViewModel }) {
+  const approved = model.approved!;
+  const content = approved.content as ApprovedContent;
+  const decisions = content.decisions ?? {};
+  return <section className="status-panel" aria-labelledby="approved-summary-heading">
+    <p className="eyebrow">Workflow: {label(model.workflowState)}</p>
+    <h2 id="approved-summary-heading">Phase 1 Diagnosis approved</h2>
+    <ul className="summary-list">
+      <li>Approved by {approved.approvedBy} on <ApprovalTime iso={approved.approvedAt} /></li>
+      <li>Version {approved.version}</li>
+      <li>{(content.items ?? []).length} diagnosis items</li>
+      <li>{decisions.ACCEPTED ?? 0} accepted · {decisions.CORRECTED ?? 0} corrected · {decisions.REJECTED ?? 0} rejected</li>
+    </ul>
+  </section>;
+}
+
 function Approved({ model }: { model: DiagnosisViewModel }) {
   const approved = model.approved!;
-  const content = approved.content as {
-    semantics?: string;
-    decisions?: Record<string, number>;
-    items?: Array<{ itemRef: string; decision: string; itemType: string; statement: string; grounding: string; materiality: string }>;
-    excludedItems?: Array<{ itemRef: string; reason: string | null }>;
-  };
+  const content = approved.content as ApprovedContent;
   return <section className="panel" aria-labelledby="approved-heading">
     <p className="eyebrow">Approved diagnosis · version {approved.version}</p>
     <h2 id="approved-heading">Approved analytical basis for the next strategic phase</h2>
-    <p>Approved by {approved.approvedBy} at {approved.approvedAt}.</p>
+    <p>Approved by {approved.approvedBy} at <ApprovalTime iso={approved.approvedAt} />.</p>
     <p className="note">{content.semantics}</p>
     <p className="muted">Decisions: {Object.entries(content.decisions ?? {}).map(([key, value]) => `${value} ${key.toLowerCase()}`).join(" · ")}</p>
     <ol>{(content.items ?? []).map((item) => <li key={item.itemRef}><strong>{label(item.itemType)}</strong> ({label(item.grounding)}, {item.materiality} materiality, {item.decision.toLowerCase()}): {item.statement}</li>)}</ol>
@@ -184,20 +219,60 @@ function Approved({ model }: { model: DiagnosisViewModel }) {
 export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; error?: string }) {
   const { business, run } = model;
   const archived = business.status === "archived";
+  // The workflow is authoritative for the approved presentation, not the
+  // artifact alone: approval commits the artifact, then APPROVE_PHASE1 in a
+  // second transaction. Any disagreement fails closed and is never repaired here.
+  const approvedWorkflow = model.workflowState === "PHASE1_APPROVED";
+  const hasApprovedArtifact = model.approved !== null;
+  const approvalMismatch = approvedWorkflow !== hasApprovedArtifact;
+  const approvedState = approvedWorkflow && hasApprovedArtifact;
+  const readOnly = archived || approvalMismatch;
   // REVISION_REQUIRED never offers Run: v1 revision needs a newer snapshot.
-  const canGenerate = !archived && (model.workflowState === "PHASE1_READY"
+  const canGenerate = !readOnly && (model.workflowState === "PHASE1_READY"
     || (model.workflowState === "PHASE1_ANALYSING" && run?.status === "FAILED"));
   const revisionRequired = model.workflowState === "REVISION_REQUIRED";
   const reviewing = model.workflowState === "PHASE1_AWAITING_REVIEW" && run?.status === "SUCCEEDED";
   const allDecided = model.items.length > 0 && model.items.every((item) => item.decision);
   const anySurviving = model.items.some((item) => item.decision?.decision === "ACCEPTED" || item.decision?.decision === "CORRECTED");
-  return <main>
+  const header = <>
     <nav className="breadcrumbs"><Link href="/businesses">Businesses</Link> <span aria-hidden="true">/</span> <Link href={`/businesses/${business.id}`}>{business.name}</Link> <span aria-hidden="true">/</span> Phase 1 Diagnosis</nav>
     <p className="context-name">{business.name}</p>
-    <h1 className="task-title">Phase 1 Diagnosis</h1>
+    <h1 className="task-title">{approvedState ? "Phase 1 Diagnosis — Approved" : "Phase 1 Diagnosis"}</h1>
+  </>;
+
+  // Workflow says approved but no approved diagnosis exists: show nothing that could be mistaken for it.
+  if (approvedWorkflow && !hasApprovedArtifact) {
+    return <main>
+      {header}
+      <p className="error" role="alert" data-integrity="approved-without-artifact"><strong>Integrity check failed.</strong> The workflow is recorded as {label(model.workflowState)}, but no approved diagnosis exists for the current diagnosis run. The diagnosis is not shown and no action is available. Nothing has been changed.</p>
+    </main>;
+  }
+
+  const provenance = run ? <Provenance model={model} /> : null;
+  const gaps = model.gaps.length ? <section data-section="gaps"><h2>Known evidence gaps carried forward</h2><p className="muted">These remain open. Missing data is not evidence of poor performance.</p>
+    <ul>{model.gaps.map((gap) => <li key={gap.handle}><code>{gap.handle}</code> · {gap.materiality} materiality · {label(gap.area)}: {gap.missingInformation}</li>)}</ul></section> : null;
+  const calculations = model.calculations.length ? <section data-section="calculations"><h2>Software calculations</h2><p className="muted">Derived by software from canonical Metrics. They are calculated, not founder-supplied evidence.</p>
+    <ul>{model.calculations.map((calculation) => <li key={calculation.handle}><code>{calculation.handle}</code> · {calculation.label}: {numeric(calculation)} · Formula: {calculation.formula} · Sources: {calculation.sources.join(", ")} · Rule {calculation.ruleKey} {calculation.ruleVersion}</li>)}</ul></section> : null;
+  const items = model.items.length ? <section data-section="items">
+    <h2>{approvedState ? "Reviewed diagnosis items" : "Diagnosis items"}</h2>
+    <p className="note">{approvedState
+      ? "These are the final reviewed diagnosis items that form the approved Phase 1 diagnosis. Corrected items show the final approved values, with the original AI proposal retained below for audit."
+      : "Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with."}</p>
+    {reviewing && !model.session && !readOnly ? <form action={startDiagnosisReviewAction} className="panel">
+      <input type="hidden" name="businessId" value={business.id} />
+      <input type="hidden" name="runId" value={run!.id} />
+      <label>Your name or identifier<input name="reviewerId" required /></label>
+      <button type="submit">Start review</button>
+    </form> : null}
+    <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} readOnly={readOnly} />)}</div>
+  </section> : null;
+
+  return <main>
+    {header}
     <p className="lede">An AI analysis of one immutable evidence snapshot. It is analytical, not canonical: it never changes Claims, Evidence or Metrics, and nothing advances until a person reviews every item and approves.</p>
     {error ? <p className="error" role="alert">{error}</p> : null}
     {archived ? <div className="notice"><strong>Archived — read-only</strong></div> : null}
+    {approvalMismatch ? <p className="error" role="alert" data-integrity="artifact-without-approved-workflow"><strong>Integrity check failed.</strong> An approved diagnosis exists for this run, but the workflow is {label(model.workflowState)}, not PHASE1 APPROVED. The diagnosis is shown read-only for its current workflow state, and no action is available. Nothing has been changed.</p> : null}
 
     {canGenerate ? <section className="status-panel">
       <p className="eyebrow">Workflow: {label(model.workflowState)}</p>
@@ -211,32 +286,26 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
       <h2 id="revision-heading">Revision requested: updated evidence needed</h2>
       <p>{REVISION_REQUIRES_NEW_SNAPSHOT_MESSAGE}</p>
       <p className="muted">The diagnosis sent for revision stays below, unchanged, as a record of snapshot {model.snapshot?.version}.</p>
-      {!archived ? <Link className="button-link" href={`/businesses/${business.id}/information`}>Add Information</Link> : null}
+      {!readOnly ? <Link className="button-link" href={`/businesses/${business.id}/information`}>Add Information</Link> : null}
     </section> : null}
     {!canGenerate && !run && !archived ? <section className="empty-state"><h2>Phase 1 Diagnosis is not available yet</h2><p>Continue with the latest snapshot&apos;s known gaps first.</p></section> : null}
     {run?.status === "RUNNING" ? <section className="status-panel"><p className="eyebrow">Diagnosis in progress</p><h2>Analysing snapshot {model.snapshot?.version}</h2></section> : null}
 
-    {run ? <Provenance model={model} /> : null}
+    {approvedState ? <>
+      <ApprovedSummary model={model} />
+      <Approved model={model} />
+      {items}
+      {gaps}
+      {calculations}
+      {provenance}
+    </> : <>
+      {provenance}
+      {gaps}
+      {calculations}
+      {items}
+    </>}
 
-    {model.gaps.length ? <section><h2>Known evidence gaps carried forward</h2><p className="muted">These remain open. Missing data is not evidence of poor performance.</p>
-      <ul>{model.gaps.map((gap) => <li key={gap.handle}><code>{gap.handle}</code> · {gap.materiality} materiality · {label(gap.area)}: {gap.missingInformation}</li>)}</ul></section> : null}
-    {model.calculations.length ? <section><h2>Software calculations</h2><p className="muted">Derived by software from canonical Metrics. They are calculated, not founder-supplied evidence.</p>
-      <ul>{model.calculations.map((calculation) => <li key={calculation.handle}><code>{calculation.handle}</code> · {calculation.label}: {numeric(calculation)} · Formula: {calculation.formula} · Sources: {calculation.sources.join(", ")} · Rule {calculation.ruleKey} {calculation.ruleVersion}</li>)}</ul></section> : null}
-
-    {model.approved ? <Approved model={model} /> : null}
-
-    {model.items.length ? <section><h2>Diagnosis items</h2>
-      <p className="note">Every field below is AI-proposed and will be recorded exactly as shown if you accept. Correct or reject anything you disagree with.</p>
-      {reviewing && !model.session && !archived ? <form action={startDiagnosisReviewAction} className="panel">
-        <input type="hidden" name="businessId" value={business.id} />
-        <input type="hidden" name="runId" value={run!.id} />
-        <label>Your name or identifier<input name="reviewerId" required /></label>
-        <button type="submit">Start review</button>
-      </form> : null}
-      <div className="record-list">{model.items.map((item) => <ItemCard key={item.id} model={model} item={item} />)}</div>
-    </section> : null}
-
-    {reviewing && model.session?.status === "OPEN" && !archived ? <section className="panel" aria-labelledby="approve-heading">
+    {reviewing && model.session?.status === "OPEN" && !readOnly ? <section className="panel" aria-labelledby="approve-heading">
       <h2 id="approve-heading">Approve the diagnosis</h2>
       <p>Approval accepts this diagnosis as the analytical basis for the next strategic phase. It does not make any Claim true, resolve any gap, or approve any recommendation.</p>
       {allDecided && !anySurviving
@@ -250,7 +319,7 @@ export function Phase1Diagnosis({ model, error }: { model: DiagnosisViewModel; e
           <button type="submit">Approve diagnosis</button></form>
         : <p className="muted">Decide every item (accept, correct or reject) before approving.</p>}
     </section> : null}
-    {reviewing && !archived ? <form action={requestDiagnosisRevisionAction} className="panel">
+    {reviewing && !readOnly ? <form action={requestDiagnosisRevisionAction} className="panel">
       <input type="hidden" name="businessId" value={business.id} />
       <label>Reason for requesting a revised diagnosis<input name="reason" /></label>
       <button type="submit" className="secondary">Request a revised diagnosis</button>
