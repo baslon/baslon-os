@@ -83,10 +83,15 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
 
 **Phase 1 boundary: Baslon Digital remains `PHASE1_READY` v18. Phase 1 Diagnosis has not started.**
-The resolution of M4-05 / M4-06 / M4-07 means the diagnosis contract, deployment and
+The resolution of M4-04 / M4-05 / M4-06 / M4-07 means the diagnosis contract, deployment and
 human-approval architecture are complete. It does **not** authorise a diagnosis run. The
 first Baslon Digital Phase 1 Diagnosis still requires separate Product Owner approval.
 The six validated gaps above remain open.
+
+**M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
+`CONTINUE_WITH_GAPS`, `GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE` and `APPROVE_PHASE1`
+each check their real artifact inside the transaction-scoped Orchestrator transition. No
+placeholder artifacts were created. Resolving it does not authorise a diagnosis run.
 
 **M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): RESOLVED** (22 September 2026). The
 resolution rests on the architecture decision, implementation, validation and live
