@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-04** (artifact-specific workflow preconditions) is **resolved**. **M4-03** (question-context grounding) stays **open**, but is non-blocking for Baslon Digital Snapshot 4 Phase 1 under a temporary no-`v7` guardrail. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. The first Baslon Digital Phase 1 Diagnosis ran on 22 September 2026 with Product Owner approval (run `1a03e409-…`, 14 items), and the human review recorded 10 ACCEPTED / 4 CORRECTED / 0 REJECTED. The workflow is `PHASE1_AWAITING_REVIEW` v20; **approval has not been executed**. **M4-13** (the approval surface did not show the complete corrected diagnosis) blocks approval and is implemented, awaiting Solution Architect review. M4-02B has not started.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-04** (artifact-specific workflow preconditions) is **resolved**. **M4-03** (question-context grounding) stays **open**, but is non-blocking for Baslon Digital Snapshot 4 Phase 1 under a temporary no-`v7` guardrail. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. The first Baslon Digital Phase 1 Diagnosis ran on 22 September 2026 with Product Owner approval (run `1a03e409-…`, 14 items), and the human review recorded 10 ACCEPTED / 4 CORRECTED / 0 REJECTED. The workflow is `PHASE1_AWAITING_REVIEW` v20; **approval has not been executed**. **M4-13** (the approval surface did not show the complete corrected diagnosis) is **resolved**: merged (PR #18) and verified post-merge against the live reviewed diagnosis. Phase 1 approval remains **not executed**, and the Business remains `PHASE1_AWAITING_REVIEW` v20. M4-02B has not started.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -908,7 +908,7 @@ The governing rule is: **AI selects bounded snapshot-local references; software 
 
 **Origin:** First live Baslon Digital Phase 1 Diagnosis human review, 22 September 2026.\
 **Classification:** Blocking before `APPROVE_PHASE1`.\
-**Status:** **IMPLEMENTED — awaiting Solution Architect review (branch `claude/milestone-4`).** It was OPEN — BLOCKING PHASE 1 APPROVAL until implemented. Not RESOLVED until review, merge and live verification. **No approval has been run.**
+**Status:** **RESOLVED — Milestone 4 (22 September 2026).** Merged in PR #18 (`23750b4`; implementation `51da257`) and confirmed by the post-merge live read-only regression. It was OPEN — BLOCKING PHASE 1 APPROVAL until resolved. **No approval has been run.**
 
 ### Original defect
 After the review decisions on run `1a03e409-…` (10 ACCEPTED, 4 CORRECTED, 0 REJECTED), the diagnosis page rendered each card from the **immutable generated item**, plus a notice showing only the corrected **statement**. The stored, revalidated corrections were right, but the page hid them:
@@ -943,7 +943,28 @@ Humans must see exactly what they are approving before a material strategic appr
 - **Builder:** 1 test proving the artifact's items equal `effectiveDiagnosisItem`, that REJECTED is `null`, and that an unresolvable stored correction fails closed.
 - **PGlite integration:** 1 test. The service read model's effective items equal the server-built artifact field for field. Corrected grounding, confidence, limitations and references survive into the artifact, and correction revalidation still refuses an unresolvable reference.
 
-### Live read-only verification (22 September 2026)
+### Resolution (22 September 2026)
+The Phase 1 approval review surface now renders the exact effective diagnosis item used by the server-side approved-artifact builder:
+- ACCEPTED items display the generated item;
+- CORRECTED items display the complete revalidated corrected payload;
+- REJECTED items are explicitly excluded.
+
+The page and the artifact builder share one deterministic `effectiveDiagnosisItem` implementation, which removes the previous divergence.
+
+**Test coverage.** Focused tests cover the corrected statement, limitations, grounding and references, ACCEPTED and REJECTED behaviour, and equality with the artifact builder. The full unit/PGlite, PostgreSQL, TypeScript, ESLint, build and diff checks passed.
+
+**Post-merge regression.** Merged PR #18 (`23750b4`) was built and run read-only against live `baslon_os` on the existing Baslon Digital reviewed diagnosis:
+- **I001:** the corrected statement is final.
+- **I002:** the corrected statement and limitations are final.
+- **I006:** the final references are exactly C035–C037 (primary) and E054–E057 (context), with no C034 or C033.
+- **I014:** grounding `interpretive`, confidence medium, and the corrected statement.
+- **Accepted items:** all 10 show their generated values, which match the database exactly.
+- **Audit sections:** collapsed by default.
+- **Approval statement:** present.
+
+These are exactly the values approval would persist. No form was submitted and no approval or other live write occurred: the review rows, workflow, session (OPEN), canonical data and Snapshot 4 were byte-identical before and after.
+
+### Pre-merge live read-only verification (22 September 2026)
 Production build against live `baslon_os`, with page load only and no form submitted:
 - **I001:** shows its corrected statement.
 - **I002:** shows its corrected statement and corrected limitations.
