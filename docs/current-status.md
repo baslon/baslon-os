@@ -82,29 +82,32 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 5. **Medium — customers and market:** reliable customer counts, revenue, lifetime value, retention and conversion metrics are not available by customer segment.
 6. **Medium — delivery and capacity:** current founder working-time allocation across production, strategy, sales, marketing, administration and product work is not reliably tracked.
 
-**Phase 1 boundary: the Business is `PHASE1_READY`, but Phase 1 Diagnosis has not started.**
-`PHASE1_READY` does not authorise a diagnosis run. The diagnosis contract is now merged,
-but diagnosis execution remains blocked until migration `0007` is applied to `baslon_os`
-with Product Owner approval, post-merge verification and bounded validation are
-complete, and the Product Owner separately authorises a run.
+**Phase 1 boundary: Baslon Digital remains `PHASE1_READY` v18. Phase 1 Diagnosis has not started.**
+The resolution of M4-05 / M4-06 / M4-07 means the diagnosis contract, deployment and
+human-approval architecture are complete. It does **not** authorise a diagnosis run. The
+first Baslon Digital Phase 1 Diagnosis still requires separate Product Owner approval.
+The six validated gaps above remain open.
 
-**M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): merged in PR #13 (`ca63e4f`, 22 September
-2026), not yet RESOLVED.** They stay pending until `0007` is applied to `baslon_os`, followed by
-post-merge verification and bounded validation.
+**M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): RESOLVED** (22 September 2026). The
+resolution rests on the architecture decision, implementation, validation and live
+deployment together, not on the merge alone.
 
-- **Commits:** implementation `6c59857`, plus two Solution Architect pre-merge amendments: `7d6a540` (approval needs a surviving item) and `183c41b` (v1 revision semantics).
-- **Pre-merge validation:** 286 unit/PGlite and 109 PostgreSQL tests passed. Browser smoke tests on `baslon_os_test` used synthetic Businesses only.
-- **Post-merge read-only check (22 September 2026):**
-  - `baslon_os` still has 7 migrations and no diagnosis tables or types;
-  - there are no `phase1_diagnosis` runs;
-  - the rebuild is still `PHASE1_READY` v18 on Snapshot 4 (`bd0e75c5…`, 39/59/18/54).
+- **Merged:** PR #13 (`ca63e4f`). Implementation `6c59857`, plus two Solution Architect pre-merge amendments: `7d6a540` (approval needs a surviving item) and `183c41b` (v1 revision semantics).
+- **Validation:** 286 unit/PGlite and 109 PostgreSQL tests; synthetic integration, bounded live-model and browser review-flow validation, all on synthetic data or `baslon_os_test`.
+- **Deployed:** `0007_phase1_diagnosis` was applied to live `baslon_os` exactly once, with Product Owner approval, through `drizzle-kit migrate`.
+  - The 5 diagnosis enums, 7 tables, FKs, CHECKs and triggers were verified; the schema matches `baslon_os_test`.
+  - All 7 tables had 0 rows, and there were 0 `phase1_diagnosis` runs.
+  - Permanent Delete coverage was verified by tests, without deleting a live Business.
+  - Live application compatibility was verified with read-only page loads.
+- **Baslon Digital unchanged:** rebuild `a658df7e-…` is `PHASE1_READY` v18 on Snapshot 4 `da6e9a8e-…` (fingerprint `bd0e75c5c0c8662dba0edb60b35d5e3b`), with 39 Claims, 59 Evidence, 18 Metrics and 54 relationships (row fingerprints identical before and after migration). There are 0 `GENERATE_PHASE1` transitions.
+- **Repository baseline** after the status PR #14: `57ad36e`.
 
 - **Versions:** `phase1_diagnosis_input_v1` / `phase1_diagnosis_v1`.
 - **Input:** exact-snapshot binding, run-local C/E/M/G/D handles and software-owned calculations.
 - **Validation:** fail-closed, covering grounding, the missing-data guardrail and M4-06 qualifier/precision semantics.
 - **Human review:** mandatory at `PHASE1_AWAITING_REVIEW`, with ACCEPT/CORRECT/REJECT and an immutable, server-built approved artifact. Approval needs at least one ACCEPTED or CORRECTED item.
 - **Revision (v1):** after `REQUEST_REVISION`, a new diagnosis needs a newer snapshot. `REVISION_REQUIRED` returns through ordinary Add Information and the normal evidence path to `PHASE1_READY`; same-snapshot re-diagnosis is refused.
-- **Migration `0007_phase1_diagnosis`** (additive) is applied to `baslon_os_test` only. **`baslon_os` is not migrated.**
+- **Migration `0007_phase1_diagnosis`** (additive) is applied to `baslon_os_test` and live `baslon_os`.
 
 See `docs/baslon-os-m4-05-m4-06-m4-07-phase1-diagnosis-contract-architecture-decision.md`
 and `docs/milestone-4-m4-05-06-07-phase1-diagnosis-contract.md`.
@@ -123,8 +126,8 @@ See `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-deci
 and Findings Register entry M4-12.
 
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
-grounding), B-31 (compound number words) and B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
-is defined but not reachable).
+grounding), B-31 (compound number words), B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
+is defined but not reachable) and B-33 (SQL migration line endings). B-19 is unchanged.
 
 Not started: M4-02B and any Phase 1 Diagnosis run (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
 
