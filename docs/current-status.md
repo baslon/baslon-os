@@ -86,7 +86,8 @@ Rebuild Business `a658df7e-a161-4487-a6c7-3b9f8b01b1fd` ("Baslon Digital — Reb
 - **Generated:** 22 September 2026, with Product Owner approval, in exactly one attempt. Run `1a03e409-0f2e-4bb7-9de9-01be66c0f84f`: SUCCEEDED, bound to Snapshot 4, 14 items, 6 software calculations.
 - **Reviewed:** the Product Owner's review decisions were entered through the normal UI in session `db3f8a0a-…` (reviewer "David Demetrius"): **10 ACCEPTED / 4 CORRECTED / 0 REJECTED**. I001, I002, I006 and I014 were corrected. The session stays OPEN until approval, by design.
 - **Workflow:** `PHASE1_AWAITING_REVIEW`, version 20. 0 approved diagnoses and no `APPROVE_PHASE1`, `REQUEST_REVISION` or `REJECT_PHASE1`.
-- **M4-13 blocks approval** until the review-surface fix is reviewed, merged and verified. The page did not show the complete corrected values. The fix is implemented on `claude/milestone-4`, awaiting Solution Architect review.
+- **M4-13: RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge, read-only, against the live reviewed diagnosis. The review page now shows the exact effective final items that approval would persist, and I001, I002, I006 and I014 display their corrected values.
+- **Phase 1 approval remains NOT executed.** The Business remains `PHASE1_AWAITING_REVIEW` v20. Approval requires separate Product Owner authorisation.
 - **Unchanged:** canonical data and Snapshot 4 (39/59/18/54, `bd0e75c5…`). The six validated gaps remain open.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
