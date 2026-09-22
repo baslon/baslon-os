@@ -37,7 +37,7 @@ Status values used here:
 **Architecture:** Sound.  
 **Rewrite required:** No.  
 **Milestone 3D:** Complete and accepted.  
-**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-04** (artifact-specific workflow preconditions) is **resolved**. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. M4-02B and any Phase 1 Diagnosis run have not started. Baslon Digital remains `PHASE1_READY` v18, and the first Baslon Digital diagnosis still requires separate Product Owner approval.\
+**Milestone 4:** Milestone 4A (Gap Resolution & Phase 1 Entry) resolves M4-01: `GAP_RESOLUTION_REQUIRED` offers Add Information or human `CONTINUE_WITH_GAPS` → `PHASE1_READY`. Phase 1 diagnosis (4B onwards) remains subject to the other Milestone 4 items below. The initial-intake path that could invalidate an open review is closed (B-03 resolved). M4-02A (Numeric Precision Foundation, merged in PR #3) resolves M4-02 and M4-10. H4 pre-rebuild live-model validation is completed and passed (`docs/m4-02a-h4-live-model-validation.md`). M4-11 and N-1 (human review completeness and application-owned provenance) are merged (PR #6). Architectural review and a manual browser smoke test both passed. **M4-12** (Evidence Coherence relies on the model reproducing canonical UUIDs) is **resolved**: merged (PR #9), post-merge verified, and confirmed by the Product Owner-approved Snapshot 4 live regression. The Baslon Digital controlled rebuild v2 is at `PHASE1_READY` on Snapshot 4: the Product Owner took `CONTINUE_WITH_GAPS` once, and 0 contradictions and 6 validated gaps remain open on record. **M4-04** (artifact-specific workflow preconditions) is **resolved**. **M4-03** (question-context grounding) stays **open**, but is non-blocking for Baslon Digital Snapshot 4 Phase 1 under a temporary no-`v7` guardrail. **M4-05, M4-06 and M4-07** (the Phase 1 Diagnosis contract) are **resolved**: merged (PR #13), with migration `0007_phase1_diagnosis` applied to live `baslon_os` and verified on 22 September 2026. M4-02B and any Phase 1 Diagnosis run have not started. Baslon Digital remains `PHASE1_READY` v18, and the first Baslon Digital diagnosis still requires separate Product Owner approval.\
 **Local/private development:** Appropriate.  
 **Shared/public production:** Not yet appropriate.
 
@@ -449,7 +449,7 @@ Any schema/contract change requires forward migration and extractor versioning.
 ## M4-03 — Question context is not deterministically isolated from every semantic field
 
 **Origin:** Claude MEDIUM.  
-**Status:** **DEFERRED — MILESTONE 4**
+**Status:** **OPEN — NON-BLOCKING for Baslon Digital Snapshot 4 Phase 1 Diagnosis (Solution Architect disposition, 22 September 2026).** Not resolved: the platform-level gap below remains. The disposition is specific to Snapshot 4 and to the no-`v7` guardrail below, and does not itself authorise a diagnosis run.
 
 ### Current strength
 Evidence/Metric excerpts and numeric provenance are checked against the human answer, not the AI-generated question.
@@ -473,6 +473,46 @@ Not resolved. M4-02A extends the existing numeric isolation to precision: range 
 
 ### Note (M4-11, 19 September 2026)
 Not resolved. M4-11 makes every persisted descriptive field visible and correctable at review, which helps the human catch question-context contamination. It adds no deterministic grounding, so this finding remains open.
+
+### Snapshot-specific disposition (22 September 2026)
+**Why it is non-blocking for Snapshot 4.** The controlled rebuild that produced Snapshot 4 (Business `a658df7e-…`) never admitted canonical data through the question-context path, so Snapshot 4 contains nothing admitted through the M4-03 risk path. A read-only audit of `baslon_os` on 22 September 2026 confirmed:
+- **Extractor version:** all seven of the rebuild's extraction runs used `evidence_extractor_v6`. There were **0** `evidence_extractor_v7` runs and **0** `analysis_question_sources` links.
+- **S1:** the approved founder source, through initial intake (`business_intake`), with human review. Three earlier `v6` attempts failed; none was admitted.
+- **S2:** first given as an answer to a question in an earlier Business. The rebuild reused only the approved answer text, as a standalone `additional_text` source, and did not recreate the question context. Human review followed.
+- **S3:** ordinary Add Information (`additional_text`), explicitly without question context, with human review.
+- **S4:** founder-supplied standalone `additional_text`, with human review.
+
+**Snapshot 4 contents.** 39 Claims, 59 Evidence, 18 Metrics and 54 relationships. All 116 Claim, Evidence and Metric records carry the M4-11 review-card marker (`m4_11_v1`) and application-assigned provenance, and the linked Metric/Evidence precision rules are satisfied.
+
+**Why diagnosis is safe to read it.** The Phase 1 Diagnosis contract reads the exact immutable snapshot plus validated carried-forward gaps. It does not reconstruct canonical evidence from questions, and it cannot mutate canonical truth.
+
+**Separate accepted deviations, not M4-03.** The accepted Snapshot 3/4 deviations are not question-context leakage, and they remain accepted limitations:
+- five S3 Evidence records with inferred exact period boundaries ("the 12 months before September 2026");
+- the garbled but interpretable S4 `claim_1`;
+- the unlinked duplicate S4 `claim_2`;
+- the non-standard S4 `metric_1` dimension shape.
+
+Evidence Coherence found that no gap or question materially relied on the inferred S3 period boundaries.
+
+### Temporary guardrail: Baslon Digital, current Phase 1 cycle
+**Until M4-03 is resolved, do not admit new Baslon Digital canonical evidence through `evidence_extractor_v7` / question-context extraction during this Phase 1 cycle.** If Phase 1 review or revision shows that more information is needed:
+
+1. collect the founder's answer as a standalone, human-supplied source;
+2. submit it through ordinary Add Information;
+3. process it with the standard extractor without question context (`evidence_extractor_v6`);
+4. complete human Evidence Review, which creates a newer immutable snapshot;
+5. run Evidence Coherence and make the appropriate gap decision, returning to `PHASE1_READY`;
+6. only then run a fresh Phase 1 Diagnosis against the newer snapshot.
+
+To use the question-context extractor for Baslon Digital instead, M4-03 must first be resolved, or a separate architecture decision must approve it. This is an operational restriction for the current Baslon Digital Phase 1 cycle, not a finding that `v7` is broken or unusable elsewhere.
+
+### Future resolution
+M4-03 stays open for a future extractor revision (see Required work above), including:
+- source-excerpt support for Claims;
+- practical deterministic checks for question-only text or digit contamination;
+- a stronger distinction between human source and interpretive context in descriptive semantic fields.
+
+**Interpretive context ≠ evidentiary source.**
 
 ---
 
@@ -1576,7 +1616,7 @@ Before Milestone 4 diagnosis implementation begins, explicitly close or approve 
 - [x] Define transaction-scoped artifact preconditions for diagnosis transitions. Resolved by M4-04 (`CONTINUE_WITH_GAPS`, `GENERATE_PHASE1`, Phase 1 `MARK_ANALYSIS_COMPLETE`, `APPROVE_PHASE1`).
 - [x] Decide how diagnosis treats approximate/range numeric evidence. Foundation in place (M4-02A): explicit precision, range bounds and the rule that a derived result cannot be more precise than its least-precise input. Resolved by M4-06: precision is carried, preserved in calculations, and guarded.
 - [x] Ensure diagnosis does not use `strengthScore` as truth/evidence weight. Resolved by M4-06.
-- [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut. *The diagnosis input carries no question text, and diagnosis writes no canonical state; M4-03 itself stays open.*
+- [ ] Ensure contextual question text cannot become canonical evidence through a diagnosis shortcut. *The diagnosis input carries no question text, and diagnosis writes no canonical state. M4-03 itself stays open, and platform-wide deterministic isolation is not achieved. It is non-blocking for Baslon Digital Snapshot 4 Phase 1 under the temporary no-`v7` guardrail (see M4-03).*
 - [x] Verify every new Business-owned table is included in Permanent Delete and PostgreSQL tests. The seven diagnosis tables are included and PostgreSQL-tested; coverage re-verified after the live `0007` migration.
 - [x] Re-check PostgreSQL test database guards before adding new suites. Verified 18 September 2026: all 9 files use the shared guard; new suites must use it too (M4-09).
 - [x] Align written-number prompt/validator if the extractor contract changes during the milestone. Resolved by M4-02A (M4-10).

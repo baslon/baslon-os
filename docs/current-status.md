@@ -93,6 +93,13 @@ The six validated gaps above remain open.
 each check their real artifact inside the transaction-scoped Orchestrator transition. No
 placeholder artifacts were created. Resolving it does not authorise a diagnosis run.
 
+**M4-03 (question-context grounding): OPEN, but non-blocking for Baslon Digital Snapshot 4
+Phase 1 under the no-`v7` guardrail** (Solution Architect disposition, 22 September 2026).
+- **Platform gap still open:** Claims and some descriptive semantic fields still lack deterministic grounding.
+- **Snapshot 4 is not affected:** it was built only through paths without question context. All seven rebuild extraction runs used `evidence_extractor_v6`, with 0 `v7` runs and 0 question links, and S1–S4 were all human-reviewed.
+- **Temporary guardrail:** until M4-03 is resolved, do not admit new Baslon Digital canonical evidence through `evidence_extractor_v7` / question-context extraction during this Phase 1 cycle. Any new information goes through standalone founder Add Information (`v6`) → Evidence Review → newer snapshot → Evidence Coherence → gap decision → `PHASE1_READY` → a fresh diagnosis.
+- **No run authorised:** this disposition does not authorise the first diagnosis run.
+
 **M4-05 / M4-06 / M4-07 (Phase 1 Diagnosis contract): RESOLVED** (22 September 2026). The
 resolution rests on the architecture decision, implementation, validation and live
 deployment together, not on the merge alone.
@@ -131,7 +138,7 @@ See `docs/baslon-os-m4-12-evidence-coherence-reference-handles-architecture-deci
 and Findings Register entry M4-12.
 
 Still open as follow-ups: B-09 (qualifier vocabulary), M4-03 (question-context
-grounding), B-31 (compound number words), B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
+grounding; non-blocking for Snapshot 4 Phase 1 under the no-`v7` guardrail), B-31 (compound number words), B-32 (`PHASE1_AWAITING_REVIEW + ADD_EVIDENCE`
 is defined but not reachable) and B-33 (SQL migration line endings). B-19 is unchanged.
 
 Not started: M4-02B and any Phase 1 Diagnosis run (see the Phase 1 boundary above). The current Baslon Digital Business has not been archived.
