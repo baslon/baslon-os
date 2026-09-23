@@ -4,6 +4,8 @@ Updated: 23 September 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
+For what the product must be capable of before a real consultant tests it end to end, see [docs/product/consultant-pilot-ready-v1.md](product/consultant-pilot-ready-v1.md).
+
 ## Current engineering milestone
 
 **Current position (23 September 2026):** Milestone 4.
