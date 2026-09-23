@@ -2,6 +2,8 @@
 
 Updated: 23 September 2026
 
+For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
+
 ## Current engineering milestone
 
 **Current position (23 September 2026):** Milestone 4.
