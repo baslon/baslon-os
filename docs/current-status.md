@@ -1,14 +1,16 @@
 # Baslon OS — Current Development Status
 
-Updated: 22 September 2026
+Updated: 23 September 2026
 
 ## Current engineering milestone
 
-**Current position (22 September 2026):** Milestone 4.
+**Current position (23 September 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
 - **Phase 2 has not started.** Its entry boundary is recorded below, and the next Phase 2 architecture task is for the Solution Architect to define.
-- Repository baseline: `main` at the PR #21 merge (`32996a6802556c56df58372256749194347ba226`, approved-diagnosis presentation).
+- The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
+- P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
+- Repository baseline: `main` at the PR #25 merge (`0624c74d4c4571d94d9e507a335d2ff27e89d22c`, backup/restore runbook). Earlier baselines: PR #24 (`32f5529`, headline extension) and PR #23 (`45ed2f8`, Diagnosis IA).
 
 Milestone 3D pre-diagnosis hardening is merged (`8602b98`), followed by the
 initial-intake review guard (PR #1, `93e03e3`).
@@ -122,6 +124,63 @@ Current counts: approved_diagnoses 1; `APPROVE_PHASE1` 1; `REQUEST_REVISION` 0; 
 - the calculations remain derived values, not founder-supplied facts.
 
 Approval does not validate the diagnosis conclusions as objective truth.
+
+
+**Phase 1 closure.** Phase 1 Diagnosis is complete and approved for the current Baslon Digital snapshot. The approved
+diagnosis stays bound to Snapshot 4 and keeps its original `phase1_diagnosis_artifact_v1` analytical artifact. A separately
+reviewed, immutable companion headline set (version 1) supplies business-facing labels without altering any approved
+diagnosis content. The five-view Diagnosis information architecture, the six evidence gaps, the six deterministic
+calculations and the provenance surfaces are live and verified. **Phase 2 remains NOT STARTED.**
+
+## Diagnosis presentation and the approved companion headline set
+
+**Diagnosis information architecture: complete** (PR #23, merge `45ed2f839ee48955fabd627aa027f00a2c6901e7`). The approved
+diagnosis is presented through five views — Overview, Full Diagnosis, Evidence Gaps, Calculations, and Audit & Provenance.
+Overview is the default business-facing view; Full Diagnosis holds all 14 approved items; Evidence Gaps holds the six
+unresolved gaps; Calculations holds the six deterministic calculations; Audit & Provenance holds technical provenance and
+the original AI proposals for the four corrected items. Progressive disclosure keeps business meaning primary and audit
+detail secondary.
+
+**Diagnosis Item Headline extension: complete and live** (PR #24, merge `32f5529781b6b68a19bfdff8ab3a4c204d42cde4`).
+Migration `0008_diagnosis_headlines` is applied to live `baslon_os` (migration count 9). The governing rule is:
+
+> The approved diagnosis statement remains the substantive analytical authority. The headline is a human-reviewed
+> presentation label.
+
+Future diagnoses can carry native reviewed headlines through `phase1_diagnosis_v2` and `phase1_diagnosis_artifact_v2`.
+v1 compatibility is preserved by version dispatch on the run's recorded prompt version, and **the existing Baslon approved
+v1 diagnosis was not mutated**: its content hash is unchanged and it carries no headline field.
+
+**Approved companion headline set (version 1).**
+
+| | |
+|---|---|
+| Headline set | `b586678b-3871-4939-9446-de84fceddba5`, version 1 |
+| Approved diagnosis | `a4e4f0e0-3544-4650-95ee-f13d31b36517` (version 1), diagnosis run `1a03e409-0f2e-4bb7-9de9-01be66c0f84f` |
+| Proposal run | `d97b01b7-d41c-4312-a9b9-2b9186ad4da6` (`diagnosis_headlines` module, `diagnosis_headlines_v1`) |
+| Headline review | Session `33622bdf-e530-45c4-ab8b-eb902abc23f9`, COMPLETED: **10 ACCEPTED / 4 CORRECTED** (I001, I002, I005 and I009 corrected) |
+| Approved by | David Demetrius, 2026-09-23T07:33:13.531Z |
+| Workflow effect | **none** — the workflow stayed `PHASE1_APPROVED` v21 with 20 transitions |
+
+The set is immutable and append-only by version; the current set is the latest approved version. There is no version 2.
+
+The 14 approved headlines are recorded in `docs/milestone-4-diagnosis-item-headline-extension.md`. They label the approved
+statements and never replace them.
+
+**Current Diagnosis UX.** Headline resolution uses the approved companion set (source: approved companion headline set,
+version 1), because the approved artifact is v1 and carries no native headline. On Overview, nine headline-led items appear
+and the five Limitations stay summarised rather than individually listed; each statement remains visible beneath its
+headline, importance stays visible, and redundant type and review-status badges are reduced. Full Diagnosis renders all 14
+approved headlines above their approved statements and keeps the 10 Accepted / 4 Corrected Phase 1 decision badges with
+full type and review detail. Audit & Provenance gained a `Headline set` group recording the set id, version, approver,
+approved timestamp, companion-label semantics and the exact binding to the approved diagnosis; every existing provenance
+group is intact.
+
+**Operational state.** Live `baslon_os` is at migration count 9 with `0008` applied, and all headline implementation
+objects are live. A verified production backup baseline exists (P-13, `docs/operations/postgres-backup-restore-runbook.md`,
+documentation merged in PR #25, `0624c74d4c4571d94d9e507a335d2ff27e89d22c`). P-13 is resolved at the minimum operational
+baseline only: scheduled backups, offsite or encrypted storage, incident handling and a formal migration rollback /
+forward-fix procedure remain open.
 
 **Phase 2 entry boundary** (descriptive; Phase 2 is not designed or authorised):
 - **Prerequisite:** workflow `PHASE1_APPROVED`. For this cycle that is v21.
