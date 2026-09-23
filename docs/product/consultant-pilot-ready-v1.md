@@ -2,6 +2,7 @@
 
 **Status:** Definition for review. Not an implementation authorisation.
 **Date:** 23 September 2026
+**Product Owner decisions recorded:** 23 September 2026 — six decisions, **PO-1** to **PO-6**, in [§12](#12-product-owner-decisions).
 **Question this answers:** what must Baslon OS be capable of before a real business consultant can meaningfully test the product end to end?
 
 This document defines **two separate gates**. They must not be conflated.
@@ -35,7 +36,9 @@ Phase 1 is closed and proven once, end to end, on real business information. See
 
 The approved diagnosis is the analytical authority; the headline set is a reviewed presentation companion and never an analytical input.
 
-The product's intended client journey, from [`product-commercial-context.md`](../product-commercial-context.md), is:
+The product's positioning, from [`product-commercial-context.md`](../product-commercial-context.md), is **consultant-led, software-assisted strategic diagnosis and planning**. That positioning is why this gate is defined around a consultant's workflow rather than a business owner's, and why Gate A can be validated with a supervised consultant before any authentication exists.
+
+The intended client journey, from the same document, is:
 
 ```text
 Discovery / Strategic Intent → Evidence Intake → Evidence Review → Evidence Quality / Gaps
@@ -79,9 +82,9 @@ Ten steps. Steps 1–3 exist today; steps 4–10 do not.
 
 The consultant opens the Baslon Digital rebuild case (`a658df7e-…`, "Baslon Digital — Rebuild 2026 v2") and sees where it stands.
 
-**Recommendation:** run the pilot against a **resettable copy** of the approved case, not the live rebuild Business itself. The pilot's whole point is that a consultant makes real strategic decisions and creates real strategy records; doing that directly on the live Phase 1 record risks a session ending with live state nobody intended to keep, and there is no way to "undo" an approved artifact by design.
+**Product Owner decision (PO-1):** the pilot runs against a **resettable copy of the approved Baslon Digital case, clearly labelled as a pilot/test Business**. It does **not** run against the live Baslon Digital rebuild Business. See §12.
 
-This needs a Product Owner decision (see §11, Decision 1). The copy must be clearly labelled and must carry the same approved diagnosis structure, or the pilot tests something other than the real product.
+The copy may be derived from Baslon's own approved data. It must be clearly labelled and must carry the same approved diagnosis structure, or the pilot tests something other than the real product. Cloning mechanics are not defined here.
 
 **No genuine Design Partner data is introduced at Gate A.**
 
@@ -110,7 +113,11 @@ The consultant needs a system-supported way to move from an approved diagnosis i
 
 ### Step 5 — Review strategic alternatives
 
-The consultant considers a **small, bounded set of genuinely distinct strategic alternatives** derived from the approved diagnosis. **2–4 options** is the working target: enough for a real choice, few enough to compare properly. (Product assumption — see §11, Decision 2.)
+The consultant considers a **small, bounded set of genuinely distinct strategic alternatives** derived from the approved diagnosis.
+
+**Product Owner decision (PO-2):** the allowed range is **2–4 alternatives, with 3 as the normal target**. See §12.
+
+The count follows the evidence, not the target. **No filler is generated merely to reach three.** Two is correct when only two materially distinct options are supportable; four is correct when the evidence genuinely supports four distinct strategic paths.
 
 Each option needs enough structure for a consultant to judge it, not a paragraph of prose. Minimum per option:
 
@@ -229,9 +236,27 @@ Classification: **READY** · **BUILD BEFORE PILOT** · **HARD GATE BEFORE REAL C
 | Scheduled / offsite / encrypted backups | **Not defined** | DEFER AFTER PILOT | **HARD GATE** | A single local dump is not sufficient for client data | No |
 | Incident handling | **Not defined** | DEFER AFTER PILOT | **HARD GATE** | Needed before holding external data | No |
 | Deletion / retention policy | **Not defined** (P-14) | DEFER AFTER PILOT | **HARD GATE** | Obligations attach the moment real client data arrives | No |
-| M4-03 evidence grounding | Open, non-blocking for Snapshot 4 | DEFER AFTER PILOT (pilot runs no new intake) | **HARD GATE or formally approved restricted path** | See §6 | No |
+| M4-03 evidence grounding | Open, non-blocking for Snapshot 4 | DEFER AFTER PILOT (pilot runs no new intake) | **HARD GATE — must be RESOLVED** | Restricted-intake workaround rejected by PO-3; see §6 | No |
 
-**Counts across 35 capabilities:** READY **14** · BUILD BEFORE PILOT **12** · HARD GATE BEFORE REAL CLIENT DATA **11** · DEFER AFTER PILOT **9**. These exceed 35 because several capabilities appear in two columns — deferred for Gate A, hard gate for Gate B — which is precisely the point of separating the gates. **Nine capabilities hard-block Pilot v1**, and eight of the nine are Phase 2 strategy and planning work.
+**Counts across 35 capabilities:** READY **14** · BUILD BEFORE PILOT **12** · HARD GATE BEFORE REAL CLIENT DATA **11** · DEFER AFTER PILOT **9**. These exceed 35 because several capabilities appear in two columns — deferred for Gate A, hard gate for Gate B — which is precisely the point of separating the gates.
+
+### How much must be built before Gate A can pass
+
+To leave no ambiguity:
+
+> **12 capabilities contain work that must be completed before Gate A can pass.**
+> **Of those, 9 are primary blocking product outcomes and 3 are supporting requirements.**
+
+The distinction is visible in the matrix's final column: a primary blocker reads **Yes**, a supporting requirement reads *Yes* with its qualifier.
+
+| | Capabilities |
+|---|---|
+| **9 primary blocking product outcomes** | Phase 2 entry · strategic option generation · strategic-option provenance · option comparison · human strategic decision · approved strategic direction · Strategic Growth Plan · 90-Day Execution Plan · pilot fixture / resettable case |
+| **3 supporting requirements** | consultant / client output (on-screen form only) · onboarding and help text (light) · error recovery and retry (new Phase 2 paths only) |
+
+A supporting requirement is smaller in scope but **not optional**: Gate A cannot pass without it. The difference is that each is a bounded addition to work already being done, rather than a distinct product outcome in its own right.
+
+**Eight of the nine primary blockers are Phase 2 strategy and planning work.** The ninth is the resettable pilot case. The entire evidence-to-diagnosis pipeline is READY.
 
 ---
 
@@ -276,7 +301,9 @@ Minimum viable roles for first external use:
 - **consultant** — runs the engagement: intake, review, diagnosis, strategy, planning;
 - **admin** — Baslon-side operator: Business lifecycle, permanent delete, migrations.
 
-A **business/client participant** role is only needed once the client themselves logs in. If the Design Partner engagement is consultant-operated — which the product context's "consultant-led, software-assisted" positioning implies — then two roles suffice at Gate B and a client role can follow.
+**Product Owner decision (PO-4):** for the first Design Partner stage the minimum role model is **Admin + Consultant**. A **client-participant** login is **not required** unless the client themselves must sign in, and stays deferred until the product genuinely needs direct client interaction. See §12.
+
+This decision reduces the number of roles. It does **not** reduce the requirement for authenticated identity, role enforcement, Business isolation or auditable approvals — all four remain hard gates.
 
 Pilot v1 needs **no roles at all**, because there is one operator and the data is Baslon's.
 
@@ -301,20 +328,25 @@ P-14 is undefined. Before external data: what is collected and why; how long it 
 | Incident procedure | **HARD GATE** | Needed before someone else's data can be affected |
 | Migration rollback / forward-fix | **HARD GATE** | A bad migration against client data must have a rehearsed path back |
 
-### M4-03 — an explicit recommendation
+### M4-03 — HARD GATE before genuine Design Partner intake
 
-**Recommendation: resolve M4-03 before any Design Partner *intake* cycle, or formally approve and technically enforce a restricted intake path.** Not left ambiguous.
+**Product Owner decision (PO-3): M4-03 must be RESOLVED before the first genuine Design Partner intake cycle.** The restricted-intake workaround is **not** to be relied on for the first genuine Design Partner. See §12.
+
+M4-03 remains **unresolved today**, and this document does not resolve it. It is now a Gate B hard gate rather than a choice between two routes.
 
 The reasoning is in the finding's own disposition. Snapshot 4 was exempt because the controlled rebuild **never admitted canonical data through the question-context path**: all seven extraction runs used `evidence_extractor_v6`, with **0** `v7` runs and **0** `analysis_question_sources` links. Every source arrived through initial intake or standalone Add Information, with human review.
 
 A Design Partner engagement is different by design. The product's own journey routes through Evidence Quality and gap resolution, where the system surfaces questions and the client answers them — which is exactly the path M4-03 concerns. Claims and descriptive fields still lack deterministic grounding against question contamination, so on a real client engagement the exemption that protected Snapshot 4 does not hold.
 
-Two acceptable routes, and the Product Owner must pick one:
+**Why resolution, and not the restricted path:**
 
-1. **Resolve M4-03** — add deterministic grounding for Claims and descriptive fields (the finding's own "required work"). Preferred: it removes the constraint permanently and unblocks the full intended journey.
-2. **Formally approve a restricted intake path** — Design Partner evidence is admitted only through intake and standalone Add Information, never through question-context answers, with that restriction **enforced in code and verified**, not merely intended. Cheaper, but it disables part of the product's own gap-resolution loop for the very engagement meant to validate it.
+- a real Design Partner engagement should validate the **intended** Evidence Quality and gap-resolution journey;
+- a restricted intake route would bypass part of the very workflow the first real engagement exists to test;
+- Snapshot 4's exception was **bounded to the controlled Baslon cycle** and does not become the default policy for external data.
 
-Drifting into route 2 informally — using the question path while assuming the Snapshot 4 exemption still applies — is the outcome to avoid.
+Resolution means deterministic grounding for Claims and descriptive fields, per the finding's own required work. The restricted-intake path is recorded here only as the rejected alternative, so that nobody later mistakes it for an approved fallback.
+
+Drifting into the restricted path informally — using the question path while assuming the Snapshot 4 exemption still applies — is the outcome to avoid.
 
 ---
 
@@ -322,17 +354,39 @@ Drifting into route 2 informally — using the question path while assuming the 
 
 ### Participant
 
-One experienced business consultant who does **not** know Baslon OS architecture. They should be able to read a diagnosis and argue with it.
+**Product Owner decision (PO-5):** **one experienced external business consultant, under NDA.** See §12.
+
+Selection characteristics:
+
+- experienced enough to challenge strategic conclusions;
+- not involved in designing Baslon OS;
+- comfortable reviewing a real SME case;
+- able to explain where the system helps or hinders professional judgement.
+
+**The NDA is a Pilot v1 operating requirement**, because the Baslon Digital case contains genuine business and financial information. It is not drafted here.
+
+Note the distinction this creates: the consultant is **external**, but the data is **Baslon's own**. That is why an NDA is required and production authentication is not — see the operational boundary below.
+
+### Consultant access — operational boundary, not production authentication
+
+The consultant is external, so they need a way to work with the application. Gate A meets that with an **operational boundary**, not by building authentication:
+
+- the session is **supervised** — the Product Owner is present throughout;
+- it runs against the **clearly labelled resettable pilot Business** (PO-1), never the live rebuild Business;
+- the environment contains **no genuine Design Partner data**;
+- access ends when the session ends.
+
+This is sufficient **only** because the data is Baslon's own and the session is supervised. It is not a model for external client data, where authentication becomes a Gate B hard gate.
 
 ### Preparation
 
 A short orientation only: what Baslon OS is for, what the case is, what the five diagnosis views are, and what they are being asked to do. **They must not be told the "right" strategic conclusion**, or the session measures agreement rather than usefulness.
 
-### Starting point — from the approved diagnosis (Option A)
+### Starting point — from the approved diagnosis
 
-**Agreed, with one qualification.** The first pilot should start from the existing approved Baslon Digital diagnosis state, because the untested part of the product is Phase 2 strategy and planning; the evidence pipeline has already been proven end to end on this exact case, and re-running it would consume most of a session to re-prove something that is already closed.
+The pilot starts from the **approved Baslon Digital diagnosis state**, on the resettable pilot copy (PO-1). The untested part of the product is Phase 2 strategy and planning; the evidence pipeline has already been proven end to end on this exact case, and re-running it would consume most of a session re-proving closed work.
 
-**Qualification worth recording:** the product positioning is *consultant-led*, which means in a real engagement the consultant will also run intake and Evidence Review with a client. Starting at the diagnosis leaves that half of their real job untested by a consultant's eyes. That is an acceptable trade for Pilot v1 — but **Pilot v2 should start at intake**, and the gate for that pilot is a separate question.
+This leaves the earlier journey — intake, Evidence Review, evidence quality, gap handling — untested by a consultant's eyes. **Product Owner decision (PO-6) addresses that: Pilot v2 is planned**, and starts earlier in the journey.
 
 ### Required tasks
 
@@ -352,6 +406,19 @@ Given without coaching, in the consultant's own words:
 ### Expected output
 
 An approved strategic direction, a Strategic Growth Plan and a 90-Day Execution Plan, all traceable to the approved diagnosis, with the consultant's decisions and rationale recorded and the six evidence gaps still visible as limitations.
+
+### Pilot v1 and Pilot v2 (PO-6)
+
+Two distinct validation stages, both using Baslon-controlled data. **Only Pilot v1 is gated by this document.**
+
+| | **Pilot v1** | **Pilot v2** |
+|---|---|---|
+| **Purpose** | Validate consultant understanding of the approved diagnosis, **and** validate Phase 2 strategy/planning usefulness and usability | Validate the earlier consultant journey: intake → Evidence Review → evidence quality → gap handling → diagnosis |
+| **Starting point** | Resettable copy of the approved Baslon Digital diagnosis state | Earlier in the journey, at intake |
+| **Data** | Baslon-controlled | Baslon-controlled |
+| **Gated by this document?** | **Yes** — Gate A | **No** |
+
+**Pilot v2 is not required to pass Consultant Pilot Ready v1.** It is a planned follow-on validation stage, to run after Pilot v1 findings are incorporated and, where practical, **before genuine Design Partner intake**. It is not an implementation milestone, and this document does not scope it.
 
 ---
 
@@ -414,8 +481,9 @@ Manual observation is sufficient for a supervised first test. Do not build analy
 ```text
 [ ] Phase 2 architecture approved by the Solution Architect and Product Owner
 [ ] Phase 2 entry exists from an approved, current diagnosis, bound to its run and snapshot
-[ ] 2–4 strategic alternatives generated, each traceable to approved diagnosis items and affected gaps
-[ ] Options are comparable side by side, and are not ranked or pre-selected by the system
+[ ] 2-4 strategic alternatives generated (normal target 3), each traceable to approved
+    diagnosis items and affected gaps, with no filler generated to reach the target
+[ ] Options are comparable side by side, and are not ranked, scored or pre-selected by the system
 [ ] Human strategic decision (accept / reject / refine / combine) is persisted with rationale and assumptions
 [ ] An approved strategic direction exists, distinct from proposals, created only by explicit human approval
 [ ] A Strategic Growth Plan exists, coherent with and traceable to the approved direction
@@ -427,19 +495,30 @@ Manual observation is sufficient for a supervised first test. Do not build analy
 [ ] All existing Phase 1 integrity tests still pass (unit, integration, PostgreSQL against baslon_os_test)
 [ ] The approved Phase 1 diagnosis and its artifact remain unmutated by any Phase 2 work
 [ ] No critical or blocking UX defect
+[ ] No critical authority-confusion defect: an AI proposal is never mistakable for an
+    approved human decision
 [ ] No silent authority escalation by AI anywhere in the new flow
 [ ] Light in-product guidance exists at each new stage
 [ ] Pilot script and observation sheet exist and have been dry-run once internally
+[ ] One experienced external business consultant identified, not involved in designing
+    Baslon OS (PO-5)
+[ ] NDA in place covering the Baslon Digital case, which contains genuine business and
+    financial information (PO-5)
+[ ] Consultant access operational boundary agreed: supervised session, resettable pilot
+    Business, no genuine Design Partner data present
 ```
 
 **Consultant Pilot Ready v1 = YES only if every box is ticked.**
+
+**Authentication is deliberately not a Gate A blocker**, even though the consultant is external. The pilot is supervised, runs on a clearly labelled pilot Business, and contains only Baslon-controlled data; the operational boundary in §7 covers it. Authentication is a Gate B hard gate, and inventing production authentication for Pilot v1 would be building Gate B work under a Gate A label.
 
 ### Gate B — Design Partner Data Ready (binary, stricter)
 
 ```text
 [ ] Authentication implemented
 [ ] Durable user identity, replacing free-text reviewer/approver strings (P-03, P-01)
-[ ] Role/permission enforcement — minimum: consultant, admin
+[ ] Role/permission enforcement — minimum: Admin + Consultant (PO-4)
+[ ] Client-participant role: deferred unless the client themselves must sign in (PO-4)
 [ ] Business/tenant data isolation proven at routes, queries, actions and supplied identifiers (P-02)
 [ ] Material approvals attributable to an authenticated actor (P-03, P-04)
 [ ] Privacy and data-handling decisions documented (P-14)
@@ -448,7 +527,8 @@ Manual observation is sufficient for a supervised first test. Do not build analy
 [ ] Offsite and encrypted backup storage
 [ ] Incident procedure defined and rehearsed
 [ ] Migration rollback / forward-fix procedure defined and rehearsed
-[ ] M4-03 resolved, OR a restricted intake path formally approved AND technically enforced
+[ ] M4-03 RESOLVED before the first genuine Design Partner intake cycle (PO-3).
+    The restricted intake path is NOT an approved fallback
 [ ] Full regression, including PostgreSQL integrity and business-isolation tests
 [ ] No known critical production blocker outstanding
 [ ] Design Partner agreement covering data handling in place
@@ -465,7 +545,7 @@ This section is the input to the next Phase 2 Architecture and Entry Design task
 ### Phase 2 MUST HAVE before Pilot v1
 
 1. **Phase 2 entry** from an approved, current diagnosis, with a staleness guard — bound to `approvedDiagnosisId`, the diagnosis run and the snapshot, per the recorded entry boundary.
-2. **Strategic option generation** — 2–4 bounded, genuinely distinct alternatives derived from the approved diagnosis, validated deterministically before persistence, failing closed like every other AI contract in the product.
+2. **Strategic option generation** — **2–4 bounded, genuinely distinct alternatives, normal target 3** (PO-2), derived from the approved diagnosis, validated deterministically before persistence, failing closed like every other AI contract in the product. No filler to reach the target.
 3. **Option provenance** — each option traceable to the approved diagnosis items it addresses and the evidence gaps that limit it. Without this, the consultant cannot answer "why is the system telling me this?"
 4. **Option comparison** — a surface where alternatives can be judged against each other, with trade-offs visible and **no system ranking or scoring**.
 5. **Human strategic decision** — accept, reject, refine, combine; rationale, assumptions and validation flags persisted and auditable.
@@ -473,7 +553,7 @@ This section is the input to the next Phase 2 Architecture and Entry Design task
 7. **Strategic Growth Plan** — generated as a proposal, human-reviewed and approved, traceable to the approved direction, carrying assumptions and gaps forward.
 8. **90-Day Execution Plan** — objectives, initiatives, owners, sequence, dates, indicators, dependencies, validation needs and checkpoints; editable and human-approved; **never auto-committing the business to actions**.
 9. **A readable end artifact**, on screen.
-10. **A resettable pilot case**, so the pilot can be run more than once.
+10. **A resettable pilot case** — a clearly labelled copy of the approved Baslon Digital case (PO-1), so the pilot can be run more than once without accumulating test strategy records on the live Phase 1 Business.
 11. **Recoverable failure** in every new model-calling path.
 
 ### Phase 2 SHOULD HAVE if low-cost
@@ -496,16 +576,53 @@ The approved diagnosis remains the analytical authority; a headline is never an 
 
 ---
 
-## 12. Decisions needed from the Product Owner
+## 12. Product Owner decisions
 
-These cannot be settled from repository evidence, and guessing them would be worse than asking.
+These six decisions were taken by the Product Owner on 23 September 2026. They are **decisions, not recommendations**, and they govern the gates defined above.
 
-1. **Pilot case handling.** Run the pilot against a resettable copy of the approved Baslon Digital case (recommended), or against the live rebuild Business? If a copy: is duplicating the approved Phase 1 record into a clearly labelled pilot Business acceptable, given the Business is Baslon's own?
-2. **Number of strategic alternatives.** Is 2–4 right? Nothing in the repository fixes this number; it is a product judgement about how much choice a consultant can meaningfully weigh.
-3. **M4-03 route before Design Partner intake** — resolve it (recommended), or formally approve and technically enforce a restricted intake path? See §6.
-4. **Gate B role model.** Two roles (consultant, admin), or is a client-participant login needed for the first Design Partner engagement?
-5. **Who the pilot consultant is**, and whether they are under an NDA — Baslon Digital's own financial evidence is in the case.
-6. **Whether Pilot v2 (starting at intake) is planned**, since Pilot v1 deliberately leaves the intake and Evidence Review experience untested by a consultant.
+### PO-1 — Pilot case handling
+
+**The consultant pilot runs against a resettable copy of the approved Baslon Digital case, clearly labelled as a pilot/test Business. It does not run against the live Baslon Digital rebuild Business.**
+
+Because Phase 2 strategy artifacts may be intentionally immutable or approval-bound; the consultant must be free to make real strategic decisions during the pilot; the pilot must be repeatable; and the live approved Phase 1 Business should not accumulate test strategy records.
+
+The copied case may be derived from Baslon's own approved data. Cloning mechanics are **not** defined by this document. *Applied in §3 Step 1, the capability matrix, and the Gate A checklist.*
+
+### PO-2 — Number of strategic alternatives
+
+**Allowed range 2–4 strategic alternatives; normal target 3.**
+
+No filler is generated merely to reach three. Two is acceptable when only two materially distinct options are supportable; four is acceptable where the evidence genuinely supports four distinct strategic paths. **The system must not rank, score or automatically select a winner.**
+
+This shapes the later Phase 2 generation contract. **No contract implementation is authorised now.** *Applied in §3 Step 5, §11 and the Gate A checklist.*
+
+### PO-3 — M4-03 before genuine Design Partner intake
+
+**M4-03 must be RESOLVED before the first genuine Design Partner intake cycle.** The restricted-intake workaround is not to be relied on for the first genuine Design Partner.
+
+Because a real Design Partner engagement should validate the intended Evidence Quality and gap-resolution journey; a restricted intake route would bypass part of the workflow the first real engagement should test; and Snapshot 4's exception was bounded to the controlled Baslon cycle and does not become the default external-data policy.
+
+M4-03 is **not resolved by this document** and remains open today. *Applied in §6, the capability matrix, and the Gate B checklist.*
+
+### PO-4 — Gate B role model
+
+**Minimum role model for the first Design Partner stage: Admin + Consultant.** A client-participant login is not required unless the client themselves must sign in, and stays deferred until the product genuinely needs direct client interaction.
+
+This does **not** reduce the requirement for authenticated identity, role enforcement, Business isolation or auditable approvals. *Applied in §6 and the Gate B checklist.*
+
+### PO-5 — First pilot consultant and NDA
+
+**One experienced external business consultant, under NDA.**
+
+Selection: experienced enough to challenge strategic conclusions; not involved in designing Baslon OS; comfortable reviewing a real SME case; able to explain where the system helps or hinders professional judgement.
+
+The NDA is a **Pilot v1 operating requirement**, because the Baslon Digital case contains genuine business and financial information. The NDA is **not** drafted by this document. *Applied in §7 and the Gate A checklist.*
+
+### PO-6 — Pilot v2
+
+**Pilot v2 is planned.** Pilot v1 starts from the approved Baslon Digital diagnosis and primarily validates diagnosis comprehension plus Phase 2 strategy and planning. Pilot v2 begins earlier in the journey — intake and Evidence Review — using Baslon-controlled data, before any genuine Design Partner data is introduced.
+
+**Pilot v2 is not required to pass Consultant Pilot Ready v1.** It is a planned follow-on validation stage, not an implementation milestone. *Applied in §7.*
 
 ---
 
