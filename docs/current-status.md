@@ -1,17 +1,19 @@
 # Baslon OS — Current Development Status
 
-Updated: 23 September 2026
+Updated: 24 September 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
 For what the product must be capable of before a real consultant tests it end to end, see [docs/product/consultant-pilot-ready-v1.md](product/consultant-pilot-ready-v1.md).
 
+For the approved Phase 2 core architecture, see [docs/phase-2/](phase-2/): the [architecture and entry design](phase-2/baslon-os-phase-2-architecture-and-entry-design-v6.md) and its [approval addendum](phase-2/baslon-os-phase-2-architecture-v6-approval-addendum-v11-final.md).
+
 ## Current engineering milestone
 
-**Current position (23 September 2026):** Milestone 4.
+**Current position (24 September 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
-- **Phase 2 has not started.** Its entry boundary is recorded below, and the next Phase 2 architecture task is for the Solution Architect to define.
+- **Phase 2 core architecture is CLOSED** (24 September 2026). The approved baseline is the two documents in `docs/phase-2/` (details below). **Phase 2 implementation has not started**, and **Pilot Fixture Architecture is a separate pending architecture gate that has not started**.
 - The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
 - P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
 - Repository baseline: `main` at the PR #25 merge (`0624c74d4c4571d94d9e507a335d2ff27e89d22c`, backup/restore runbook). Earlier baselines: PR #24 (`32f5529`, headline extension) and PR #23 (`45ed2f8`, Diagnosis IA).
@@ -186,7 +188,7 @@ documentation merged in PR #25, `0624c74d4c4571d94d9e507a335d2ff27e89d22c`). P-1
 baseline only: scheduled backups, offsite or encrypted storage, incident handling and a formal migration rollback /
 forward-fix procedure remain open.
 
-**Phase 2 entry boundary** (descriptive; Phase 2 is not designed or authorised):
+**Phase 2 entry boundary** (recorded 23 September 2026, before the Phase 2 core architecture was approved; it remains accurate and is now defined in full by the approved architecture below):
 - **Prerequisite:** workflow `PHASE1_APPROVED`. For this cycle that is v21.
 - **Analytical authority:** the approved artifact `a4e4f0e0-…` (`phase1_diagnosis_artifact_v1` v1), not raw model output, unreviewed items, mutable review state, rejected items or superseded values.
 - **Provenance:** any Phase 2 input keeps an explicit trail to `approvedDiagnosisId`, `diagnosisRunId`, `snapshotId`, `snapshotVersion` and `snapshotContentHash`.
@@ -197,6 +199,21 @@ forward-fix procedure remain open.
 - **Human decisions stay human:** Phase 2 may propose; material strategic choices need defined human checkpoints before becoming approved state.
 
 **Not yet authorised:** a Phase 2 model call, Phase 2 analysis runs, strategy, recommendations, initiative ranking, objectives, roadmaps, implementation plans, any workflow move beyond `PHASE1_APPROVED`, recommendation approval, or any Phase 2 artifact.
+
+**Phase 2 core architecture: CLOSED** (24 September 2026).
+
+The governing Phase 2 architecture baseline for Gate A is these two documents together:
+
+- [`docs/phase-2/baslon-os-phase-2-architecture-and-entry-design-v6.md`](phase-2/baslon-os-phase-2-architecture-and-entry-design-v6.md)
+- [`docs/phase-2/baslon-os-phase-2-architecture-v6-approval-addendum-v11-final.md`](phase-2/baslon-os-phase-2-architecture-v6-approval-addendum-v11-final.md)
+
+Recorded for this closure:
+
+- **Both documents are governing.** Neither stands alone: the addendum records the approved clarifications and the binary acceptance criteria that supplement the architecture's own, and it controls for those clarifications only. Where it is silent, the architecture governs.
+- **Architecture review is complete.** The core architecture went through six revisions and the approval addendum through eleven. The substantive design findings closed at addendum v6; the revisions after that were verification coverage and document integrity.
+- **Requirements-to-criteria verification is complete.** Every normative requirement in the addendum's §§2–10 has at least one binary acceptance criterion in its §11 (111 criteria across 17 blocks). That section is regenerated from the requirements rather than edited incrementally, and the criteria supplement the architecture's own §28.
+- **Phase 2 implementation has not started.** No Phase 2 schema, migration, prompt, model contract, service, workflow state or UI exists. The workflow enum still ends at `PHASE1_APPROVED`, and `analysis_runs` still holds only `evidence_coherence`, `phase1_diagnosis` and `diagnosis_headlines`.
+- **Pilot Fixture Architecture is a separate pending architecture gate, and no work on it has started.** No implementation brief may be issued until it is separately approved. It must settle, among other things, whether a general pilot/test domain classification is required and how fixture eligibility is validated without hard-coding Baslon Digital — an entry precondition in the approved architecture depends on that decision.
 
 **M4-13 (approval review surface): RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge before approval. The review page shows the exact effective items that approval persists.
 
