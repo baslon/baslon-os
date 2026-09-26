@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 24 September 2026
+Updated: 26 September 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
@@ -8,12 +8,15 @@ For what the product must be capable of before a real consultant tests it end to
 
 For the approved Phase 2 core architecture, see [docs/phase-2/](phase-2/): the [architecture and entry design](phase-2/baslon-os-phase-2-architecture-and-entry-design-v6.md) and its [approval addendum](phase-2/baslon-os-phase-2-architecture-v6-approval-addendum-v11-final.md).
 
+For where the product is heading, see the [Indispensable Core Product Specification v2](product/baslon-os-indispensable-core-product-spec-v2.md) and the [Phase 3 Management Loop roadmap decision](product/baslon-os-phase-3-management-loop-roadmap-decision.md). Both are product direction, not architecture.
+
 ## Current engineering milestone
 
-**Current position (24 September 2026):** Milestone 4.
+**Current position (26 September 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
 - **Phase 2 core architecture is CLOSED** (24 September 2026). The approved baseline is the two documents in `docs/phase-2/` (details below). **Phase 2 implementation has not started**, and **Pilot Fixture Architecture is a separate pending architecture gate that has not started**.
+- **Phase 3 is formally named MANAGE** and its product direction is approved (26 September 2026). **Phase 3 architecture has not started and Phase 3 implementation has not started** (details below).
 - The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
 - P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
 - Repository baseline: `main` at the PR #25 merge (`0624c74d4c4571d94d9e507a335d2ff27e89d22c`, backup/restore runbook). Earlier baselines: PR #24 (`32f5529`, headline extension) and PR #23 (`45ed2f8`, Diagnosis IA).
@@ -271,6 +274,46 @@ grounding; non-blocking for Snapshot 4 Phase 1 under the no-`v7` guardrail), B-3
 is defined but not reachable) and B-33 (SQL migration line endings). B-19 is unchanged.
 
 Not started: M4-02B and Phase 2 (see the Phase 2 entry boundary above). The current Baslon Digital Business has not been archived.
+
+## Product direction and roadmap
+
+Two approved product artifacts were registered on 26 September 2026. Both define **product direction only**. Neither authorises architecture or implementation.
+
+- [`docs/product/baslon-os-indispensable-core-product-spec-v2.md`](product/baslon-os-indispensable-core-product-spec-v2.md) — **approved product-direction artifact.** The Indispensable Core Product Specification v2, which frames Baslon OS as the owner's weekly management cockpit and sets out the adopted operating strategy, the weekly owner experience and cadence, the reassessment trigger, the minimum data required, and the product and human/AI boundaries.
+- [`docs/product/baslon-os-phase-3-management-loop-roadmap-decision.md`](product/baslon-os-phase-3-management-loop-roadmap-decision.md) — **approved roadmap decision.** The post-Phase-2 Management Loop becomes formal Phase 3.
+
+The approved phase model is:
+
+```text
+Phase 1 — UNDERSTAND
+Evidence → Diagnosis
+
+Phase 2 — DECIDE
+Diagnosis → Strategic Direction → Growth Plan → 90-Day Plan
+
+Phase 3 — MANAGE
+Adopted Operating Strategy → Execution → Measurement → Weekly Review → Decisions → Reassessment
+```
+
+Status of each phase:
+
+| Phase | Name | Status |
+|---|---|---|
+| Phase 1 | UNDERSTAND | Built; approved baseline (`PHASE1_APPROVED` v21 on Snapshot 4) |
+| Phase 2 | DECIDE | **Core architecture closed**; implementation not started |
+| Phase 3 | MANAGE | **Product direction defined**; architecture not started |
+
+Recorded for this registration:
+
+- **Phase 3 is formally named MANAGE.** It is the intended destination of the product rather than an optional future feature set.
+- **Phase 3 product direction is defined.** The two documents above are the approved statement of it.
+- **Phase 3 architecture has not started.** No Phase 3 entry contract, workspace model, state model, command set or acceptance criteria exists. The open architecture questions are listed in the roadmap decision and are not answered anywhere in this repository.
+- **Phase 3 implementation has not started.** No Phase 3 schema, migration, workflow state, prompt, model contract, service, test or UI exists.
+- **The closed Phase 2 architecture remains unchanged.** Registering Phase 3 direction does not amend, reinterpret or extend the two governing Phase 2 documents in `docs/phase-2/`.
+- **Pilot Fixture Architecture remains the next separate Phase 2 architecture gate**, and it must be approved before any Phase 2 implementation brief is issued. Phase 3 does not displace or precede it.
+- **Sequencing.** The roadmap decision records that Phase 3 architecture should not begin before the Phase 2 implementation path is stable enough to validate its real outputs and domain boundaries.
+
+---
 
 ## Active Baslon Digital Business
 
