@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 26 September 2026
+Updated: 29 September 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
@@ -12,10 +12,10 @@ For where the product is heading, see the [Indispensable Core Product Specificat
 
 ## Current engineering milestone
 
-**Current position (26 September 2026):** Milestone 4.
+**Current position (29 September 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
-- **Phase 2 core architecture is CLOSED** (24 September 2026). The approved baseline is the two documents in `docs/phase-2/` (details below). **Phase 2 implementation has not started**, and **Pilot Fixture Architecture is a separate pending architecture gate that has not started**.
+- **Phase 2 core architecture is CLOSED** (24 September 2026) and **Pilot Fixture Architecture v2.1 is APPROVED** (29 September 2026), which closes the separate Pilot Fixture Architecture design gate for Phase 2 Gate A. The approved baseline is the three documents in `docs/phase-2/` (details below). **Phase 2 implementation has not started** and no live migration is authorised.
 - **Phase 3 is formally named MANAGE** and its product direction is approved (26 September 2026). **Phase 3 architecture has not started and Phase 3 implementation has not started** (details below).
 - The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
 - P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
@@ -216,8 +216,27 @@ Recorded for this closure:
 - **Architecture review is complete.** The core architecture went through six revisions and the approval addendum through eleven. The substantive design findings closed at addendum v6; the revisions after that were verification coverage and document integrity.
 - **Requirements-to-criteria verification is complete.** Every normative requirement in the addendum's §§2–10 has at least one binary acceptance criterion in its §11 (111 criteria across 17 blocks). That section is regenerated from the requirements rather than edited incrementally, and the criteria supplement the architecture's own §28.
 - **Phase 2 implementation has not started.** No Phase 2 schema, migration, prompt, model contract, service, workflow state or UI exists. The workflow enum still ends at `PHASE1_APPROVED`, and `analysis_runs` still holds only `evidence_coherence`, `phase1_diagnosis` and `diagnosis_headlines`.
-- **Pilot Fixture Architecture is a separate pending architecture gate, and no work on it has started.** No implementation brief may be issued until it is separately approved. It must settle, among other things, whether a general pilot/test domain classification is required and how fixture eligibility is validated without hard-coding Baslon Digital — an entry precondition in the approved architecture depends on that decision.
+- **Pilot Fixture Architecture is approved** (29 September 2026), closing the gate this bullet list previously recorded as pending. It settles the general pilot/test classification and how fixture eligibility is validated without hard-coding Baslon Digital — the entry precondition in the approved architecture that depended on that decision. The record follows.
 
+**Pilot Fixture Architecture: APPROVED** (29 September 2026).
+
+Approved by Product Owner David Demetrius on 29 September 2026. This **closes the separate Pilot Fixture Architecture design gate** for Phase 2 Gate A — the last outstanding Phase 2 architecture gate.
+
+- [`docs/phase-2/baslon-os-pilot-fixture-architecture-v2.1.md`](phase-2/baslon-os-pilot-fixture-architecture-v2.1.md)
+
+The approved mechanism:
+
+- **Protected template.** A fixture template is a separate, protected Business graph holding a canonical approved Phase 1 baseline. It is never the consultant workspace, never receives Phase 2 work, and an approved template version is immutable.
+- **Disposable instance.** The consultant works only on a Pilot Fixture Instance — a clone of the template with regenerated identifiers throughout. The live source Business is never the consultant's workspace.
+- **Reviewed export before disposal.** Reset is whole-instance dispose-and-recreate, never in-place mutation or rollback. Before disposal, a reviewed export of the attempt's outputs must be durably stored, verified and explicitly confirmed by an authorised actor; reset fails closed if any of that fails. The reset audit lives outside the disposable Business graph and survives it.
+
+Scope of this record:
+
+- **Phase 2 implementation has not started**, and registering this approval does not start it. No Phase 2 or fixture schema, migration, service, test or UI exists.
+- **No live migration is authorised** by this approval. Any schema work still requires explicit Product Owner approval before it touches live `baslon_os`.
+- **Consultant Pilot Ready v1 is not achieved.** This closes one architecture gate; the Gate A criteria in [`docs/product/consultant-pilot-ready-v1.md`](product/consultant-pilot-ready-v1.md) are unchanged.
+- **The closed Phase 2 core architecture is unchanged.** The two governing documents above are not amended, reinterpreted or extended by this approval.
+- **Next work is scoped implementation planning for Step A** of the approved sequence — Business usage classification, fixture template/instance/reset metadata, and guarded fixture services — subject to the approved architecture and the remaining implementation-planning checks recorded in its §24.
 **M4-13 (approval review surface): RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge before approval. The review page shows the exact effective items that approval persists.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
@@ -310,7 +329,7 @@ Recorded for this registration:
 - **Phase 3 architecture has not started.** No Phase 3 entry contract, workspace model, state model, command set or acceptance criteria exists. The open architecture questions are listed in the roadmap decision and are not answered anywhere in this repository.
 - **Phase 3 implementation has not started.** No Phase 3 schema, migration, workflow state, prompt, model contract, service, test or UI exists.
 - **The closed Phase 2 architecture remains unchanged.** Registering Phase 3 direction does not amend, reinterpret or extend the two governing Phase 2 documents in `docs/phase-2/`.
-- **Pilot Fixture Architecture remains the next separate Phase 2 architecture gate**, and it must be approved before any Phase 2 implementation brief is issued. Phase 3 does not displace or precede it.
+- **Pilot Fixture Architecture was approved on 29 September 2026**, closing the last Phase 2 architecture gate. Phase 3 does not displace or precede the Phase 2 implementation work that follows it.
 - **Sequencing.** The roadmap decision records that Phase 3 architecture should not begin before the Phase 2 implementation path is stable enough to validate its real outputs and domain boundaries.
 
 ---
