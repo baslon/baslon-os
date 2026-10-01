@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { numericPrecisions, numericShapeIssue } from "@/domain/numeric-precision";
+import { DEFAULT_BUSINESS_USAGE, selfAssignableBusinessUsageSchema } from "@/domain/pilot-fixture";
 
 const score = z.number().min(0).max(1);
 const dateString = z.iso.date();
@@ -18,6 +19,13 @@ export const businessInputSchema = z.object({
   sector: z.string().trim().max(120).optional(),
   primaryGeography: z.string().trim().max(120).optional(),
   profileData: z.record(z.string(), z.unknown()).default({}),
+  /**
+   * Ordinary creation may declare only LIVE or SYNTHETIC_TEST, and defaults to LIVE.
+   * Protected fixture classifications are deliberately unreachable here: they are
+   * assigned only by the guarded fixture pathway, so a generic create request cannot
+   * manufacture a template or a disposable instance.
+   */
+  businessUsage: selfAssignableBusinessUsageSchema.default(DEFAULT_BUSINESS_USAGE),
 });
 
 export const businessProfileInputSchema = z.object({

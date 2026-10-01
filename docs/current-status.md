@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 29 September 2026
+Updated: 1 October 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
@@ -12,10 +12,10 @@ For where the product is heading, see the [Indispensable Core Product Specificat
 
 ## Current engineering milestone
 
-**Current position (29 September 2026):** Milestone 4.
+**Current position (1 October 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
-- **Phase 2 core architecture is CLOSED** (24 September 2026) and **Pilot Fixture Architecture v2.1 is APPROVED** (29 September 2026), which closes the separate Pilot Fixture Architecture design gate for Phase 2 Gate A. The approved baseline is the three documents in `docs/phase-2/` (details below). **Phase 2 implementation has not started** and no live migration is authorised.
+- **Phase 2 core architecture is CLOSED** (24 September 2026) and **Pilot Fixture Architecture v2.1 is APPROVED** (29 September 2026), which closes the separate Pilot Fixture Architecture design gate for Phase 2 Gate A. The approved baseline is the three documents in `docs/phase-2/` (details below). **Pilot fixture Step A (fixture domain foundation) is delivered and awaiting Solution Architect review on an unmerged PR; Steps B–F have not started** and no live migration is authorised.
 - **Phase 3 is formally named MANAGE** and its product direction is approved (26 September 2026). **Phase 3 architecture has not started and Phase 3 implementation has not started** (details below).
 - The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
 - P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
@@ -215,7 +215,7 @@ Recorded for this closure:
 - **Both documents are governing.** Neither stands alone: the addendum records the approved clarifications and the binary acceptance criteria that supplement the architecture's own, and it controls for those clarifications only. Where it is silent, the architecture governs.
 - **Architecture review is complete.** The core architecture went through six revisions and the approval addendum through eleven. The substantive design findings closed at addendum v6; the revisions after that were verification coverage and document integrity.
 - **Requirements-to-criteria verification is complete.** Every normative requirement in the addendum's §§2–10 has at least one binary acceptance criterion in its §11 (111 criteria across 17 blocks). That section is regenerated from the requirements rather than edited incrementally, and the criteria supplement the architecture's own §28.
-- **Phase 2 implementation has not started.** No Phase 2 schema, migration, prompt, model contract, service, workflow state or UI exists. The workflow enum still ends at `PHASE1_APPROVED`, and `analysis_runs` still holds only `evidence_coherence`, `phase1_diagnosis` and `diagnosis_headlines`.
+- **Only the pilot fixture foundation (Step A) exists; no Phase 2 strategic implementation has started.** No Phase 2 prompt, model contract, strategic module, workflow state or UI exists. The workflow enum still ends at `PHASE1_APPROVED`, and `analysis_runs` still holds only `evidence_coherence`, `phase1_diagnosis` and `diagnosis_headlines`. The fixture schema added by Step A is classification and provenance metadata only — see the Step A record below.
 - **Pilot Fixture Architecture is approved** (29 September 2026), closing the gate this bullet list previously recorded as pending. It settles the general pilot/test classification and how fixture eligibility is validated without hard-coding Baslon Digital — the entry precondition in the approved architecture that depended on that decision. The record follows.
 
 **Pilot Fixture Architecture: APPROVED** (29 September 2026).
@@ -232,11 +232,35 @@ The approved mechanism:
 
 Scope of this record:
 
-- **Phase 2 implementation has not started**, and registering this approval does not start it. No Phase 2 or fixture schema, migration, service, test or UI exists.
+- **Phase 2 implementation had not started when this approval was registered.** Step A of the approved sequence has since been implemented; see the Step A record below.
 - **No live migration is authorised** by this approval. Any schema work still requires explicit Product Owner approval before it touches live `baslon_os`.
 - **Consultant Pilot Ready v1 is not achieved.** This closes one architecture gate; the Gate A criteria in [`docs/product/consultant-pilot-ready-v1.md`](product/consultant-pilot-ready-v1.md) are unchanged.
 - **The closed Phase 2 core architecture is unchanged.** The two governing documents above are not amended, reinterpreted or extended by this approval.
 - **Next work is scoped implementation planning for Step A** of the approved sequence — Business usage classification, fixture template/instance/reset metadata, and guarded fixture services — subject to the approved architecture and the remaining implementation-planning checks recorded in its §24.
+
+**Pilot Fixture Step A — Fixture Domain Foundation: DELIVERED, AWAITING REVIEW** (1 October 2026).
+
+Implemented on `claude/phase-2` against baseline `76ba7a0`. **The PR is open and unmerged**, left for Solution Architect review.
+
+- [`docs/phase-2/baslon-os-step-a-fixture-domain-foundation-implementation-note.md`](phase-2/baslon-os-step-a-fixture-domain-foundation-implementation-note.md)
+
+What Step A adds:
+
+- **`businesses.business_usage`** — a validated first-class classification with the four approved values (`LIVE`, `SYNTHETIC_TEST`, `PILOT_FIXTURE_TEMPLATE`, `PILOT_FIXTURE_INSTANCE`), separate from `businesses.status`. Existing rows classify as **`LIVE`** by column default, the conservative direction because `LIVE` is ineligible for pilot reset.
+- **Four metadata tables** — `fixture_templates`, `fixture_instances`, `fixture_instance_run_provenance` and `fixture_reset_operations`. None is Business-owned, so the **reset audit survives disposal of the Business it describes**.
+- **Guarded services** with administrative authority separate from ordinary Business edit authority. Protected fixture classifications are unreachable through generic create/update and through raw SQL, enforced by a database trigger.
+
+What Step A explicitly does **not** do:
+
+| | |
+|---|---|
+| Clone engine and clone verification | **not implemented** — Step B. The reserved command contracts fail closed |
+| Phase 2 entry, workspace, eligibility enforcement | **not implemented** — Step C. The eligibility evaluation covers classification and metadata only |
+| Disposal, reset orchestration, reviewed-export generator | **not implemented** — Step D. Export format, storage, access and retention remain unresolved and block enabling reset |
+| Live migration | **not authorised**. Migration and tests ran only against `baslon_os_test` |
+| Phase 2 Gate A / Consultant Pilot Ready v1 | **not complete** — unchanged by this delivery |
+
+Validation: typecheck, lint, 371 unit/integration tests, 135 PostgreSQL tests and the production build all pass. One pre-existing intermittent failure in `tests/postgres/initial-intake.postgres.test.ts` was observed on the untouched baseline and is recorded in the implementation note.
 **M4-13 (approval review surface): RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge before approval. The review page shows the exact effective items that approval persists.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).
