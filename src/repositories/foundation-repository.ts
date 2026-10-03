@@ -40,6 +40,8 @@ export class FoundationRepository {
         websiteUrl: parsed.websiteUrl,
         sector: parsed.sector,
         primaryGeography: parsed.primaryGeography,
+        // Parsed from the self-assignable set only; defaults to LIVE.
+        businessUsage: parsed.businessUsage,
       }).returning();
       await tx.insert(businessProfiles).values({
         businessId: business.id,

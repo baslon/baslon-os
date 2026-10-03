@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   check,
   bigint,
+  boolean,
   date,
   foreignKey,
   index,
@@ -25,6 +26,12 @@ import {
   findingMaterialities,
 } from "@/domain/evidence-coherence";
 import { numericPrecisions } from "@/domain/numeric-precision";
+import {
+  businessUsages,
+  fixtureInstanceStatuses,
+  fixtureResetStates,
+  fixtureTemplateStatuses,
+} from "@/domain/pilot-fixture";
 import {
   diagnosisGroundings,
   diagnosisInterpretationConfidences,
@@ -53,6 +60,10 @@ export const workflowEvent = pgEnum("workflow_event", [
   "RUN_GAP_ANALYSIS", "MARK_ANALYSIS_COMPLETE",
 ]);
 export const actorType = pgEnum("actor_type", ["human", "system", "ai"]);
+export const businessUsage = pgEnum("business_usage", businessUsages);
+export const fixtureTemplateStatus = pgEnum("fixture_template_status", fixtureTemplateStatuses);
+export const fixtureInstanceStatus = pgEnum("fixture_instance_status", fixtureInstanceStatuses);
+export const fixtureResetState = pgEnum("fixture_reset_state", fixtureResetStates);
 export const evidenceExtractionRunStatus = pgEnum("evidence_extraction_run_status", [
   "RUNNING", "SUCCEEDED", "FAILED",
 ]);
@@ -100,10 +111,22 @@ export const businesses = pgTable("businesses", {
   websiteUrl: text("website_url"),
   sector: text("sector"),
   status: text("status").default("active").notNull(),
+  // Lifecycle (`status`) and data classification (`businessUsage`) are deliberately
+  // separate concerns. LIVE is the safe default: it forbids pilot reset and fixture
+  // eligibility, so an unclassified row withholds a capability rather than exposing
+  // real data to disposal. Protected fixture values are settable only through the
+  // guarded fixture pathway, enforced by the businesses_usage_guard trigger.
+  businessUsage: businessUsage("business_usage").default("LIVE").notNull(),
   primaryGeography: text("primary_geography"),
   ...timestamps,
   archivedAt: timestamp("archived_at", { withTimezone: true }),
-}, (table) => [index("businesses_status_idx").on(table.status)]);
+}, (table) => [
+  index("businesses_status_idx").on(table.status),
+  index("businesses_usage_idx").on(table.businessUsage),
+  // Composite target so fixture metadata can bind a Business by id *and* usage,
+  // making "this row is the template/instance it claims to be" a relational fact.
+  unique("businesses_id_usage_unique").on(table.id, table.businessUsage),
+]);
 
 export const businessProfiles = pgTable("business_profiles", {
   businessId: uuid("business_id").primaryKey().references(() => businesses.id, { onDelete: "restrict" }),
@@ -1188,3 +1211,414 @@ export const evidenceExtractionRunRelations = relations(evidenceExtractionRuns, 
     references: [sourceSubmissions.id],
   }),
 }));
+
+// ---------------------------------------------------------------------------
+// Pilot fixture foundation (Pilot Fixture Architecture v2.1, Step A)
+//
+// These four tables hold the durable provenance the fixture mechanism needs. They are
+// deliberately NOT part of the Business-owned graph that permanent deletion walks:
+// disposal of a fixture Business must not be able to erase the record of what was
+// disposed. Links are therefore of two kinds, and each is labelled below:
+//
+//   * relational        - a real foreign key, used where the target must still exist
+//   * retained identity - a bare uuid with no FK, used where the target is expected to
+//                         be deleted and the identifier must outlive it
+// ---------------------------------------------------------------------------
+
+/**
+ * A protected canonical Phase 1 baseline (architecture section 5).
+ *
+ * A row here records provenance for a template Business that already exists. It does
+ * not construct the copy - Step B does that - so a template registered by Step A alone
+ * is not a usable pilot baseline.
+ */
+export const fixtureTemplates = pgTable("fixture_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  templateVersion: integer("template_version").notNull(),
+
+  // relational: the template Business must exist, and must really be classified as a
+  // template. The composite FK below makes that a database fact rather than a comment.
+  templateBusinessId: uuid("template_business_id").notNull()
+    .references(() => businesses.id, { onDelete: "restrict" }),
+  templateBusinessUsage: businessUsage("template_business_usage")
+    .default("PILOT_FIXTURE_TEMPLATE").notNull(),
+
+  // relational: the source Business is never modified or reclassified, and restrict
+  // keeps it from being deleted out from under its own provenance record.
+  sourceBusinessId: uuid("source_business_id").notNull()
+    .references(() => businesses.id, { onDelete: "restrict" }),
+
+  // relational, via composite same-Business FKs: the approved Diagnosis and immutable
+  // Snapshot must belong to the source Business, not merely exist somewhere.
+  sourceApprovedDiagnosisId: uuid("source_approved_diagnosis_id").notNull(),
+  sourceApprovedDiagnosisVersion: integer("source_approved_diagnosis_version").notNull(),
+  sourceSnapshotId: uuid("source_snapshot_id").notNull(),
+  sourceSnapshotVersion: integer("source_snapshot_version").notNull(),
+  // Recorded, not derived: there is no first-class Snapshot hash column in this PR.
+  sourceSnapshotContentHash: text("source_snapshot_content_hash").notNull(),
+
+  templateContentFingerprint: text("template_content_fingerprint").notNull(),
+  /**
+   * Three approval meanings, kept strictly apart (review finding R2, amendment section 1).
+   *
+   * 1. creation execution - who registered this template, derived from authority;
+   * 2. historical source approval - who approved the SOURCE Diagnosis, copied verbatim
+   *    from the stored approved_diagnoses row. There is no actor type because the source
+   *    record does not carry one, and inventing one would be fabrication;
+   * 3. template-version approval - a separate explicit approval of this protected
+   *    template. Null until approved: a template is NOT approved because its source was.
+   */
+  createdByActorType: actorType("created_by_actor_type").notNull(),
+  createdByActorId: text("created_by_actor_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  sourceApprovalActorId: text("source_approval_actor_id").notNull(),
+  sourceApprovedAt: timestamp("source_approved_at", { withTimezone: true }).notNull(),
+  templateApprovedByActorType: actorType("template_approved_by_actor_type"),
+  templateApprovedByActorId: text("template_approved_by_actor_id"),
+  templateApprovedAt: timestamp("template_approved_at", { withTimezone: true }),
+  status: fixtureTemplateStatus("status").default("ACTIVE").notNull(),
+  retiredByActorType: actorType("retired_by_actor_type"),
+  retiredByActorId: text("retired_by_actor_id"),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+}, (table) => [
+  // A Business is at most one template.
+  unique("fixture_templates_business_unique").on(table.templateBusinessId),
+  // Versions are numbered per source family, so a second non-Baslon fixture can have
+  // its own v1 without colliding. Deliberately not a single global ACTIVE template.
+  unique("fixture_templates_source_version_unique")
+    .on(table.sourceBusinessId, table.templateVersion),
+  // Composite target for instances and reset operations binding a template version.
+  unique("fixture_templates_id_version_unique").on(table.id, table.templateVersion),
+  foreignKey({
+    columns: [table.templateBusinessId, table.templateBusinessUsage],
+    foreignColumns: [businesses.id, businesses.businessUsage],
+    name: "fixture_templates_business_usage_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.sourceApprovedDiagnosisId, table.sourceBusinessId],
+    foreignColumns: [approvedDiagnoses.id, approvedDiagnoses.businessId],
+    name: "fixture_templates_source_diagnosis_same_business_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.sourceSnapshotId, table.sourceBusinessId],
+    foreignColumns: [businessStateSnapshots.id, businessStateSnapshots.businessId],
+    name: "fixture_templates_source_snapshot_same_business_fk",
+  }).onDelete("restrict"),
+  check(
+    "fixture_templates_identity_separation_check",
+    sql`${table.templateBusinessId} <> ${table.sourceBusinessId}`,
+  ),
+  check(
+    "fixture_templates_usage_check",
+    sql`${table.templateBusinessUsage} = 'PILOT_FIXTURE_TEMPLATE'`,
+  ),
+  check("fixture_templates_version_check", sql`${table.templateVersion} > 0`),
+  // All-or-nothing approval evidence, including the actor type (R5).
+  check(
+    "fixture_templates_approval_check",
+    sql`((${table.templateApprovedAt} IS NULL AND ${table.templateApprovedByActorId} IS NULL AND ${table.templateApprovedByActorType} IS NULL) OR (${table.templateApprovedAt} IS NOT NULL AND ${table.templateApprovedByActorId} IS NOT NULL AND ${table.templateApprovedByActorType} IS NOT NULL))`,
+  ),
+  check(
+    "fixture_templates_retirement_check",
+    sql`((${table.status} = 'RETIRED' AND ${table.retiredAt} IS NOT NULL AND ${table.retiredByActorId} IS NOT NULL AND ${table.retiredByActorType} IS NOT NULL) OR (${table.status} <> 'RETIRED' AND ${table.retiredAt} IS NULL AND ${table.retiredByActorId} IS NULL AND ${table.retiredByActorType} IS NULL))`,
+  ),
+]);
+
+/**
+ * A disposable Business clone produced from a template (architecture section 6).
+ *
+ * `businessId` is nullable on purpose. Step D disposal deletes the Business row, and
+ * the instance record must survive that to explain the disposal and support retries,
+ * so the live link is cleared while `historicalBusinessId` retains the identity.
+ */
+export const fixtureInstances = pgTable("fixture_instances", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // relational while the graph exists; cleared on disposal.
+  businessId: uuid("business_id").references(() => businesses.id, { onDelete: "restrict" }),
+  businessUsageBinding: businessUsage("business_usage_binding"),
+  // retained identity: survives deletion of the Business row above.
+  historicalBusinessId: uuid("historical_business_id").notNull(),
+
+  // relational: templates are retired rather than deleted, so restrict is safe.
+  fixtureTemplateId: uuid("fixture_template_id").notNull()
+    .references(() => fixtureTemplates.id, { onDelete: "restrict" }),
+  templateVersion: integer("template_version").notNull(),
+
+  createdByActorType: actorType("created_by_actor_type").notNull(),
+  createdByActorId: text("created_by_actor_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+
+  /** 0 for a first instance; incremented by each reset that recreates it. */
+  generation: integer("generation").default(0).notNull(),
+  // relational self-link: predecessor instance rows are retained, never deleted.
+  predecessorInstanceId: uuid("predecessor_instance_id")
+    .references((): AnyPgColumn => fixtureInstances.id, { onDelete: "restrict" }),
+
+  status: fixtureInstanceStatus("status").default("ACTIVE").notNull(),
+
+  /**
+   * Clone verification is a Step B capability. This stays false until a real
+   * verification runs, and eligibility requires it - so a metadata row alone can never
+   * present an unverified instance as pilot-ready.
+   */
+  verificationPassed: boolean("verification_passed").default(false).notNull(),
+  verificationFingerprint: text("verification_fingerprint"),
+  verifiedByActorType: actorType("verified_by_actor_type"),
+  verifiedByActorId: text("verified_by_actor_id"),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+
+  disposedAt: timestamp("disposed_at", { withTimezone: true }),
+  disposalByActorType: actorType("disposal_by_actor_type"),
+  disposalByActorId: text("disposal_by_actor_id"),
+  disposalReason: text("disposal_reason"),
+  failureReason: text("failure_reason"),
+  // R2: previously parsed and discarded, so failure attribution was lost.
+  failureRecordedByActorType: actorType("failure_recorded_by_actor_type"),
+  failureRecordedByActorId: text("failure_recorded_by_actor_id"),
+  failureRecordedAt: timestamp("failure_recorded_at", { withTimezone: true }),
+}, (table) => [
+  unique("fixture_instances_business_unique").on(table.businessId),
+  unique("fixture_instances_historical_business_unique").on(table.historicalBusinessId),
+  // One replacement per predecessor: a reset cannot fork into two live successors.
+  unique("fixture_instances_predecessor_unique").on(table.predecessorInstanceId),
+  foreignKey({
+    columns: [table.businessId, table.businessUsageBinding],
+    foreignColumns: [businesses.id, businesses.businessUsage],
+    name: "fixture_instances_business_usage_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.fixtureTemplateId, table.templateVersion],
+    foreignColumns: [fixtureTemplates.id, fixtureTemplates.templateVersion],
+    name: "fixture_instances_template_version_fk",
+  }).onDelete("restrict"),
+  check(
+    "fixture_instances_usage_check",
+    sql`(${table.businessUsageBinding} IS NULL OR ${table.businessUsageBinding} = 'PILOT_FIXTURE_INSTANCE')`,
+  ),
+  // The live link and its usage binding move together, and while attached the live id
+  // must equal the retained identity.
+  check(
+    "fixture_instances_business_link_check",
+    sql`((${table.businessId} IS NULL AND ${table.businessUsageBinding} IS NULL) OR (${table.businessId} IS NOT NULL AND ${table.businessUsageBinding} IS NOT NULL AND ${table.businessId} = ${table.historicalBusinessId}))`,
+  ),
+  check("fixture_instances_generation_check", sql`${table.generation} >= 0`),
+  check(
+    "fixture_instances_predecessor_check",
+    sql`(${table.predecessorInstanceId} IS NULL OR ${table.predecessorInstanceId} <> ${table.id})`,
+  ),
+  // A first-generation instance has no predecessor; a reset-created one must have both.
+  check(
+    "fixture_instances_generation_predecessor_check",
+    sql`((${table.generation} = 0 AND ${table.predecessorInstanceId} IS NULL) OR (${table.generation} > 0 AND ${table.predecessorInstanceId} IS NOT NULL))`,
+  ),
+  check(
+    "fixture_instances_verification_check",
+    sql`((${table.verificationPassed} = false AND ${table.verificationFingerprint} IS NULL AND ${table.verifiedAt} IS NULL AND ${table.verifiedByActorId} IS NULL AND ${table.verifiedByActorType} IS NULL) OR (${table.verificationPassed} = true AND ${table.verificationFingerprint} IS NOT NULL AND ${table.verifiedAt} IS NOT NULL AND ${table.verifiedByActorId} IS NOT NULL AND ${table.verifiedByActorType} IS NOT NULL))`,
+  ),
+  check(
+    "fixture_instances_disposal_check",
+    sql`((${table.status} = 'DISPOSED' AND ${table.disposedAt} IS NOT NULL AND ${table.disposalByActorId} IS NOT NULL AND ${table.disposalByActorType} IS NOT NULL AND ${table.disposalReason} IS NOT NULL) OR (${table.status} <> 'DISPOSED' AND ${table.disposedAt} IS NULL AND ${table.disposalByActorId} IS NULL AND ${table.disposalByActorType} IS NULL AND ${table.disposalReason} IS NULL))`,
+  ),
+  check(
+    "fixture_instances_failed_creation_check",
+    sql`((${table.status} = 'FAILED_CREATION' AND ${table.failureReason} IS NOT NULL AND ${table.failureRecordedByActorId} IS NOT NULL AND ${table.failureRecordedByActorType} IS NOT NULL AND ${table.failureRecordedAt} IS NOT NULL) OR (${table.status} <> 'FAILED_CREATION' AND ${table.failureReason} IS NULL AND ${table.failureRecordedByActorId} IS NULL AND ${table.failureRecordedByActorType} IS NULL AND ${table.failureRecordedAt} IS NULL))`,
+  ),
+  index("fixture_instances_template_idx").on(table.fixtureTemplateId),
+  index("fixture_instances_status_idx").on(table.status),
+]);
+
+/**
+ * Per-run provenance for a cloned Phase 1 graph (architecture section 6, final bullet).
+ *
+ * Both run identifiers are retained identities with no FK: the cloned run is deleted
+ * when the instance graph is disposed, and the source run belongs to a template graph
+ * outside this record's ownership. Keeping the mapping here is what lets a copied run
+ * be told apart from a genuine new AI execution after disposal.
+ */
+export const fixtureInstanceRunProvenance = pgTable("fixture_instance_run_provenance", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  // relational: the owning instance record is retained, never deleted.
+  fixtureInstanceId: uuid("fixture_instance_id").notNull()
+    .references(() => fixtureInstances.id, { onDelete: "restrict" }),
+
+  // retained identity: deleted with the disposable graph.
+  clonedAnalysisRunId: uuid("cloned_analysis_run_id").notNull(),
+  // retained identity: belongs to the template/source graph.
+  sourceAnalysisRunId: uuid("source_analysis_run_id").notNull(),
+  sourceAnalysisModule: text("source_analysis_module").notNull(),
+
+  /**
+   * The SOURCE run's original hashes, kept verbatim. The clone's own recomputed hashes
+   * live on the cloned run; conflating the two would misrepresent a copy as a fresh
+   * execution. Step B recomputes the clone side and must not overwrite these.
+   */
+  sourceInputHash: text("source_input_hash").notNull(),
+  sourceSnapshotContentHash: text("source_snapshot_content_hash"),
+
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("fixture_run_provenance_cloned_unique")
+    .on(table.fixtureInstanceId, table.clonedAnalysisRunId),
+  unique("fixture_run_provenance_source_unique")
+    .on(table.fixtureInstanceId, table.sourceAnalysisRunId),
+  index("fixture_run_provenance_instance_idx").on(table.fixtureInstanceId),
+]);
+
+/**
+ * The reset audit trail (architecture sections 9 and 10).
+ *
+ * This table owns no Business and is referenced by none, so deleting a fixture
+ * Business, its copied runs or its instance graph cannot remove a row here. Every
+ * identifier that points into a disposable graph is a retained identity.
+ *
+ * Step A persists and guards this metadata. It does not perform reset.
+ */
+export const fixtureResetOperations = pgTable("fixture_reset_operations", {
+  /** Caller-supplied idempotency key: a retry reuses it and must not rebind the target. */
+  id: uuid("id").primaryKey(),
+
+  // retained identities: these are exactly the rows a reset destroys.
+  originalInstanceId: uuid("original_instance_id").notNull(),
+  originalBusinessId: uuid("original_business_id").notNull(),
+  replacementInstanceId: uuid("replacement_instance_id"),
+  replacementBusinessId: uuid("replacement_business_id"),
+
+  // relational: templates are retired, not deleted, so the audit can rely on them.
+  fixtureTemplateId: uuid("fixture_template_id").notNull()
+    .references(() => fixtureTemplates.id, { onDelete: "restrict" }),
+  templateVersion: integer("template_version").notNull(),
+  resetGeneration: integer("reset_generation").notNull(),
+
+  requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
+  requestedByActorType: actorType("requested_by_actor_type").notNull(),
+  requestedByActorId: text("requested_by_actor_id").notNull(),
+  /** An operator-supplied reason. Never model chain-of-thought. */
+  reason: text("reason").notNull(),
+
+  state: fixtureResetState("state").default("REQUESTED").notNull(),
+  failureCode: text("failure_code"),
+  failureDetail: text("failure_detail"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+
+  preDisposalFingerprint: text("pre_disposal_fingerprint"),
+  replacementVerificationFingerprint: text("replacement_verification_fingerprint"),
+
+  /**
+   * Review finding R3: a fingerprint does not prove disposal committed. This checkpoint is
+   * written by Step D in the SAME transaction as the actual deletion, and recovery routing
+   * reconciles it against the real instance rows rather than trusting it alone.
+   */
+  disposalCommittedAt: timestamp("disposal_committed_at", { withTimezone: true }),
+  /** Incremented on each re-entry from FAILED. Failure history lives in its own table. */
+  attemptCount: integer("attempt_count").default(0).notNull(),
+
+  /** Reviewed-export evidence required before disposal (architecture section 9.5). */
+  exportReference: text("export_reference"),
+  exportChecksum: text("export_checksum"),
+  exportVerifiedAt: timestamp("export_verified_at", { withTimezone: true }),
+  disposalConfirmedByActorType: actorType("disposal_confirmed_by_actor_type"),
+  disposalConfirmedByActorId: text("disposal_confirmed_by_actor_id"),
+  disposalConfirmedAt: timestamp("disposal_confirmed_at", { withTimezone: true }),
+}, (table) => [
+  // One operation per original target per generation: a retry reuses the row.
+  unique("fixture_reset_operations_target_generation_unique")
+    .on(table.originalInstanceId, table.resetGeneration),
+  // A replacement belongs to exactly one reset operation.
+  unique("fixture_reset_operations_replacement_unique").on(table.replacementInstanceId),
+  foreignKey({
+    columns: [table.fixtureTemplateId, table.templateVersion],
+    foreignColumns: [fixtureTemplates.id, fixtureTemplates.templateVersion],
+    name: "fixture_reset_operations_template_version_fk",
+  }).onDelete("restrict"),
+  check(
+    "fixture_reset_operations_distinct_instances_check",
+    sql`(${table.replacementInstanceId} IS NULL OR ${table.replacementInstanceId} <> ${table.originalInstanceId})`,
+  ),
+  check("fixture_reset_operations_generation_check", sql`${table.resetGeneration} >= 1`),
+  check(
+    "fixture_reset_operations_failure_check",
+    sql`((${table.state} = 'FAILED' AND ${table.failureCode} IS NOT NULL) OR (${table.state} <> 'FAILED' AND ${table.failureCode} IS NULL AND ${table.failureDetail} IS NULL))`,
+  ),
+  // Export evidence is all-or-nothing: a half-recorded confirmation must not look valid.
+  check(
+    "fixture_reset_operations_export_check",
+    sql`((${table.exportReference} IS NULL AND ${table.exportChecksum} IS NULL AND ${table.exportVerifiedAt} IS NULL AND ${table.disposalConfirmedByActorId} IS NULL AND ${table.disposalConfirmedByActorType} IS NULL AND ${table.disposalConfirmedAt} IS NULL) OR (${table.exportReference} IS NOT NULL AND ${table.exportChecksum} IS NOT NULL AND ${table.exportVerifiedAt} IS NOT NULL AND ${table.disposalConfirmedByActorId} IS NOT NULL AND ${table.disposalConfirmedByActorType} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL))`,
+  ),
+  // Success is only claimable with a replacement, a completion time and confirmed export.
+  check(
+    "fixture_reset_operations_success_check",
+    sql`(${table.state} <> 'SUCCEEDED' OR (${table.replacementInstanceId} IS NOT NULL AND ${table.replacementBusinessId} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.exportReference} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL AND ${table.disposalCommittedAt} IS NOT NULL AND ${table.replacementVerificationFingerprint} IS NOT NULL))`,
+  ),
+  check(
+    "fixture_reset_operations_disposal_progress_check",
+    sql`(${table.state} NOT IN ('RECREATING', 'VERIFYING', 'SUCCEEDED') OR ${table.disposalCommittedAt} IS NOT NULL)`,
+  ),
+  check("fixture_reset_operations_attempt_count_check", sql`${table.attemptCount} >= 0`),
+  index("fixture_reset_operations_state_idx").on(table.state),
+  index("fixture_reset_operations_original_business_idx").on(table.originalBusinessId),
+]);
+
+/**
+ * Append-only failure history for reset operations (review finding R3).
+ *
+ * Retrying a failed reset clears the live failure fields so the operation can re-enter the
+ * machine, which would destroy the evidence of what went wrong. Each failure is therefore
+ * recorded here first, in the same transaction, and these rows are never updated or
+ * deleted. The table owns no Business, so it survives disposal like the audit it belongs to.
+ */
+export const fixtureResetOperationFailures = pgTable("fixture_reset_operation_failures", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  resetOperationId: uuid("reset_operation_id").notNull()
+    .references(() => fixtureResetOperations.id, { onDelete: "restrict" }),
+  /** 0 for the first failure, then 1, 2, ... matching the operation's attempt counter. */
+  attemptNumber: integer("attempt_number").notNull(),
+  failureCode: text("failure_code").notNull(),
+  failureDetail: text("failure_detail"),
+  /** Which state the operation was in when it failed, so recovery is interpretable. */
+  stateAtFailure: fixtureResetState("state_at_failure").notNull(),
+  recordedByActorType: actorType("recorded_by_actor_type").notNull(),
+  recordedByActorId: text("recorded_by_actor_id").notNull(),
+  failedAt: timestamp("failed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("fixture_reset_operation_failures_attempt_unique")
+    .on(table.resetOperationId, table.attemptNumber),
+  check("fixture_reset_operation_failures_attempt_check", sql`${table.attemptNumber} >= 0`),
+  index("fixture_reset_operation_failures_operation_idx").on(table.resetOperationId),
+]);
+
+export const fixtureTemplateRelations = relations(fixtureTemplates, ({ one, many }) => ({
+  templateBusiness: one(businesses, {
+    fields: [fixtureTemplates.templateBusinessId],
+    references: [businesses.id],
+  }),
+  instances: many(fixtureInstances),
+}));
+
+export const fixtureInstanceRelations = relations(fixtureInstances, ({ one, many }) => ({
+  template: one(fixtureTemplates, {
+    fields: [fixtureInstances.fixtureTemplateId],
+    references: [fixtureTemplates.id],
+  }),
+  runProvenance: many(fixtureInstanceRunProvenance),
+}));
+
+export const fixtureResetOperationFailureRelations = relations(
+  fixtureResetOperationFailures,
+  ({ one }) => ({
+    operation: one(fixtureResetOperations, {
+      fields: [fixtureResetOperationFailures.resetOperationId],
+      references: [fixtureResetOperations.id],
+    }),
+  }),
+);
+
+export const fixtureInstanceRunProvenanceRelations = relations(
+  fixtureInstanceRunProvenance,
+  ({ one }) => ({
+    instance: one(fixtureInstances, {
+      fields: [fixtureInstanceRunProvenance.fixtureInstanceId],
+      references: [fixtureInstances.id],
+    }),
+  }),
+);
