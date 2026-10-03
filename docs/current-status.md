@@ -1,6 +1,6 @@
 # Baslon OS — Current Development Status
 
-Updated: 1 October 2026
+Updated: 3 October 2026
 
 For how the project reached this state, see [docs/project-history/](project-history/README.md): the [timeline](project-history/timeline.md), the [decision log](project-history/decision-log.md) and the [milestone map](project-history/milestones.md).
 
@@ -12,10 +12,10 @@ For where the product is heading, see the [Indispensable Core Product Specificat
 
 ## Current engineering milestone
 
-**Current position (1 October 2026):** Milestone 4.
+**Current position (3 October 2026):** Milestone 4.
 - The first live Baslon Digital Phase 1 cycle is complete and **approved**: rebuild v2 is at `PHASE1_APPROVED` v21 (details below).
 - M4-04, M4-05, M4-06, M4-07, M4-12 and M4-13 are resolved. M4-03 stays open (non-blocking for Snapshot 4).
-- **Phase 2 core architecture is CLOSED** (24 September 2026) and **Pilot Fixture Architecture v2.1 is APPROVED** (29 September 2026), which closes the separate Pilot Fixture Architecture design gate for Phase 2 Gate A. The approved baseline is the three documents in `docs/phase-2/` (details below). **Pilot fixture Step A (fixture domain foundation) is delivered and awaiting Solution Architect review on an unmerged PR; Steps B–F have not started** and no live migration is authorised.
+- **Phase 2 core architecture is CLOSED** (24 September 2026) and **Pilot Fixture Architecture v2.1 is APPROVED** (29 September 2026), which closes the separate Pilot Fixture Architecture design gate for Phase 2 Gate A. The approved baseline is the three documents in `docs/phase-2/` (details below). **Pilot fixture Step A (fixture domain foundation) is delivered; Solution Architect review returned changes required and those corrections are now applied, with PR #32 still unmerged pending re-review; Steps B–F have not started** and no live migration is authorised.
 - **Phase 3 is formally named MANAGE** and its product direction is approved (26 September 2026). **Phase 3 architecture has not started and Phase 3 implementation has not started** (details below).
 - The Diagnosis information architecture and the Diagnosis Item Headline extension are **complete and live**: migration `0008_diagnosis_headlines` is applied to `baslon_os`, and an approved companion headline set (version 1) labels the approved diagnosis without altering it (details below).
 - P-13 (backups and restore) is **resolved at the minimum operational baseline**; the wider production hardening it names stays open.
@@ -261,6 +261,20 @@ What Step A explicitly does **not** do:
 | Phase 2 Gate A / Consultant Pilot Ready v1 | **not complete** — unchanged by this delivery |
 
 Validation: typecheck, lint, 371 unit/integration tests, 135 PostgreSQL tests and the production build all pass. One pre-existing intermittent failure in `tests/postgres/initial-intake.postgres.test.ts` was observed on the untouched baseline and is recorded in the implementation note.
+
+**Solution Architect review corrections applied** (3 October 2026).
+
+PR #32 was reviewed and returned as **changes required**. Six findings (R1–R6) plus a focused verification item were raised, confirmed in code, and corrected. The findings and their disposition are recorded as **SA-PF-01** in [`docs/baslon-os-consolidated-code-review-findings-register.md`](baslon-os-consolidated-code-review-findings-register.md).
+
+- **Administrative authority** no longer self-issues: capabilities derive from policy keyed to a trusted principal, and **production issuance fails closed**. There is still no authentication or role model in the repository, so the token does not prove its holder is an administrator — wiring a trusted principal source is a prerequisite before exposure.
+- **Audit attribution** derives from authority on every mutation; the three approval meanings (historical source approval, creation execution, template-version approval) are now separate records, and an unapproved template cannot create instances.
+- **Reset recovery** works under the same operation id, as architecture §16 requires, routed by a durable disposal checkpoint reconciled against actual instance state. Failure history is append-only. `SUCCEEDED` is terminal and frozen.
+- **Template graph protection is now enforced.** The shared lifecycle guard refuses ordinary strategic writes to a protected template Business across 11 repositories, 9 services and the orchestrator. Previously only the template metadata row was frozen.
+- **Migrations 0010 and 0011 are append-only**; 0009 is unchanged, because wider application of 0009 could not be safely excluded without inspecting the development database, which is not authorised.
+
+Corrected claims, previously overstated in the Step A record: the transaction-local usage setting is **application discipline, not protection against arbitrary SQL credentials**; direct-update tests are **schema simulations**, not proof of disposal; and the reversed deletion order is an **unverified Step B starting hypothesis** for table-level ordering only.
+
+Validation after corrections: typecheck, lint (0 issues), **385** unit/integration tests, **153** PostgreSQL tests and the production build all pass.
 **M4-13 (approval review surface): RESOLVED** (22 September 2026). Merged in PR #18 (`23750b4`) and verified post-merge before approval. The review page shows the exact effective items that approval persists.
 
 **M4-04 (artifact-specific workflow preconditions): RESOLVED** (22 September 2026).

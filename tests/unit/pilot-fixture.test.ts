@@ -11,6 +11,9 @@ import {
   isLegalTemplateStatusTransition,
   isProtectedBusinessUsage,
   isTerminalResetState,
+  legalResetRecoveryTargets,
+  resetStateAcceptsReplacementBinding,
+  resetStateRequiresVerifiedReplacement,
   protectedBusinessUsages,
   registerFixtureTemplateSchema,
   selfAssignableBusinessUsages,
@@ -80,22 +83,50 @@ describe("reset state machine", () => {
     expect(isLegalResetStateTransition("DISPOSING", "VERIFYING")).toBe(false);
   });
 
-  it("allows FAILED from every non-terminal state", () => {
+  it("allows FAILED from every progress state", () => {
+    // FAILED itself is excluded: a failed operation re-enters the machine towards
+    // disposal or recreation, it does not fail again in place.
     for (const state of fixtureResetStates) {
-      if (isTerminalResetState(state)) continue;
+      if (isTerminalResetState(state) || state === "FAILED") continue;
       expect(isLegalResetStateTransition(state, "FAILED")).toBe(true);
     }
   });
 
-  it("freezes terminal states", () => {
+  it("freezes SUCCEEDED but leaves FAILED recoverable", () => {
+    // Review finding R3: this test previously asserted that FAILED was terminal, which is
+    // the defect itself -- architecture section 16 requires retry under the same operation
+    // id once the cause is resolved. SUCCEEDED remains terminal.
     expect(isTerminalResetState("SUCCEEDED")).toBe(true);
-    expect(isTerminalResetState("FAILED")).toBe(true);
+    expect(isTerminalResetState("FAILED")).toBe(false);
     expect(isTerminalResetState("REQUESTED")).toBe(false);
-    for (const from of ["SUCCEEDED", "FAILED"] as const) {
-      for (const to of fixtureResetStates) {
-        expect(isLegalResetStateTransition(from, to)).toBe(false);
-      }
+    for (const to of fixtureResetStates) {
+      expect(isLegalResetStateTransition("SUCCEEDED", to)).toBe(false);
     }
+    expect(isLegalResetStateTransition("FAILED", "DISPOSING")).toBe(true);
+    expect(isLegalResetStateTransition("FAILED", "RECREATING")).toBe(true);
+    // But never straight to success, and never back to the start.
+    expect(isLegalResetStateTransition("FAILED", "SUCCEEDED")).toBe(false);
+    expect(isLegalResetStateTransition("FAILED", "REQUESTED")).toBe(false);
+    expect(isLegalResetStateTransition("FAILED", "VERIFYING")).toBe(false);
+  });
+
+  it("routes recovery by whether disposal committed", () => {
+    // Pre-disposal failure retries the whole operation; post-disposal failure may only
+    // recreate, so a graph that is already gone is never disposed twice.
+    expect([...legalResetRecoveryTargets(false)]).toEqual(["DISPOSING"]);
+    expect([...legalResetRecoveryTargets(true)]).toEqual(["RECREATING"]);
+  });
+
+  it("requires verification before SUCCEEDED, not before VERIFYING", () => {
+    // Amendment section 2: a replacement is bound before it is verified, because
+    // verification happens during VERIFYING.
+    expect(resetStateRequiresVerifiedReplacement("SUCCEEDED")).toBe(true);
+    expect(resetStateRequiresVerifiedReplacement("VERIFYING")).toBe(false);
+    expect(resetStateRequiresVerifiedReplacement("RECREATING")).toBe(false);
+    expect(resetStateAcceptsReplacementBinding("RECREATING")).toBe(true);
+    expect(resetStateAcceptsReplacementBinding("VERIFYING")).toBe(true);
+    expect(resetStateAcceptsReplacementBinding("REQUESTED")).toBe(false);
+    expect(resetStateAcceptsReplacementBinding("DISPOSING")).toBe(false);
   });
 
   it("never allows a reset to move backwards", () => {
@@ -204,33 +235,37 @@ describe("template registration contract", () => {
     sourceApprovedDiagnosisVersion: 1,
     sourceSnapshotId: "44444444-4444-4444-8444-444444444444",
     sourceSnapshotVersion: 1,
-    sourceSnapshotContentHash: "hash",
     templateContentFingerprint: "fingerprint",
-    createdBy: { actorType: "human" as const, actorId: "admin" },
-    approvedBy: { actorType: "human" as const, actorId: "approver" },
   };
 
-  it("accepts a well-formed registration", () => {
+  it("accepts a well-formed registration without any actor input", () => {
+    // Review finding R2: the contract no longer carries createdBy/approvedBy. The
+    // executing actor is derived from the verified authority, and the historical source
+    // approval is read from the stored Diagnosis.
     expect(registerFixtureTemplateSchema.parse(valid).templateVersion).toBe(1);
   });
 
-  it("refuses a source and template that are the same Business", () => {
+  it("rejects a caller-supplied actor outright rather than ignoring it", () => {
     expect(() => registerFixtureTemplateSchema.parse({
-      ...valid, templateBusinessId: valid.sourceBusinessId,
+      ...valid, createdBy: { actorType: "human", actorId: "bob" },
+    })).toThrow();
+    expect(() => registerFixtureTemplateSchema.parse({
+      ...valid, approvedBy: { actorType: "human", actorId: "bob" },
     })).toThrow();
   });
 
-  it("refuses a non-positive version and an AI actor", () => {
+  it("treats the source Snapshot hash as an optional cross-check only", () => {
+    // Review finding R6: the stored hash is always derived from the Snapshot, so the
+    // contract cannot require one and must not treat a supplied value as authoritative.
+    expect(registerFixtureTemplateSchema.parse(valid).expectedSourceSnapshotContentHash)
+      .toBeUndefined();
+    expect(registerFixtureTemplateSchema.parse({
+      ...valid, expectedSourceSnapshotContentHash: "sha256-abc",
+    }).expectedSourceSnapshotContentHash).toBe("sha256-abc");
+  });
+
+  it("refuses a non-positive version and blank provenance", () => {
     expect(() => registerFixtureTemplateSchema.parse({ ...valid, templateVersion: 0 })).toThrow();
-    expect(() => registerFixtureTemplateSchema.parse({
-      ...valid, createdBy: { actorType: "ai", actorId: "model" },
-    })).toThrow();
-  });
-
-  it("refuses blank provenance", () => {
-    expect(() => registerFixtureTemplateSchema.parse({
-      ...valid, sourceSnapshotContentHash: "   ",
-    })).toThrow();
     expect(() => registerFixtureTemplateSchema.parse({
       ...valid, templateContentFingerprint: "",
     })).toThrow();

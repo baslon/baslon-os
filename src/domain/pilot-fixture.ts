@@ -121,7 +121,13 @@ const resetStateTransitions: Readonly<Record<FixtureResetState, readonly Fixture
   RECREATING: ["VERIFYING", "FAILED"],
   VERIFYING: ["SUCCEEDED", "FAILED"],
   SUCCEEDED: [],
-  FAILED: [],
+  /**
+   * Review finding R3: architecture §16 requires a failed reset to be retried under the
+   * SAME operation ID once its cause is resolved, so FAILED is re-enterable. Which target
+   * is legal depends on whether disposal was recorded as committed, which the caller
+   * cannot assert — see `legalResetRecoveryTargets`.
+   */
+  FAILED: ["DISPOSING", "RECREATING"],
 };
 
 export function isLegalResetStateTransition(
@@ -133,6 +139,39 @@ export function isLegalResetStateTransition(
 
 export function isTerminalResetState(state: FixtureResetState): boolean {
   return resetStateTransitions[state].length === 0;
+}
+
+/**
+ * Where a FAILED operation may resume.
+ *
+ * Architecture §16 distinguishes failure *before* disposal (the original graph is intact,
+ * so the whole operation retries) from failure *after* disposal committed (the original is
+ * gone, so only recreation retries and the old graph must never be disposed again).
+ *
+ * The checkpoint alone is not proof of either, which is why the repository reconciles it
+ * against the actual instance rows under lock before allowing a transition. This function
+ * states the legal set; it does not establish the facts.
+ */
+export function legalResetRecoveryTargets(
+  disposalCommitted: boolean,
+): readonly FixtureResetState[] {
+  return disposalCommitted ? ["RECREATING"] : ["DISPOSING"];
+}
+
+/**
+ * Verification evidence is required before SUCCEEDED, not before VERIFYING.
+ *
+ * Review finding R4/amendment §2: a replacement is bound and frozen early, then verified
+ * during VERIFYING. Demanding a passed verification in order to *enter* VERIFYING would
+ * make the state unreachable.
+ */
+export function resetStateRequiresVerifiedReplacement(state: FixtureResetState): boolean {
+  return state === "SUCCEEDED";
+}
+
+/** States in which a replacement instance may legally be bound to the operation. */
+export function resetStateAcceptsReplacementBinding(state: FixtureResetState): boolean {
+  return state === "RECREATING" || state === "VERIFYING";
 }
 
 // ---------------------------------------------------------------------------
@@ -195,18 +234,32 @@ export function evaluateFixtureInstanceEligibility(
 // Service input contracts
 // ---------------------------------------------------------------------------
 
-const actorSchema = z.object({
-  actorType: z.enum(["human", "system"]),
-  actorId: z.string().trim().min(1).max(200),
-});
+/**
+ * Review finding R2: executing actors are NO LONGER accepted as input. They are derived
+ * from the verified authority at the service boundary, so an audit record can never name
+ * somebody other than the actor who performed the action.
+ *
+ * Three approval meanings are kept strictly apart (amendment §1):
+ *
+ *  1. *historical source approval* — who approved the source Diagnosis, read from the
+ *     stored `approved_diagnoses` row, never supplied by a caller;
+ *  2. *creation execution* — who registered the template, derived from authority;
+ *  3. *template-version approval* — a separate, explicit approval of the protected
+ *     template, performed by its own guarded operation and recorded as its own action.
+ *
+ * A template is not approved merely because its source Diagnosis was.
+ */
 
 const fingerprintSchema = z.string().trim().min(1).max(200);
 const hashSchema = z.string().trim().min(1).max(200);
 
 /**
- * Registration of an approved template. This records provenance for a template
- * Business that already exists; it does not construct the copy. Step B supplies the
- * deep copy, so a row created here describes a baseline that is not yet populated.
+ * Register a template over an existing template Business.
+ *
+ * Records provenance and creation; it does not construct the copy (Step B) and does not
+ * approve the template. `sourceSnapshotContentHash` is optional: the repository derives the
+ * hash from the stored Snapshot under the approved hashing contract and, when a value is
+ * supplied, treats it as a cross-check that must agree (R6).
  */
 export const registerFixtureTemplateSchema = z.object({
   templateBusinessId: z.uuid(),
@@ -216,39 +269,41 @@ export const registerFixtureTemplateSchema = z.object({
   sourceApprovedDiagnosisVersion: z.number().int().positive(),
   sourceSnapshotId: z.uuid(),
   sourceSnapshotVersion: z.number().int().positive(),
-  sourceSnapshotContentHash: hashSchema,
+  /** Optional cross-check only. The stored value is always derived, never trusted input. */
+  expectedSourceSnapshotContentHash: hashSchema.optional(),
   templateContentFingerprint: fingerprintSchema,
-  createdBy: actorSchema,
-  approvedBy: actorSchema,
-}).refine((value) => value.templateBusinessId !== value.sourceBusinessId, {
-  message: "A template Business must be distinct from its source Business",
-  path: ["templateBusinessId"],
-});
+}).strict();
+
+/**
+ * Approve a registered template version. A distinct, explicit action from creation, so the
+ * record states which action the actor performed even when policy lets one human do both.
+ */
+export const approveFixtureTemplateSchema = z.object({
+  fixtureTemplateId: z.uuid(),
+  /** Must equal the fingerprint recorded at registration: approval binds to content. */
+  templateContentFingerprint: fingerprintSchema,
+}).strict();
 
 export const retireFixtureTemplateSchema = z.object({
   fixtureTemplateId: z.uuid(),
-  retiredBy: actorSchema,
-});
+}).strict();
 
 export const registerFixtureInstanceSchema = z.object({
   businessId: z.uuid(),
   fixtureTemplateId: z.uuid(),
-  createdBy: actorSchema,
   generation: z.number().int().min(0).default(0),
   predecessorInstanceId: z.uuid().nullish(),
-});
+}).strict();
 
 export const recordInstanceVerificationSchema = z.object({
   fixtureInstanceId: z.uuid(),
   verificationFingerprint: fingerprintSchema,
-  verifiedBy: actorSchema,
-});
+}).strict();
 
 export const markInstanceFailedCreationSchema = z.object({
   fixtureInstanceId: z.uuid(),
   failureReason: z.string().trim().min(1).max(2000),
-  recordedBy: actorSchema,
-});
+}).strict();
 
 export const recordRunProvenanceSchema = z.object({
   fixtureInstanceId: z.uuid(),
@@ -258,33 +313,40 @@ export const recordRunProvenanceSchema = z.object({
     sourceAnalysisModule: z.string().trim().min(1).max(120),
     sourceInputHash: hashSchema,
     sourceSnapshotContentHash: hashSchema.nullish(),
-  })).min(1),
-});
+  }).strict()).min(1),
+}).strict();
 
 /**
- * The reset request record. Committed in its own transaction before any destructive
- * work (§9.4), so a crash leaves an interpretable row rather than an ambiguous
- * fixture. The export fields are confirmation evidence captured before disposal
- * (§9.5); Step A stores them, Step D will require them.
+ * The reset request record, committed in its own transaction before any destructive work
+ * (§9.4). Every identity field is compared on replay, so a repeat with the same id cannot
+ * silently change the target, template, version or generation (R6).
  */
 export const createResetRequestSchema = z.object({
-  /** Caller-supplied idempotency key. A repeat must not rebind the original target. */
   resetOperationId: z.uuid(),
   originalInstanceId: z.uuid(),
   fixtureTemplateId: z.uuid(),
   templateVersion: z.number().int().positive(),
   resetGeneration: z.number().int().min(1),
   reason: z.string().trim().min(1).max(2000),
-  requestedBy: actorSchema,
-});
+}).strict();
 
+/**
+ * Record the reviewed export and the explicit disposal confirmation (§9.5). The confirming
+ * actor is derived from authority and must be human; a system actor cannot invent it (R2).
+ */
 export const confirmResetExportSchema = z.object({
   resetOperationId: z.uuid(),
   exportReference: z.string().trim().min(1).max(500),
   exportChecksum: hashSchema,
-  disposalConfirmedBy: actorSchema,
-});
+}).strict();
 
+/**
+ * Advance the reset state machine.
+ *
+ * `replacementVerificationFingerprint` is deliberately absent: success evidence is read
+ * from the replacement's own recorded verification rather than accepted from the caller
+ * (R4).
+ */
 export const advanceResetStateSchema = z.object({
   resetOperationId: z.uuid(),
   toState: z.enum(fixtureResetStates),
@@ -292,9 +354,9 @@ export const advanceResetStateSchema = z.object({
   failureDetail: z.string().trim().min(1).max(2000).nullish(),
   replacementInstanceId: z.uuid().nullish(),
   preDisposalFingerprint: fingerprintSchema.nullish(),
-  replacementVerificationFingerprint: fingerprintSchema.nullish(),
-});
+}).strict();
 
+export type ApproveFixtureTemplateInput = z.input<typeof approveFixtureTemplateSchema>;
 export type RegisterFixtureTemplateInput = z.input<typeof registerFixtureTemplateSchema>;
 export type RetireFixtureTemplateInput = z.input<typeof retireFixtureTemplateSchema>;
 export type RegisterFixtureInstanceInput = z.input<typeof registerFixtureInstanceSchema>;

@@ -60,6 +60,39 @@ Milestone 3D resolved the most material pre-diagnosis integrity risks:
 
 # A. RESOLVED
 
+## SA-PF-01 — Pilot fixture Step A: Solution Architect review findings R1–R6 and template graph protection
+
+**Origin:** Solution Architect review of PR #32 (2 October 2026), amendment 3 October 2026.
+**Status:** **RESOLVED — corrections applied on `claude/phase-2`, PR #32 unmerged pending re-review (3 October 2026)**
+
+Candidate reviewed at `dc7382262fd670c693a9eb1d1847c6b10ad1a2de` against base `76ba7a0a902ff646b276b74c6999ae7b1f0c4830`. All findings were confirmed in code before being fixed. Corrections ship as append-only migrations `0010` and `0011`; migration `0009` is unchanged.
+
+### Findings and disposition
+
+| Ref | Finding | Disposition |
+|---|---|---|
+| R1 | Administrative authority could be self-issued: any importing module could supply a plain actor context and its own capability list | **Resolved.** Capabilities derive from a policy table keyed to a trusted principal with runtime provenance. Production issuance fails closed; the only principal factory is test-only and its import boundary is asserted by test |
+| R2 | Audit actor labels were independent of authority; `recordedBy` was parsed and discarded; confirmation accepted a system actor as human approval; three approval meanings were conflated | **Resolved.** Executing actors derive from authority on every mutation, contracts are strict, failure attribution is persisted, disposal confirmation requires a human actor, and historical source approval / creation execution / template-version approval are three separate records |
+| R3 | `FAILED` was terminal, permanently blocking the generation and contradicting architecture §16; concurrent first requests could raise a bare uniqueness error | **Resolved.** `FAILED` is re-enterable under the same operation id, routed by a durable disposal checkpoint reconciled against actual instance state under lock; failure history is append-only; concurrent first requests converge on one row |
+| R4 | `SUCCEEDED` did not require a verified, attached, matching replacement and accepted an arbitrary success fingerprint | **Resolved.** Success requires an ACTIVE attached verified replacement agreeing on template, version, generation and predecessor plus durable disposal evidence; the fingerprint is read from the replacement's own record. Binding is permitted before verification, as verification occurs during `VERIFYING` |
+| R5 | `fixture_instances` had no trigger at all; run provenance permitted `DELETE`; retirement attribution was editable after retirement; reset SQL permitted state skipping and success-evidence changes; three CHECKs omitted actor type | **Resolved.** New instance guard, provenance `DELETE` refusal, frozen retirement and approval attribution, SQL-enforced reset transitions, fully frozen `SUCCEEDED`, and actor types added to all three evidence checks |
+| R6 | The approved Diagnosis was not checked against the supplied Snapshot binding; the source Snapshot hash was arbitrary text; replay ignored conflicting template/version | **Resolved.** Exact Snapshot id and version binding required, hash derived under the approved contract with any supplied value treated as a cross-check, and replay compares every identity field |
+| Focused item | The approved-template **graph** was unprotected: `business_usage` was read by one write path and every strategic write gated on `status = 'active'` alone | **Resolved.** The shared lifecycle guard now reads classification under `FOR UPDATE` and refuses ordinary strategic writes to a `PILOT_FIXTURE_TEMPLATE` Business, covering 11 repositories, 9 services and the orchestrator from one chokepoint |
+
+### Disclosed limitations, not resolved by this work
+
+- **No authentication or role model exists in the repository.** The capability token does not prove its holder is an administrator. Wiring a trusted principal source is a prerequisite before any fixture operation is exposed, and production issuance fails closed until then.
+- **The transaction-local usage setting is application discipline, not security.** A connection able to run arbitrary SQL can set it. It is now scoped per Business id so a stray setting cannot cover a second row.
+- **Template graph protection lives in the shared application guard**, not in per-table triggers, so arbitrary SQL can still write a template's graph.
+- **Reset lifecycle tests are metadata-state simulations.** Step A has no clone verifier, no destructive engine and no export generator; those contracts still fail closed.
+- **Export format, storage, access, retention and the readability check remain unresolved** and continue to block enabling reset.
+
+### Validation
+
+Typecheck, lint (0 issues), 385 unit/integration tests, 153 real PostgreSQL tests and the production build all pass against Claude's isolated instance `127.0.0.1:5442`, database `baslon_os_test`, PostgreSQL 17.0.11. See `docs/phase-2/baslon-os-step-a-fixture-domain-foundation-implementation-note.md` §9.
+
+---
+
 ## R-01 — Add Information could leave orphan Source Submissions/question links
 
 **Origin:** Codex HIGH; Claude HIGH; Antigravity related workflow atomicity finding.  

@@ -1258,12 +1258,24 @@ export const fixtureTemplates = pgTable("fixture_templates", {
   sourceSnapshotContentHash: text("source_snapshot_content_hash").notNull(),
 
   templateContentFingerprint: text("template_content_fingerprint").notNull(),
+  /**
+   * Three approval meanings, kept strictly apart (review finding R2, amendment section 1).
+   *
+   * 1. creation execution - who registered this template, derived from authority;
+   * 2. historical source approval - who approved the SOURCE Diagnosis, copied verbatim
+   *    from the stored approved_diagnoses row. There is no actor type because the source
+   *    record does not carry one, and inventing one would be fabrication;
+   * 3. template-version approval - a separate explicit approval of this protected
+   *    template. Null until approved: a template is NOT approved because its source was.
+   */
   createdByActorType: actorType("created_by_actor_type").notNull(),
   createdByActorId: text("created_by_actor_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  approvedByActorType: actorType("approved_by_actor_type").notNull(),
-  approvedByActorId: text("approved_by_actor_id").notNull(),
-  approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+  sourceApprovalActorId: text("source_approval_actor_id").notNull(),
+  sourceApprovedAt: timestamp("source_approved_at", { withTimezone: true }).notNull(),
+  templateApprovedByActorType: actorType("template_approved_by_actor_type"),
+  templateApprovedByActorId: text("template_approved_by_actor_id"),
+  templateApprovedAt: timestamp("template_approved_at", { withTimezone: true }),
   status: fixtureTemplateStatus("status").default("ACTIVE").notNull(),
   retiredByActorType: actorType("retired_by_actor_type"),
   retiredByActorId: text("retired_by_actor_id"),
@@ -1301,6 +1313,11 @@ export const fixtureTemplates = pgTable("fixture_templates", {
     sql`${table.templateBusinessUsage} = 'PILOT_FIXTURE_TEMPLATE'`,
   ),
   check("fixture_templates_version_check", sql`${table.templateVersion} > 0`),
+  // All-or-nothing approval evidence, including the actor type (R5).
+  check(
+    "fixture_templates_approval_check",
+    sql`((${table.templateApprovedAt} IS NULL AND ${table.templateApprovedByActorId} IS NULL AND ${table.templateApprovedByActorType} IS NULL) OR (${table.templateApprovedAt} IS NOT NULL AND ${table.templateApprovedByActorId} IS NOT NULL AND ${table.templateApprovedByActorType} IS NOT NULL))`,
+  ),
   check(
     "fixture_templates_retirement_check",
     sql`((${table.status} = 'RETIRED' AND ${table.retiredAt} IS NOT NULL AND ${table.retiredByActorId} IS NOT NULL AND ${table.retiredByActorType} IS NOT NULL) OR (${table.status} <> 'RETIRED' AND ${table.retiredAt} IS NULL AND ${table.retiredByActorId} IS NULL AND ${table.retiredByActorType} IS NULL))`,
@@ -1356,6 +1373,10 @@ export const fixtureInstances = pgTable("fixture_instances", {
   disposalByActorId: text("disposal_by_actor_id"),
   disposalReason: text("disposal_reason"),
   failureReason: text("failure_reason"),
+  // R2: previously parsed and discarded, so failure attribution was lost.
+  failureRecordedByActorType: actorType("failure_recorded_by_actor_type"),
+  failureRecordedByActorId: text("failure_recorded_by_actor_id"),
+  failureRecordedAt: timestamp("failure_recorded_at", { withTimezone: true }),
 }, (table) => [
   unique("fixture_instances_business_unique").on(table.businessId),
   unique("fixture_instances_historical_business_unique").on(table.historicalBusinessId),
@@ -1393,15 +1414,15 @@ export const fixtureInstances = pgTable("fixture_instances", {
   ),
   check(
     "fixture_instances_verification_check",
-    sql`((${table.verificationPassed} = false AND ${table.verificationFingerprint} IS NULL AND ${table.verifiedAt} IS NULL AND ${table.verifiedByActorId} IS NULL) OR (${table.verificationPassed} = true AND ${table.verificationFingerprint} IS NOT NULL AND ${table.verifiedAt} IS NOT NULL AND ${table.verifiedByActorId} IS NOT NULL))`,
+    sql`((${table.verificationPassed} = false AND ${table.verificationFingerprint} IS NULL AND ${table.verifiedAt} IS NULL AND ${table.verifiedByActorId} IS NULL AND ${table.verifiedByActorType} IS NULL) OR (${table.verificationPassed} = true AND ${table.verificationFingerprint} IS NOT NULL AND ${table.verifiedAt} IS NOT NULL AND ${table.verifiedByActorId} IS NOT NULL AND ${table.verifiedByActorType} IS NOT NULL))`,
   ),
   check(
     "fixture_instances_disposal_check",
-    sql`((${table.status} = 'DISPOSED' AND ${table.disposedAt} IS NOT NULL AND ${table.disposalByActorId} IS NOT NULL AND ${table.disposalReason} IS NOT NULL) OR (${table.status} <> 'DISPOSED' AND ${table.disposedAt} IS NULL AND ${table.disposalByActorId} IS NULL AND ${table.disposalReason} IS NULL))`,
+    sql`((${table.status} = 'DISPOSED' AND ${table.disposedAt} IS NOT NULL AND ${table.disposalByActorId} IS NOT NULL AND ${table.disposalByActorType} IS NOT NULL AND ${table.disposalReason} IS NOT NULL) OR (${table.status} <> 'DISPOSED' AND ${table.disposedAt} IS NULL AND ${table.disposalByActorId} IS NULL AND ${table.disposalByActorType} IS NULL AND ${table.disposalReason} IS NULL))`,
   ),
   check(
     "fixture_instances_failed_creation_check",
-    sql`((${table.status} = 'FAILED_CREATION' AND ${table.failureReason} IS NOT NULL) OR (${table.status} <> 'FAILED_CREATION' AND ${table.failureReason} IS NULL))`,
+    sql`((${table.status} = 'FAILED_CREATION' AND ${table.failureReason} IS NOT NULL AND ${table.failureRecordedByActorId} IS NOT NULL AND ${table.failureRecordedByActorType} IS NOT NULL AND ${table.failureRecordedAt} IS NOT NULL) OR (${table.status} <> 'FAILED_CREATION' AND ${table.failureReason} IS NULL AND ${table.failureRecordedByActorId} IS NULL AND ${table.failureRecordedByActorType} IS NULL AND ${table.failureRecordedAt} IS NULL))`,
   ),
   index("fixture_instances_template_idx").on(table.fixtureTemplateId),
   index("fixture_instances_status_idx").on(table.status),
@@ -1483,6 +1504,15 @@ export const fixtureResetOperations = pgTable("fixture_reset_operations", {
   preDisposalFingerprint: text("pre_disposal_fingerprint"),
   replacementVerificationFingerprint: text("replacement_verification_fingerprint"),
 
+  /**
+   * Review finding R3: a fingerprint does not prove disposal committed. This checkpoint is
+   * written by Step D in the SAME transaction as the actual deletion, and recovery routing
+   * reconciles it against the real instance rows rather than trusting it alone.
+   */
+  disposalCommittedAt: timestamp("disposal_committed_at", { withTimezone: true }),
+  /** Incremented on each re-entry from FAILED. Failure history lives in its own table. */
+  attemptCount: integer("attempt_count").default(0).notNull(),
+
   /** Reviewed-export evidence required before disposal (architecture section 9.5). */
   exportReference: text("export_reference"),
   exportChecksum: text("export_checksum"),
@@ -1513,15 +1543,48 @@ export const fixtureResetOperations = pgTable("fixture_reset_operations", {
   // Export evidence is all-or-nothing: a half-recorded confirmation must not look valid.
   check(
     "fixture_reset_operations_export_check",
-    sql`((${table.exportReference} IS NULL AND ${table.exportChecksum} IS NULL AND ${table.exportVerifiedAt} IS NULL AND ${table.disposalConfirmedByActorId} IS NULL AND ${table.disposalConfirmedAt} IS NULL) OR (${table.exportReference} IS NOT NULL AND ${table.exportChecksum} IS NOT NULL AND ${table.exportVerifiedAt} IS NOT NULL AND ${table.disposalConfirmedByActorId} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL))`,
+    sql`((${table.exportReference} IS NULL AND ${table.exportChecksum} IS NULL AND ${table.exportVerifiedAt} IS NULL AND ${table.disposalConfirmedByActorId} IS NULL AND ${table.disposalConfirmedByActorType} IS NULL AND ${table.disposalConfirmedAt} IS NULL) OR (${table.exportReference} IS NOT NULL AND ${table.exportChecksum} IS NOT NULL AND ${table.exportVerifiedAt} IS NOT NULL AND ${table.disposalConfirmedByActorId} IS NOT NULL AND ${table.disposalConfirmedByActorType} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL))`,
   ),
   // Success is only claimable with a replacement, a completion time and confirmed export.
   check(
     "fixture_reset_operations_success_check",
-    sql`(${table.state} <> 'SUCCEEDED' OR (${table.replacementInstanceId} IS NOT NULL AND ${table.replacementBusinessId} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.exportReference} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL AND ${table.replacementVerificationFingerprint} IS NOT NULL))`,
+    sql`(${table.state} <> 'SUCCEEDED' OR (${table.replacementInstanceId} IS NOT NULL AND ${table.replacementBusinessId} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.exportReference} IS NOT NULL AND ${table.disposalConfirmedAt} IS NOT NULL AND ${table.disposalCommittedAt} IS NOT NULL AND ${table.replacementVerificationFingerprint} IS NOT NULL))`,
   ),
+  check(
+    "fixture_reset_operations_disposal_progress_check",
+    sql`(${table.state} NOT IN ('RECREATING', 'VERIFYING', 'SUCCEEDED') OR ${table.disposalCommittedAt} IS NOT NULL)`,
+  ),
+  check("fixture_reset_operations_attempt_count_check", sql`${table.attemptCount} >= 0`),
   index("fixture_reset_operations_state_idx").on(table.state),
   index("fixture_reset_operations_original_business_idx").on(table.originalBusinessId),
+]);
+
+/**
+ * Append-only failure history for reset operations (review finding R3).
+ *
+ * Retrying a failed reset clears the live failure fields so the operation can re-enter the
+ * machine, which would destroy the evidence of what went wrong. Each failure is therefore
+ * recorded here first, in the same transaction, and these rows are never updated or
+ * deleted. The table owns no Business, so it survives disposal like the audit it belongs to.
+ */
+export const fixtureResetOperationFailures = pgTable("fixture_reset_operation_failures", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  resetOperationId: uuid("reset_operation_id").notNull()
+    .references(() => fixtureResetOperations.id, { onDelete: "restrict" }),
+  /** 0 for the first failure, then 1, 2, ... matching the operation's attempt counter. */
+  attemptNumber: integer("attempt_number").notNull(),
+  failureCode: text("failure_code").notNull(),
+  failureDetail: text("failure_detail"),
+  /** Which state the operation was in when it failed, so recovery is interpretable. */
+  stateAtFailure: fixtureResetState("state_at_failure").notNull(),
+  recordedByActorType: actorType("recorded_by_actor_type").notNull(),
+  recordedByActorId: text("recorded_by_actor_id").notNull(),
+  failedAt: timestamp("failed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("fixture_reset_operation_failures_attempt_unique")
+    .on(table.resetOperationId, table.attemptNumber),
+  check("fixture_reset_operation_failures_attempt_check", sql`${table.attemptNumber} >= 0`),
+  index("fixture_reset_operation_failures_operation_idx").on(table.resetOperationId),
 ]);
 
 export const fixtureTemplateRelations = relations(fixtureTemplates, ({ one, many }) => ({
@@ -1539,6 +1602,16 @@ export const fixtureInstanceRelations = relations(fixtureInstances, ({ one, many
   }),
   runProvenance: many(fixtureInstanceRunProvenance),
 }));
+
+export const fixtureResetOperationFailureRelations = relations(
+  fixtureResetOperationFailures,
+  ({ one }) => ({
+    operation: one(fixtureResetOperations, {
+      fields: [fixtureResetOperationFailures.resetOperationId],
+      references: [fixtureResetOperations.id],
+    }),
+  }),
+);
 
 export const fixtureInstanceRunProvenanceRelations = relations(
   fixtureInstanceRunProvenance,

@@ -1,7 +1,4 @@
-import {
-  assertFixtureAdminCapability,
-  type FixtureAdminAuthority,
-} from "@/domain/fixture-authority";
+import type { FixtureAdminAuthority } from "@/domain/fixture-authority";
 import {
   PilotFixtureEngineUnavailableError,
   type AdvanceResetStateInput,
@@ -11,6 +8,7 @@ import {
   type RecordInstanceVerificationInput,
   type RecordRunProvenanceInput,
   type RegisterFixtureInstanceInput,
+  type ApproveFixtureTemplateInput,
   type RegisterFixtureTemplateInput,
   type RetireFixtureTemplateInput,
 } from "@/domain/pilot-fixture";
@@ -37,13 +35,20 @@ export class PilotFixtureService {
   // -------------------------------------------------------------------------
 
   registerTemplate(authority: FixtureAdminAuthority, input: RegisterFixtureTemplateInput) {
-    assertFixtureAdminCapability(authority, "template_admin");
-    return this.repository.registerTemplate(input);
+    return this.repository.registerTemplate(authority, input);
+  }
+
+  /**
+   * Approve a registered template version. Separate from registering it: a template is not
+   * approved because its source Diagnosis was, and the record states which action the
+   * actor performed.
+   */
+  approveTemplate(authority: FixtureAdminAuthority, input: ApproveFixtureTemplateInput) {
+    return this.repository.approveTemplate(authority, input);
   }
 
   retireTemplate(authority: FixtureAdminAuthority, input: RetireFixtureTemplateInput) {
-    assertFixtureAdminCapability(authority, "template_admin");
-    return this.repository.retireTemplate(input);
+    return this.repository.retireTemplate(authority, input);
   }
 
   // -------------------------------------------------------------------------
@@ -51,29 +56,25 @@ export class PilotFixtureService {
   // -------------------------------------------------------------------------
 
   registerInstance(authority: FixtureAdminAuthority, input: RegisterFixtureInstanceInput) {
-    assertFixtureAdminCapability(authority, "instance_admin");
-    return this.repository.registerInstance(input);
+    return this.repository.registerInstance(authority, input);
   }
 
   recordInstanceVerification(
     authority: FixtureAdminAuthority,
     input: RecordInstanceVerificationInput,
   ) {
-    assertFixtureAdminCapability(authority, "instance_admin");
-    return this.repository.recordInstanceVerification(input);
+    return this.repository.recordInstanceVerification(authority, input);
   }
 
   markInstanceFailedCreation(
     authority: FixtureAdminAuthority,
     input: MarkInstanceFailedCreationInput,
   ) {
-    assertFixtureAdminCapability(authority, "instance_admin");
-    return this.repository.markInstanceFailedCreation(input);
+    return this.repository.markInstanceFailedCreation(authority, input);
   }
 
   recordRunProvenance(authority: FixtureAdminAuthority, input: RecordRunProvenanceInput) {
-    assertFixtureAdminCapability(authority, "instance_admin");
-    return this.repository.recordRunProvenance(input);
+    return this.repository.recordRunProvenance(authority, input);
   }
 
   // -------------------------------------------------------------------------
@@ -81,18 +82,15 @@ export class PilotFixtureService {
   // -------------------------------------------------------------------------
 
   createResetRequest(authority: FixtureAdminAuthority, input: CreateResetRequestInput) {
-    assertFixtureAdminCapability(authority, "reset_admin");
-    return this.repository.createResetRequest(input);
+    return this.repository.createResetRequest(authority, input);
   }
 
   confirmResetExport(authority: FixtureAdminAuthority, input: ConfirmResetExportInput) {
-    assertFixtureAdminCapability(authority, "reset_admin");
-    return this.repository.confirmResetExport(input);
+    return this.repository.confirmResetExport(authority, input);
   }
 
   advanceResetState(authority: FixtureAdminAuthority, input: AdvanceResetStateInput) {
-    assertFixtureAdminCapability(authority, "reset_admin");
-    return this.repository.advanceResetState(input);
+    return this.repository.advanceResetState(authority, input);
   }
 
   // -------------------------------------------------------------------------
@@ -121,6 +119,25 @@ export class PilotFixtureService {
 
   getResetOperation(resetOperationId: string) {
     return this.repository.getResetOperation(resetOperationId);
+  }
+
+  /** Append-only failure history for a reset operation (R3). */
+  listResetFailures(resetOperationId: string) {
+    return this.repository.listResetFailures(resetOperationId);
+  }
+
+  /**
+   * The disposal METADATA contract only (amendment section 4).
+   *
+   * Step D must call this inside the same transaction as the real graph deletion. It is not
+   * a disposal command: `disposePilotFixtureInstance` below still fails closed, so nothing
+   * here deletes anything.
+   */
+  applyDisposalMetadata(
+    authority: FixtureAdminAuthority,
+    input: { resetOperationId: string; fixtureInstanceId: string; reason: string },
+  ) {
+    return this.repository.applyDisposalMetadata(authority, input);
   }
 
   listResetOperationsForBusiness(businessId: string) {

@@ -188,18 +188,31 @@ itself a template or instance.
 The database half is `enforce_business_usage_change()`, a trigger on
 `BEFORE INSERT OR UPDATE ON businesses`. It refuses any insert or update that sets or
 clears a protected classification unless the transaction-local setting
-`baslon.fixture_usage_change` is `'on'`, which only the fixture repository sets. This
-mirrors the established `baslon.permanent_delete_business_id` convention, so the
-protection does not depend on every caller remembering to use the right service.
+`baslon.fixture_usage_change` names **that specific Business id**, which only the fixture
+repository sets.
+
+**This is application discipline, not security.** Any connection able to run arbitrary SQL
+can set the same variable itself. What it buys is that ordinary application paths and
+accidents are refused, and the per-Business scope means a stray setting cannot cover a
+second row in the same transaction. It is not protection against a privileged database
+credential, and the same is true of the `baslon.permanent_delete_business_id` convention
+it mirrors.
 
 A fixture therefore cannot be silently promoted to `LIVE`, and a fixture identity cannot
 be manufactured by a generic request — both are demonstrated by test against raw SQL,
 not merely against the service.
 
-Administrative capability is separate from ordinary Business edit authority:
-`deriveFixtureAdminAuthority` issues branded, unforgeable tokens carrying
-`template_admin`, `instance_admin` or `reset_admin`. A hand-built object literal is
-rejected, and **an AI actor cannot hold fixture authority at all**.
+Fixture operations require a distinct capability token that ordinary Business edit paths
+do not hold. `resolveFixtureAdminAuthority` derives capabilities **from policy keyed to a
+trusted principal**, never from a caller-chosen list, and a principal carries runtime
+provenance rather than merely the right shape. A forged literal is rejected and an AI
+actor cannot hold fixture authority.
+
+**This is not authentication, and it does not prove the holder is an administrator.**
+There is no session, token or role store in this repository, so production issuance
+**fails closed** and the only principals that exist are test-only ones that cannot be
+registered in a production runtime. Wiring a trusted principal source is a named
+integration dependency (§8), not delivered work.
 
 ---
 
@@ -361,10 +374,9 @@ fixture validation (Step E).
 **Operational decisions still blocking reset**, carried from §1.3: export format, durable
 storage location, access control, retention period and the readability check.
 
-**Remaining future Phase 2 guard integration**, not pretended here: protecting templates
-from consultant mutation at the Phase 2 workspace boundary, which cannot exist until
-Phase 2 tables do. Step A protects templates through service authority and database
-immutability only.
+**Template graph protection is now enforced** (see §9). The remaining future Phase 2 guard
+integration, not pretended here, is the Phase 2 workspace boundary itself, which cannot
+exist until Phase 2 tables do.
 
 ### The exact next dependency for Step B — not started
 
@@ -373,15 +385,96 @@ immutability only.
 > `snapshotContentHash` **at INSERT**, while leaving the source values already retained in
 > `fixture_instance_run_provenance` untouched.
 
-The insertion order is the proven deletion order reversed; the three `analysis_runs`
-INSERT-time guards mean a cloned run must be inserted `RUNNING` with
-`completed_at IS NULL` and then completed, exactly as a real run is. 21 of the 24
-immutability triggers fire on `UPDATE OR DELETE` only, so ordinary cloning needs no
-bypass.
+**The reversed deletion order is an unverified starting hypothesis for table-level
+ordering only — not an accepted clone manifest.** A truthful manifest additionally needs:
+intra-table ordering for the self-referential `claims.superseded_by_claim_id` second pass;
+two-phase inserts for lifecycle-guarded tables (`analysis_runs` must be inserted `RUNNING`
+with `completed_at IS NULL`, `diagnosis_items` are writable only while their run runs, and
+`diagnosis_review_sessions` must be created `OPEN` then completed); a value-level
+identifier map applied **inside** JSON payloads, which no ordering fact addresses; and
+tuple-consistent remapping across the 48 composite same-Business foreign keys. 21 of the
+24 immutability triggers fire on `UPDATE OR DELETE` only, so ordinary cloning needs no
+bypass, but that is a necessary condition, not a manifest.
 
 Step B is not started and is not authorised by this note.
 
 ---
 
-**Status: Step A delivered for Solution Architect review. PR left unmerged. Steps B–F
-pending. Phase 2 Gate A and Consultant Pilot Ready v1 are not complete.**
+## 9. Solution Architect review corrections (2–3 October 2026)
+
+PR #32 was reviewed and returned as **changes required**. Six findings (R1–R6) plus a
+focused verification item were raised, all confirmed against the candidate before any fix.
+Corrections ship as **append-only migrations 0010 and 0011**; migration 0009 is unchanged.
+
+| Finding | Correction |
+|---|---|
+| **R1** administrative authority was self-issued | Capabilities now derive from a policy table keyed to a **trusted principal** with runtime provenance. Production issuance **fails closed**; the only principal factory is test-only, refuses to run outside the test runner, and the import boundary is asserted by a test rather than assumed |
+| **R2** audit labels independent of authority | Executing actors are **derived from the authority**, never accepted as input, and the contracts are strict so an impersonation attempt is rejected rather than ignored. Failure attribution is now **persisted** instead of parsed and discarded. Disposal confirmation requires a **human** actor; a system actor may orchestrate but cannot invent it |
+| **R2** three approval meanings conflated | Separated into *historical source approval* (read verbatim from the stored `approved_diagnoses` row), *creation execution* (from authority) and *template-version approval* (its own guarded action). The old conflated `approved_by_*`/`approved_at` trio is dropped in 0011. **An unapproved template cannot create instances** |
+| **R3** `FAILED` blocked same-id recovery | `FAILED` is re-enterable, routed by a durable `disposal_committed_at` checkpoint **reconciled against the actual instance rows under lock** — contradictory evidence is refused. Failure history moves to the append-only `fixture_reset_operation_failures` table, so retrying never destroys evidence. `SUCCEEDED` stays terminal and wholly frozen |
+| **R3** concurrent first requests | The request insert is `ON CONFLICT DO NOTHING` and the loser falls through to the same strict identity comparison, because **locking a nonexistent row prevents nothing**. Three simultaneous first requests now produce one consistent row |
+| **R4** success untied to a verified replacement | `SUCCEEDED` requires an **ACTIVE, attached, verified** replacement agreeing on template, version, generation and predecessor, plus durable disposal evidence. The success fingerprint is **read from the replacement's own record**, not supplied. A replacement is bound and frozen *before* verification, because verification happens during `VERIFYING` |
+| **R5** retained guards incomplete | New `fixture_instances_guard` freezes identity, provenance and recorded verification, enforces legal lifecycle, refuses deletion, refuses reattachment, and permits detachment **only** as part of a complete disposal. Run provenance now refuses `DELETE` as well as `UPDATE`. Template retirement and approval attribution are frozen once written. The reset guard enforces the transition table in SQL, freezes a `SUCCEEDED` row entirely, and protects the checkpoint and confirming actor **type**. Three all-or-nothing CHECKs gained their missing actor-type column |
+| **R6** provenance could be inconsistent | The approved Diagnosis must be bound to the **exact** source Snapshot id and version; the Snapshot content hash is **derived** under the approved contract and a supplied value is only a cross-check; replay compares every identity field |
+
+### 9.1 Template graph protection — the focused verification item
+
+Confirmed as a real gap: `business_usage` was read by exactly one write path, and every
+strategic write gated on `businesses.status = 'active'` alone. A template Business accepted
+claims, evidence, profile edits, submissions, intake, extraction and diagnosis.
+
+Closed at the single chokepoint. `assertBusinessActive` and `assertActiveBusinessForUpdate`
+in `src/repositories/business-lifecycle-guard.ts` now read classification alongside status
+and raise `ProtectedFixtureTemplateError` for `PILOT_FIXTURE_TEMPLATE`. The locking variant
+takes `FOR UPDATE`, so the classification read is race-safe against a concurrent template
+registration rather than an unlocked guess.
+
+**Coverage inventory** — both functions are used by **11 repositories** (`add-information`,
+`diagnosis-headline`, `evidence-coherence`, `evidence-extraction`, `evidence-review`,
+`fact-admission`, `foundation`, `initial-intake`, `phase1-diagnosis`, `source-submission`,
+`workflow`), **9 services** and the strategy orchestrator. Tests exercise five distinct
+paths and assert nothing was partially written; **one guard test does not prove every
+path**, and the inventory above is the claim being made.
+
+**Deliberately still permitted:** fixture *instances* accept ordinary writes — they exist to
+receive work — and `archiveBusiness` / `restoreBusiness` bypass the guard because lifecycle
+administration is not graph mutation. Both are covered by tests.
+
+**Remaining database-level limit:** the protection is enforced in the shared application
+guard, not by a trigger on each owned table. A privileged connection running arbitrary SQL
+can still write a template's graph directly.
+
+### 9.2 Migration treatment
+
+**0009 was not amended.** Verified before choosing: 0009 had reached Claude's disposable
+test instance only — Codex and Antigravity both still showed 9 migrations with no fixture
+tables. The development database could **not** be inspected (its container is stopped, and
+starting or migrating it is not authorised), so wider application could not be *safely
+excluded*, which makes append-only the correct treatment.
+
+- **0010** adds the new columns, the failure-history table, the corrected CHECKs and the
+  R5 trigger set. It begins by clearing the four 0009 fixture tables, because rows written
+  under 0009 cannot satisfy the stricter evidence constraints and the only alternative would
+  be to invent approval or disposal evidence. `TRUNCATE` is used deliberately: it does not
+  fire the `DELETE` guard 0009 placed on the audit table, so no trigger is disabled.
+- **0011** drops the three obsolete conflated approval columns. It is separate only because
+  drizzle-kit cannot resolve a drop-and-add pair non-interactively in one step.
+
+Claude's test instance was rebuilt by dropping **both** `public` and the Drizzle tracking
+schema `drizzle` — dropping `public` alone would have left `__drizzle_migrations` behind and
+broken the reapply — then reapplying 0000→0011. Journal entries and applied migrations
+agree at 12, and the resulting schema has 38 tables and all six fixture guards.
+
+### 9.3 What these tests do and do not prove
+
+The reset lifecycle tests, including disposal metadata and recovery, are **metadata-state
+simulations**. `applyDisposalMetadata` performs only the metadata transition that Step D must
+call inside the same transaction as the real deletion. Step A has **no clone verifier, no
+destructive engine and no export generator**; the reserved contracts still throw. These
+tests do not prove real disposal or end-to-end crash recovery.
+
+---
+
+**Status: Step A delivered, Solution Architect review corrections applied. PR #32 remains
+unmerged pending re-review. Steps B–F pending. Phase 2 Gate A and Consultant Pilot
+Ready v1 are not complete.**
